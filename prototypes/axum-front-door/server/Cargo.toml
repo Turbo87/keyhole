@@ -1,0 +1,14 @@
+[package]
+name = "axum-front-door-prototype"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+axum = "0.8"
+http-body-util = "0.1"
+hyper = { version = "1", features = ["client", "http1"] }
+hyper-util = { version = "0.1", features = ["client-legacy", "http1", "tokio"] }
+libc = "0.2"
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
