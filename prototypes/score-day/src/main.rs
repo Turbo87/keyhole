@@ -374,13 +374,13 @@ fn engine_threshold() -> u16 {
 }
 
 fn time_rule() -> String {
-    env::var("TIME_RULE").unwrap_or("fix".into())
+    env::var("TIME_RULE").unwrap_or("against-pilot".into())
 }
 
 fn start_time(t0: f64, t1: f64, frac: f64) -> f64 {
     match time_rule().as_str() {
         "fix" => t0,
-        "floor" => (t0 + frac * (t1 - t0)).floor(),
+        "against-pilot" => (t0 + frac * (t1 - t0)).floor(),
         _ => t0 + frac * (t1 - t0),
     }
 }
@@ -388,7 +388,7 @@ fn start_time(t0: f64, t1: f64, frac: f64) -> f64 {
 fn finish_time(t0: f64, t1: f64, frac: f64) -> f64 {
     match time_rule().as_str() {
         "fix" => t1,
-        "floor" => (t0 + frac * (t1 - t0)).ceil(),
+        "against-pilot" => (t0 + frac * (t1 - t0)).ceil(),
         _ => t0 + frac * (t1 - t0),
     }
 }
@@ -427,6 +427,10 @@ fn read_fixes(path: &Path) -> Vec<Fix> {
         if fixes.last().is_some_and(|last| t < last.t - 12 * 3600) {
             day_offset += 86400;
             t += 86400;
+        }
+        // A repeated timestamp (seen on VF's logger) would shift the interpolated crossing.
+        if fixes.last().is_some_and(|last| t <= last.t) {
+            continue;
         }
         let engine = engine_cols
             .iter()
