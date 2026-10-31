@@ -48,6 +48,28 @@ _Avoid_: Training day
 How far a class day has progressed toward final results: no task, task published, preliminary, unofficial, final or cancelled.
 _Avoid_: Result status, day state
 
+### Competitors
+
+**Competitor**:
+One glider's entry in one class of a competition, with its competition ID, glider and crew.
+_Avoid_: Pilot (when the entry is meant), participant, entrant
+
+**Crew**:
+The one or more people who fly a competitor's glider during the competition.
+_Avoid_: Team (unless it is the display name), pilots
+
+**Hors concours**:
+A competitor who is scored and shown but does not rank and does not affect other competitors' points.
+_Avoid_: Guest, HC (in prose), non-competing
+
+**Logger**:
+A flight recorder identified by its manufacturer and serial, assigned to a competitor, that produces IGC files.
+_Avoid_: Flight recorder, FR, recorder
+
+**Primary logger**:
+The one logger of a competitor whose files are scored by default.
+_Avoid_: Main logger, first logger
+
 ### Scoring rules
 
 **Rule set**:
@@ -105,6 +127,10 @@ _Avoid_: Warning, event
 **Flight result**:
 What a pilot achieved on a day (start, turnpoints, finish or landing, distance and time), whether from flight analysis or entered by the scorer.
 _Avoid_: Performance, score
+
+**Scored file**:
+The one IGC file a flight result is analysed and scored from.
+_Avoid_: Main file, active flight
 
 **Publish**:
 Make a class day's results visible to the public as a fixed copy that stays unchanged until the scorer publishes again.
