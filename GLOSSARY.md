@@ -17,19 +17,15 @@ _Avoid_: Account, member
 ### Competitions
 
 **Competition**:
-A gliding contest run on Keyhole with its own classes, days and results, and invoiced as one unit.
+A gliding contest run on Keyhole with its own classes, days and results.
 _Avoid_: Contest, event
 
 **Approved competition**:
 A competition the Keyhole team has accepted, which makes it publicly visible and lifts the limits on competitions awaiting approval.
 _Avoid_: Confirmed, activated, verified competition
 
-**Billing details**:
-The name, postal address, email and optional VAT ID that a competition is invoiced to.
-_Avoid_: Invoice address, customer data
-
 **Admin**:
-A user who manages a competition, including its billing details and who works on it.
+A user who manages a competition, including who works on it.
 _Avoid_: Owner, competition director
 
 **Scorer**:
