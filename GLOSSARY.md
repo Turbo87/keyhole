@@ -48,6 +48,28 @@ _Avoid_: Training day
 How far a class day has progressed toward final results: no task, task published, preliminary, unofficial, final or cancelled.
 _Avoid_: Result status, day state
 
+### Classes
+
+**Class**:
+A group of competitors in a competition that fly the same tasks and are ranked against each other, either one of the rule set's classes or a local class such as "Hasen".
+_Avoid_: Category, group
+
+**Class template**:
+One of the rule set's classes, such as Club or Standard, picked when a class is set up so that its rule values and handicap list are filled in from it.
+_Avoid_: Rule set class, class type
+
+**Handicapped class**:
+A class whose competitors' speeds and distances are divided by their handicaps before scoring.
+_Avoid_: Index class
+
+**Handicap**:
+The number a competitor's speed or distance is divided by to even out differences between glider types, written on the class's scale of 1.000 or 100.
+_Avoid_: Index, factor, Hcap
+
+**Handicap list**:
+A published edition of handicaps per glider type, such as the DAeC Indexliste 2026 or the IGC Club Class list, used to fill in competitors' handicaps.
+_Avoid_: Index list (except in the DAeC list's own name)
+
 ### Competitors
 
 **Competitor**:
