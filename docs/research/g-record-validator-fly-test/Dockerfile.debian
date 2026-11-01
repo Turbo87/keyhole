@@ -1,0 +1,18 @@
+FROM debian:trixie-slim AS harness
+RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends gcc-mingw-w64-i686 >/dev/null
+COPY vali.c /src/vali.c
+RUN i686-w64-mingw32-gcc -O2 -static -o /src/vali.exe /src/vali.c
+
+FROM --platform=linux/386 busybox:musl AS i386
+
+FROM debian:trixie-slim
+RUN dpkg --add-architecture i386 && apt-get update -qq && apt-get install -y -qq --no-install-recommends wine wine32:i386 wine64 bc procps >/dev/null && rm -rf /var/lib/apt/lists/*
+ENV WINEDEBUG=-all WINEDLLOVERRIDES="mscoree,mshtml=" 
+RUN wineboot --init; wineserver -w; ls /root/.wine/drive_c/windows/syswow64 | wc -l
+COPY --from=harness /src/vali.exe /opt/vali/vali.exe
+COPY --from=i386 /bin/busybox /opt/i386-busybox
+COPY dll-2021 /opt/vali/dll-2021
+COPY dll-2026 /opt/vali/dll-2026
+COPY igc /opt/vali/igc
+COPY run.sh /opt/vali/run.sh
+CMD ["sleep", "infinity"]
