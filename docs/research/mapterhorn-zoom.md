@@ -142,13 +142,15 @@ Tiles were counted that intersect a circle of 150 km and 300 km around three air
 | 150 km | 12 | 2,059 tiles, 112 MB | 1,888 tiles, 146 MB | 1,747 tiles, 180 MB |
 | 150 km | 13 | 8,057 tiles, 477 MB | 7,354 tiles, 594 MB | 6,755 tiles, 714 MB |
 | 150 km | 14 | 31,855 tiles, 1.89 GB | 29,042 tiles, 2.27 GB | 26,653 tiles, 2.82 GB |
+| 150 km | 16 | 504,880 tiles, 26.8 GB | 459,992 tiles, 27.6 GB | 422,021 tiles, 37.6 GB |
 | 300 km | 10 | 544 tiles, 35.2 MB | 488 tiles, 44.1 MB | 455 tiles, 54.0 MB |
 | 300 km | 11 | 2,062 tiles, 99.8 MB | 1,884 tiles, 123 MB | 1,739 tiles, 152 MB |
 | 300 km | 12 | 8,064 tiles, 463 MB | 7,364 tiles, 560 MB | 6,769 tiles, 660 MB |
 | 300 km | 13 | 31,904 tiles, 1.97 GB | 29,081 tiles, 2.33 GB | 26,698 tiles, 2.68 GB |
 | 300 km | 14 | 126,809 tiles, 7.75 GB | 115,550 tiles, 9.02 GB | 105,990 tiles, 10.3 GB |
+| 300 km | 16 | 2,019,615 tiles, 98.8 GB | 1,839,685 tiles, 111 GB | 1,687,312 tiles, 124 GB |
 
-At zoom 13 within 300 km of Lüsse, 1,578 tiles do not exist, and at zoom 14 within 300 km of Lüsse and Königsdorf, 6,167 and 5,265 tiles do not exist. These are areas where the best source ends at a lower zoom, such as TINITALY in northern Italy at zoom 13, or open sea. A reader has to fall back to the parent tile there.
+At zoom 13 within 300 km of Lüsse, 1,578 tiles do not exist, and at zoom 14 within 300 km of Lüsse and Königsdorf, 6,167 and 5,265 tiles do not exist. These are areas where the best source ends at a lower zoom, such as TINITALY in northern Italy at zoom 13, or open sea. A reader has to fall back to the parent tile there. At zoom 16, 63,897 tiles within 150 km of Bayreuth and 18,815 within 150 km of Königsdorf do not exist, for example where the 5 m Czech model ends at zoom 14, and within 300 km 13 to 23 percent of the tiles are missing. The zoom 16 sizes count only the tiles that exist.
 
 An average zoom 12 tile is 55 KB at Lüsse, 77 KB at Bayreuth and 103 KB at Königsdorf. Rough terrain compresses worse, so the Alpine areas are larger per tile, while smaller tiles at higher latitudes give the northern site more tiles per circle. The zoom 12 tiles average more bytes than zoom 11 tiles because the vertical step halves from 1 m to 0.5 m at zoom 12.
 
