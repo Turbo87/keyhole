@@ -138,13 +138,52 @@ _Avoid_: Height limit, max height loss
 Working out from a flight's IGC file what the pilot achieved on the day's task.
 _Avoid_: Evaluation, check
 
-**Finding**:
-Something flight analysis reports for the scorer to judge, such as an airspace entry or an engine run, with its evidence.
-_Avoid_: Warning, event
+**Analysis log**:
+The list of entries produced while analysing one uploaded IGC file, available even if parsing fails. Debug entries are hidden by default.
+_Avoid_: Timeline, event log
+
+**Analysis log entry**:
+A message produced while analysing one uploaded IGC file, with the level debug, info, warning or error and supporting evidence where applicable. An entry can concern a moment, an interval or the whole file.
+_Avoid_: Finding, event, timeline entry
+
+**Analysis log level**:
+What an analysis log entry means:
+
+- **Debug**: Diagnostic detail useful for investigating analysis behaviour.
+- **Info**: Routine information, such as take-off, aerotow release or an engine run before the start.
+- **Warning**: Something the scorer needs to review, such as a possible airspace infringement.
+- **Error**: Something could not be processed, such as an uploaded file failing to parse. The entry identifies what failed, whether the whole file or one analysis check.
+
+Debug and info entries do not require review. Errors indicate incomplete or failed processing; acknowledging an error does not make the missing analysis complete.
+_Avoid_: Severity
+
+**Review item**:
+Something about a competitor's class day that the scorer has to settle, such as a file arriving for a competitor marked did not fly, raised outside flight analysis. Unlike an analysis log entry, it does not come from a file's analysis.
+_Avoid_: Notice, discrepancy, conflict
 
 **Flight result**:
 What a pilot achieved on a day (start, turnpoints, finish or landing, distance and time), whether from flight analysis or entered by the scorer.
 _Avoid_: Performance, score
+
+**Manual result**:
+A flight result entered by the scorer instead of analysed from a scored file.
+_Avoid_: Manual entry, virtual result
+
+**Override**:
+A scorer's correction of one part of an analysed flight result, such as the start or the flight end, that stays in place when the flight is analysed again.
+_Avoid_: Correction, adjustment
+
+**Launch status**:
+Whether a competitor launched on a class day: unresolved, launched or did not fly. Competitors who launched count toward the day's number of competitors.
+_Avoid_: Start status, DNS, DNF
+
+**Penalty**:
+Points a scorer deducts from a competitor's day score for a rule breach, shown with a public remark. A day score never goes below zero, so a large penalty disqualifies the competitor for the day.
+_Avoid_: Deduction, Strafpunkte
+
+**Official warning**:
+A public remark about a rule breach that deducts no points.
+_Avoid_: Warning (alone), caution, Verwarnung (in prose)
 
 **Scored file**:
 The one IGC file a flight result is analysed and scored from.
@@ -155,5 +194,15 @@ Make a class day's results visible to the public as a fixed copy that stays unch
 _Avoid_: Release
 
 **Review status**:
-Whether a scorer still has to look at a flight result: check, OK or manually OK.
-_Avoid_: Flight status, check status
+Whether a scorer still has to look at a flight result:
+
+- **OK**: The analysis reported no warnings or errors, or the result is a manual result.
+- **Check**: The analysis reported warnings or errors that no scorer has reviewed.
+- **Reviewed**: A scorer reviewed the analysis output that is currently shown.
+- **Changed since review**: Analysis ran again after a scorer's review and produced a different output.
+
+_Avoid_: Flight status, check status, manually OK
+
+**Confirmation**:
+A scorer's recorded decision to depart from the rule set, such as publishing unofficial results while flights are still in check, with the scorer, time and rule concerned.
+_Avoid_: Override, waiver, exception
