@@ -1,0 +1,448 @@
+<!doctype html>
+<!--
+  PROTOTYPE, throwaway. Layout is not part of the decision: the variants only exist to see the status rules on realistic pages. Answers: "What does the public results site show for each day status?"
+  Three layouts of the public competition site (?variant=A|B|C) driven by one shared
+  status-to-content mapping. The right-hand "Prototype controls" panel sets each class
+  day's status, the approval state and the clock. Open this file directly in a browser.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE · Keyhole public results site</title>
+<style>
+  :root { --fg:#1b1f24; --muted:#5d6670; --line:#d9dde2; --bg:#fff; --soft:#f4f6f8; --accent:#1f5fbf;
+    --s-none:#8a939c; --s-task:#6b5bd6; --s-pre:#c77700; --s-unoff:#1f6fd1; --s-final:#1d8a4e; --s-cxl:#9aa1a8; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.45 system-ui, sans-serif; color:var(--fg); background:var(--bg); }
+  a { color:var(--accent); text-decoration:none; } a:hover { text-decoration:underline; }
+  .site { max-width:1100px; margin:0 auto; padding:16px 20px 120px; margin-right:max(20px, calc(50vw - 550px)); }
+  @media (min-width:1500px) { .site { margin-right:auto; } }
+  @media (max-width:1499px) { body.controls-open .site { margin-right:340px; } }
+  h1 { font-size:24px; margin:4px 0; } h2 { font-size:19px; margin:20px 0 8px; } h3 { font-size:16px; margin:16px 0 6px; }
+  .muted { color:var(--muted); } .small { font-size:13px; }
+  table { border-collapse:collapse; width:100%; font-size:14px; }
+  th, td { padding:5px 8px; border-bottom:1px solid var(--line); text-align:left; white-space:nowrap; }
+  th { background:var(--soft); font-weight:600; } td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+  .scroll { overflow-x:auto; }
+  .pill { display:inline-block; padding:1px 8px; border-radius:10px; font-size:12px; font-weight:600; color:#fff; white-space:nowrap; }
+  .pill.none { background:var(--s-none); } .pill.task { background:var(--s-task); } .pill.pre { background:var(--s-pre); }
+  .pill.unoff { background:var(--s-unoff); } .pill.final { background:var(--s-final); } .pill.cxl { background:var(--s-cxl); }
+  .pill.practice { background:#fff; color:var(--fg); border:1px dashed var(--muted); }
+  .banner { border-left:5px solid; padding:10px 14px; margin:12px 0; background:var(--soft); border-radius:4px; }
+  .banner.pre { border-color:var(--s-pre); background:#fff6e8; } .banner.unoff { border-color:var(--s-unoff); background:#eaf2fd; }
+  .banner.final { border-color:var(--s-final); background:#e9f6ef; } .banner.cxl { border-color:var(--s-cxl); }
+  .banner.task, .banner.none { border-color:var(--s-task); } .banner.practice { border-color:var(--muted); border-left-style:dashed; }
+  .footer { margin-top:32px; padding-top:10px; border-top:1px solid var(--line); color:var(--muted); font-size:12px; }
+  .crumbs { font-size:13px; color:var(--muted); margin-bottom:6px; }
+  .strike { text-decoration:line-through; color:var(--muted); }
+  .remark { font-size:12px; color:#9a3b00; }
+  .notice { font-size:12px; color:var(--muted); }
+  .qbox { border:2px dashed #e0a800; background:#fffbe6; padding:6px 10px; font-size:12px; margin:8px 0; border-radius:4px; }
+  .qbox::before { content:"OPEN QUESTION: "; font-weight:700; }
+
+  /* Variant A: classic tabs and tables */
+  .A-head { border-bottom:3px solid var(--accent); padding-bottom:8px; }
+  .A-tabs { display:flex; gap:2px; margin-top:12px; flex-wrap:wrap; }
+  .A-tabs a { padding:6px 14px; background:var(--soft); border-radius:6px 6px 0 0; color:var(--fg); }
+  .A-tabs a.on { background:var(--accent); color:#fff; }
+
+  /* Variant B: day strip */
+  .B-classbar { display:flex; gap:8px; margin:10px 0; }
+  .B-classbar a { padding:4px 12px; border:1px solid var(--line); border-radius:16px; color:var(--fg); }
+  .B-classbar a.on { background:var(--fg); color:#fff; border-color:var(--fg); }
+  .B-strip { display:flex; gap:6px; overflow-x:auto; padding:6px 0 10px; }
+  .B-chip { flex:0 0 auto; width:96px; border:2px solid var(--line); border-radius:8px; padding:6px; color:var(--fg); background:#fff; }
+  .B-chip:hover { text-decoration:none; border-color:var(--accent); }
+  .B-chip.on { border-color:var(--fg); box-shadow:0 2px 6px rgba(0,0,0,.15); }
+  .B-chip .d { font-weight:700; } .B-chip .dt { font-size:12px; color:var(--muted); }
+  .B-chip .bar { height:5px; border-radius:3px; margin-top:6px; }
+  .B-chip.practice { border-style:dashed; }
+  .B-chip.overall { background:var(--soft); }
+  .B-sub { display:flex; gap:16px; border-bottom:1px solid var(--line); margin-top:8px; }
+  .B-sub a { padding:6px 2px; color:var(--muted); } .B-sub a.on { color:var(--fg); border-bottom:2px solid var(--fg); }
+
+  /* Variant C: matrix home and card results */
+  .C-hero { background:linear-gradient(135deg,#123c7a,#1f6fd1); color:#fff; padding:18px 20px; border-radius:10px; }
+  .C-hero a { color:#fff; text-decoration:underline; }
+  .C-matrix td, .C-matrix th { text-align:center; } .C-matrix td:first-child, .C-matrix th:first-child { text-align:left; }
+  .C-cell { display:block; padding:6px 4px; border-radius:6px; color:var(--fg); }
+  .C-cell:hover { background:var(--soft); text-decoration:none; }
+  .C-cards { display:grid; gap:8px; }
+  .C-card { border:1px solid var(--line); border-radius:8px; padding:8px 12px; display:grid; grid-template-columns:44px 1fr auto; gap:2px 12px; align-items:center; }
+  .C-card .rk { font-size:22px; font-weight:700; text-align:center; } .C-card .pts { font-size:20px; font-weight:700; text-align:right; }
+  .C-card .meta { font-size:12px; color:var(--muted); grid-column:2 / 4; }
+  .C-card.dim { opacity:.6; }
+
+  /* Prototype chrome, deliberately not part of the design */
+  #controls { position:fixed; top:0; right:0; bottom:0; width:320px; background:#111; color:#eee; font:12px/1.4 ui-monospace, monospace;
+    padding:10px 12px 70px; overflow-y:auto; z-index:20; box-shadow:-4px 0 12px rgba(0,0,0,.3); }
+  #controls.closed { width:auto; bottom:auto; padding:6px; box-shadow:none; background:transparent; }
+  #controls.closed .body { display:none; }
+  #controls h4 { margin:12px 0 4px; color:#ffd166; font-size:12px; text-transform:uppercase; letter-spacing:.05em; }
+  #controls select, #controls button, #controls input { font:inherit; }
+  #controls select { background:#222; color:#eee; border:1px solid #444; padding:1px 2px; }
+  #controls button { background:#333; color:#eee; border:1px solid #555; padding:2px 6px; cursor:pointer; margin:2px 2px 2px 0; }
+  #controls .grid { display:grid; grid-template-columns:auto 1fr 1fr; gap:3px 6px; align-items:center; }
+  #controls pre { white-space:pre-wrap; background:#1c1c1c; padding:6px; color:#9fe0a8; }
+  #toggle { background:#ffd166 !important; color:#111 !important; font-weight:700; }
+  #switcher { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:#111; color:#fff; border-radius:24px;
+    padding:6px 10px; display:flex; gap:10px; align-items:center; font:13px ui-monospace, monospace; z-index:30; box-shadow:0 4px 14px rgba(0,0,0,.35); }
+  #switcher button { background:#333; color:#fff; border:0; border-radius:50%; width:28px; height:28px; cursor:pointer; font-size:14px; }
+</style>
+</head>
+<body class="controls-open">
+<div class="site" id="app"></div>
+<div id="controls"></div>
+<div id="switcher"></div>
+<script>
+// ---------------------------------------------------------------- fake data
+const TZ = 'CEST';
+const COMP = { name: 'Regionalmeisterschaft Musterstadt 2027', place: 'Musterstadt (EDXM)', from: 'Fri 14 May', to: 'Thu 20 May 2027', slug: 'rm-musterstadt-2027' };
+const DAYS = [
+  { id: 'p', label: 'Practice day', short: 'P', date: 'Fri 14 May', practice: true },
+  { id: '1', label: 'Day 1', short: '1', date: 'Sat 15 May' },
+  { id: '2', label: 'Day 2', short: '2', date: 'Sun 16 May' },
+  { id: '3', label: 'Day 3', short: '3', date: 'Mon 17 May' },
+  { id: '4', label: 'Day 4', short: '4', date: 'Tue 18 May' },
+  { id: '5', label: 'Day 5', short: '5', date: 'Wed 19 May' },
+  { id: '6', label: 'Day 6', short: '6', date: 'Thu 20 May' },
+];
+const NEXT_MORNING = { p: 'Sat 15 May', 1: 'Sun 16 May', 2: 'Mon 17 May', 3: 'Tue 18 May', 4: 'Wed 19 May', 5: 'Thu 20 May', 6: 'Thu 20 May' };
+const CLASSES = {
+  club: { name: 'Club', handicapped: true, scale: 100, crew: [
+    ['KA', 'Anna Keller', 'LSV Musterstadt', 'Std Libelle', 98], ['2T', 'Jonas Brandt', 'FSV Oberwald', 'LS4', 104],
+    ['MZ', 'Lea Hoffmann', 'SFG Talheim', 'Astir CS', 92], ['X7', 'Felix Wagner', 'LSV Musterstadt', 'DG-100', 98],
+    ['P2', 'Mia Schuster', 'AC Bergheim', 'Pegase', 102], ['W9', 'Paul Richter', 'FSV Oberwald', 'ASW 19', 100],
+    ['C3', 'Emma Vogt', 'SFG Talheim', 'Std Cirrus', 98], ['RB', 'Lukas Bauer', 'AC Bergheim', 'ASW 15', 100] ] },
+  mixed: { name: 'Mixed', handicapped: true, scale: 100, crew: [
+    ['D2', 'Sophie Lange', 'LSV Musterstadt', 'Discus 2b', 108], ['8L', 'Max Krüger', 'AC Bergheim', 'LS8', 108],
+    ['V2', 'Hanna Wolf', 'FSV Oberwald', 'Ventus 2cx', 116], ['29', 'Tim Schröder & Ole Schröder', 'SFG Talheim', 'ASG 29', 121],
+    ['WT', 'Clara Neumann', 'LSV Musterstadt', 'ASW 28', 110], ['L3', 'Ben Hartmann', 'AC Bergheim', 'LS3', 106],
+    ['GO', 'Nora Peters', 'FSV Oberwald', 'Discus CS', 106, true] ] },
+};
+const TASKS = {
+  club: { kind: 'Racing task', dist: [182.4, 214.7, 251.0, 0, 196.3, 238.9, 205.5],
+    tps: ['Musterstadt', 'Talheim Kirche', 'Bergheim AB-Kreuz', 'Oberwald Turm', 'Musterstadt'] },
+  mixed: { kind: 'Assigned area task', dist: [221.0, 268.2, 302.5, 0, 247.8, 288.0, 260.1], time: '3:00',
+    tps: ['Musterstadt', 'Talheim (20 km)', 'Bergheim (15 km)', 'Oberwald (20 km)', 'Musterstadt'] },
+};
+
+function rng(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
+function fmtTime(min) { const h = Math.floor(min / 60), m = Math.floor(min % 60), s = Math.floor((min * 60) % 60);
+  return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`; }
+
+// One deterministic result set per class day. Content never changes with status, only visibility does.
+function results(cls, dayIdx) {
+  const c = CLASSES[cls], r = rng(1000 + dayIdx * 37 + cls.length), dist = TASKS[cls].dist[dayIdx];
+  let rows = c.crew.map(([cn, crew, club, glider, h, hc], i) => {
+    const outland = r() < 0.18, dnf = dayIdx === 2 && i === 5;
+    const v = 72 + r() * 30, d = outland ? dist * (0.35 + r() * 0.55) : dist;
+    const start = 13 * 60 + 5 + r() * 40, dur = d / v * 60;
+    return { cn, crew, club, glider, h, hc: !!hc, outland, dnf, speed: outland ? null : v, dist: d,
+      start: fmtTime(start), finish: outland ? null : fmtTime(start + dur), dur: outland ? null : fmtTime(dur), vh: v * c.scale / h };
+  });
+  const finishers = rows.filter(x => !x.outland && !x.dnf), v0 = Math.max(...finishers.map(x => x.vh));
+  const maxD = Math.max(...rows.map(x => x.dist * c.scale / x.h)), f = dayIdx === 0 ? 0.82 : Math.min(1, 0.7 + dist / 600);
+  for (const x of rows) {
+    if (x.dnf) { x.points = 0; continue; }
+    x.points = Math.round(x.outland ? 750 * f * (x.dist * c.scale / x.h) / maxD * 0.8 : 1000 * f * (0.33 + 0.67 * x.vh / v0));
+  }
+  if (dayIdx === 1 && cls === 'club') { rows[3].penalty = 50; rows[3].remark = 'Finish below minimum finish height (−50)'; rows[3].points -= 50; }
+  if (dayIdx === 4 && cls === 'mixed') { rows[1].remark = 'Official warning: airspace distance below 100 m (Musterstadt CTR)'; }
+  const scored = rows.filter(x => !x.hc && !x.dnf).sort((a, b) => b.points - a.points);
+  scored.forEach((x, i) => x.rank = i + 1);
+  const launched = rows.filter(x => !x.dnf && !x.hc), n1 = launched.filter(x => x.dist >= 100).length;
+  const invalid = state.invalid[cls] === dayIdx;
+  if (invalid) rows.forEach(x => x.points = 0);
+  rows.sort((a, b) => (a.dnf - b.dnf) || (b.points - a.points) || a.cn.localeCompare(b.cn));
+  if (invalid) return { rows, invalid: { n1: Math.min(n1, Math.floor(launched.length / 4)), n: launched.length }, params: { f: '0.000', n: launched.length, dist, v0: v0.toFixed(1), dm: 100, d1: 250 } };
+  return { rows, params: { f: f.toFixed(3), n: rows.filter(x => !x.dnf).length, dist, v0: v0.toFixed(1), dm: 100, d1: 250 } };
+}
+
+// ---------------------------------------------------------------- state
+const STATUSES = ['none', 'task', 'pre', 'unoff', 'final', 'cxl'];
+const STATUS_LABEL = { none: 'No task', task: 'Task published', pre: 'Preliminary', unoff: 'Unofficial', final: 'Final', cxl: 'Cancelled' };
+const ORDER = { pre: 0, unoff: 1, final: 2 };
+const PRESETS = {
+  'Before practice': { club: ['task', 'none', 'none', 'none', 'none', 'none', 'none'], mixed: ['task', 'none', 'none', 'none', 'none', 'none', 'none'] },
+  'Evening of day 5': { club: ['final', 'final', 'final', 'cxl', 'unoff', 'pre', 'none'], mixed: ['final', 'final', 'final', 'cxl', 'final', 'unoff', 'none'] },
+  'Briefing day 6': { club: ['final', 'final', 'final', 'cxl', 'final', 'unoff', 'task'], mixed: ['final', 'final', 'final', 'cxl', 'final', 'unoff', 'task'] },
+  'All final': { club: ['final', 'final', 'final', 'cxl', 'final', 'final', 'final'], mixed: ['final', 'final', 'final', 'cxl', 'final', 'final', 'final'] },
+};
+const state = { approved: true, deadlinePassed: false, cxlLaunched: true, invalid: { club: null, mixed: null }, status: structuredClone(PRESETS['Evening of day 5']) };
+const params = new URLSearchParams(location.search);
+let variant = params.get('variant') || 'A';
+
+function route() { const p = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean); return p; }
+function href(...parts) { return '#/' + parts.join('/'); }
+
+// ---------------------------------------------------------------- shared status-to-content mapping
+// This is the decision under test: what each status makes public. Variants only differ in layout.
+function dayInfo(cls, dayIdx) {
+  const day = DAYS[dayIdx], s = state.status[cls][dayIdx];
+  const deadline = `${NEXT_MORNING[day.id]} 10:00 ${TZ}`;
+  return {
+    day, s,
+    listed: true,                                   // every class day appears in the schedule, even without a task
+    taskPublic: s !== 'none',                       // task page exists from "task published" on, and stays for cancelled days
+    resultsPublic: ['pre', 'unoff', 'final'].includes(s) || (s === 'cxl' && state.cxlLaunched),
+    inOverall: !day.practice && ['pre', 'unoff', 'final'].includes(s),
+    deadline,
+    banner: bannerText(s, day, deadline),
+  };
+}
+function bannerText(s, day, deadline) {
+  const pr = day.practice ? ' Practice day results do not count toward the overall results.' : '';
+  switch (s) {
+    case 'none': return 'No task has been published for this day yet.';
+    case 'task': return 'The task is published. Results appear here once the scorer publishes them.' + pr;
+    case 'pre': return 'Preliminary results. Scoring is still in progress, so points and ranks can change.' + pr;
+    case 'unoff': return (state.deadlinePassed
+      ? `Unofficial results. The complaint period ended ${deadline}. Final results follow.`
+      : `Unofficial results. Complaints can be raised with the scorer until ${deadline}.`) + pr;
+    case 'final': return 'Final results.' + pr;
+    case 'cxl': return 'This day was cancelled. It does not count toward the overall results.'
+      + (state.cxlLaunched ? ' The flights below are shown for reference and carry no points.' : '');
+  }
+}
+function pill(s) { return `<span class="pill ${s}">${STATUS_LABEL[s]}</span>`; }
+function practicePill(day) { return day.practice ? ' <span class="pill practice">Practice</span>' : ''; }
+function overallInfo(cls) {
+  const included = DAYS.map((d, i) => ({ d, i, info: dayInfo(cls, i) })).filter(x => x.info.inOverall);
+  if (!included.length) return { included, s: null };
+  const s = included.map(x => x.info.s).sort((a, b) => ORDER[a] - ORDER[b])[0];
+  return { included, s };
+}
+function overallBanner(o) {
+  if (!o.s) return 'No results yet. Overall results appear after the first competition day is published.';
+  const lowest = o.included.filter(x => x.info.s === o.s).map(x => x.d.label).join(', ');
+  return { pre: `Preliminary overall results, because ${lowest} ${lowest.includes(',') ? 'are' : 'is'} preliminary.`,
+    unoff: `Unofficial overall results, because ${lowest} ${lowest.includes(',') ? 'are' : 'is'} still unofficial.`,
+    final: 'Final overall results.' }[o.s];
+}
+function overallRows(cls, o) {
+  const c = CLASSES[cls], per = Object.fromEntries(o.included.map(x => [x.i, results(cls, x.i).rows]));
+  const rows = c.crew.map(([cn, crew, club, glider, h, hc]) => {
+    const pts = o.included.map(x => per[x.i].find(r => r.cn === cn));
+    return { cn, crew, club, glider, h, hc: !!hc, days: pts, total: pts.reduce((a, r) => a + r.points, 0) };
+  }).sort((a, b) => b.total - a.total);
+  let rk = 0; rows.forEach(r => { if (!r.hc) r.rank = ++rk; });
+  return rows;
+}
+function footer() {
+  return `<div class="footer">Times in ${TZ} (Europe/Berlin). Published Wed 19 May 19:42 ${TZ}. Scored with Keyhole 0.4.1 · rules SWO 2026 + local procedures · rules hash 3f2a9c1e.<br>
+  <a href="#">Deutsch</a> · <a href="${href('directory')}">All competitions</a> · Imprint · Privacy</div>`;
+}
+function invalidBanner(invalid) {
+  return invalid ? `<div class="banner cxl">Not a valid competition day: ${invalid.n1} of ${invalid.n} launched competitors reached Dm (100 km). All scores are 0.</div>` : '';
+}
+function rankCell(r) { return r.dnf ? '' : r.hc ? 'HC' : r.rank; }
+function taskBody(cls, dayIdx, info) {
+  const t = TASKS[cls];
+  if (info.s === 'none') return `<div class="banner none">${info.banner}</div>`;
+  const dist = t.dist[dayIdx];
+  return `${info.s === 'cxl' ? `<div class="banner cxl">${info.banner}</div>` : ''}
+    <div class="${info.s === 'cxl' ? 'strike' : ''}">
+    <p><b>${t.kind}</b>${t.time ? `, minimum time ${t.time}` : ''} · ${dist ? dist.toFixed(1) : '–'} km · start opens 13:05 ${TZ}</p>
+    <table><tr><th>#</th><th>Point</th><th>Observation zone</th></tr>
+    ${t.tps.map((p, i) => `<tr><td>${i === 0 ? 'Start' : i === t.tps.length - 1 ? 'Finish' : 'TP ' + i}</td><td>${p}</td><td>${i === 0 ? 'Line 10 km' : i === t.tps.length - 1 ? 'Ring 3 km' : t.time ? 'Cylinder' : 'Cylinder 0.5 km'}</td></tr>`).join('')}
+    </table></div>
+    <p class="small"><a href="#">Download task (.cup)</a> · <a href="#">Download task (.tsk)</a></p>`;
+}
+function resultsTable(cls, dayIdx, info, { compact } = {}) {
+  if (!info.resultsPublic) return `<div class="banner ${info.day.practice && info.s !== 'cxl' ? 'practice' : info.s}">${info.banner}</div>`;
+  const { rows: all, params: p, invalid } = results(cls, dayIdx), cxl = info.s === 'cxl';
+  const rows = cxl ? all.filter(r => !r.dnf).sort((a, b) => a.cn.localeCompare(b.cn)) : all;
+  return `<div class="banner ${info.s}">${info.banner}</div>${invalidBanner(invalid)}
+    <div class="scroll"><table>
+    <tr><th class="num">#</th><th>CN</th><th>Crew</th>${compact ? '' : '<th>Club</th>'}<th>Glider</th><th class="num">Hcp</th>
+      <th>Start</th><th>Finish</th><th>Time</th><th class="num">km/h</th><th class="num">km</th>${cxl ? '' : '<th class="num">Points</th>'}</tr>
+    ${rows.map(r => `<tr><td class="num">${cxl ? '' : rankCell(r)}</td><td><b>${r.cn}</b></td><td>${r.crew}${r.remark ? `<div class="remark">${r.remark}</div>` : ''}</td>
+      ${compact ? '' : `<td>${r.club}</td>`}<td>${r.glider}</td><td class="num">${r.h}</td>
+      ${r.dnf ? `<td colspan="5" class="muted">Did not fly</td>` : `<td>${r.start}</td><td>${r.finish ?? '<span class="muted">outlanding</span>'}</td><td>${r.dur ?? ''}</td>
+      <td class="num">${r.speed ? r.speed.toFixed(1) : ''}</td><td class="num">${r.dist.toFixed(1)}</td>`}
+      ${cxl ? '' : `<td class="num"><b>${r.dnf ? '' : r.points}</b>${r.dnf ? '' : ` <a class="small" href="#" title="IGC file">IGC</a>`}</td>`}</tr>`).join('')}
+    </table></div>
+    ${cxl ? '' : `<p class="small muted">Day parameters: task distance ${p.dist.toFixed(1)} km · N ${p.n} · Dm ${p.dm} km · D1 ${p.d1} km · day factor f ${p.f} · best handicapped speed ${p.v0} km/h</p>`}
+    <div class="qbox">Are IGC downloads public, and for how long? Retention is still fog on the map.</div>`;
+}
+function overallTable(cls, o) {
+  if (!o.s) return `<div class="banner none">${overallBanner(o)}</div>`;
+  const rows = overallRows(cls, o), excluded = DAYS.map((d, i) => ({ d, info: dayInfo(cls, i) })).filter(x => !x.info.inOverall && (x.info.s === 'cxl' || (x.d.practice && x.info.resultsPublic)));
+  return `<div class="banner ${o.s}">${overallBanner(o)}</div>
+    <div class="scroll"><table>
+    <tr><th class="num">#</th><th>CN</th><th>Crew</th><th>Glider</th>${o.included.map(x => `<th class="num">${x.d.short}${x.info.s !== 'final' ? ` <span class="pill ${x.info.s}" title="${STATUS_LABEL[x.info.s]}">${x.info.s === 'pre' ? 'P' : 'U'}</span>` : ''}</th>`).join('')}<th class="num">Total</th></tr>
+    ${rows.map(r => `<tr><td class="num">${r.hc ? 'HC' : r.rank}</td><td><b>${r.cn}</b></td><td>${r.crew}</td><td>${r.glider}</td>
+      ${r.days.map(d => `<td class="num">${d.dnf ? '<span class="muted">–</span>' : d.points}</td>`).join('')}<td class="num"><b>${r.total}</b></td></tr>`).join('')}
+    </table></div>
+    ${excluded.length ? `<p class="small muted">Not counted: ${excluded.map(x => `${x.d.label} (${x.d.practice ? 'practice day' : 'cancelled'})`).join(', ')}.</p>` : ''}`;
+}
+function notFound() {
+  return `<h1>404</h1><p>This page does not exist.</p><p class="small"><a href="${href('directory')}">All competitions</a></p>
+    <div class="qbox">A competition awaiting approval has no public pages at all, so its URLs look exactly like an unknown competition. Admins see their own preview in the admin UI, not here.</div>`;
+}
+function directory() {
+  const comps = [
+    { name: 'Hahnenkamm-Pokal 2027', place: 'Oberwald', when: '1 to 8 May 2027' },
+    ...(state.approved ? [{ name: COMP.name, place: COMP.place, when: `${COMP.from} to ${COMP.to}`, me: true }] : []),
+    { name: 'Talheimer Segelflugwoche 2027', place: 'Talheim', when: '5 to 12 June 2027' },
+  ];
+  return `<div class="crumbs">Keyhole</div><h1>Competitions</h1>
+    <table><tr><th>Competition</th><th>Place</th><th>Dates</th></tr>
+    ${comps.map(c => `<tr><td>${c.me ? `<a href="${href()}">${c.name}</a>` : c.name}</td><td>${c.place}</td><td>${c.when}</td></tr>`).join('')}</table>
+    ${state.approved ? '' : `<p class="small muted">${COMP.name} is awaiting approval and is not listed.</p>`}${footer()}`;
+}
+
+// ---------------------------------------------------------------- Variant A: classic tabs and tables
+function variantA(p) {
+  const [cls, day, sub] = p;
+  const head = `<div class="A-head"><div class="crumbs"><a href="${href('directory')}">Keyhole</a> › ${COMP.name}</div>
+    <h1>${COMP.name}</h1><div class="muted">${COMP.place} · ${COMP.from} to ${COMP.to}</div>
+    <div class="A-tabs"><a class="${!cls ? 'on' : ''}" href="${href()}">Overview</a>
+    ${Object.entries(CLASSES).map(([k, c]) => `<a class="${cls === k ? 'on' : ''}" href="${href(k)}">${c.name}</a>`).join('')}</div></div>`;
+  if (!cls) return head + `<h2>Classes</h2>
+    ${Object.entries(CLASSES).map(([k, c]) => `<h3><a href="${href(k)}">${c.name}</a></h3><p class="small muted">${c.crew.length} competitors · handicapped, scale ${c.scale}</p>`).join('')}
+    <h2>Downloads</h2><p class="small"><a href="#">Turnpoints (.cup)</a> · <a href="#">Airspace (OpenAir)</a> · <a href="#">Local procedures (PDF)</a></p>${footer()}`;
+  if (!day) {
+    const o = overallInfo(cls);
+    return head + `<h2>${CLASSES[cls].name}: days</h2>
+      <table><tr><th>Day</th><th>Date</th><th>Task</th><th>Status</th><th></th></tr>
+      ${DAYS.map((d, i) => { const info = dayInfo(cls, i), t = TASKS[cls];
+        return `<tr><td>${d.label}${practicePill(d)}</td><td>${d.date}</td>
+        <td class="${info.s === 'cxl' ? 'strike' : ''}">${info.taskPublic ? `<a href="${href(cls, d.id, 'task')}">${t.kind}, ${(t.dist[i] || 0).toFixed(1)} km</a>` : '<span class="muted">–</span>'}</td>
+        <td>${pill(info.s)}${info.s === 'unoff' ? `<div class="notice">complaints until ${info.deadline}</div>` : ''}</td>
+        <td>${info.resultsPublic ? `<a href="${href(cls, d.id)}">Results</a>` : ''}</td></tr>`; }).join('')}
+      <tr><td colspan="3"><b><a href="${href(cls, 'overall')}">Overall results</a></b></td><td>${o.s ? pill(o.s) : '<span class="muted">none yet</span>'}</td><td></td></tr></table>${footer()}`;
+  }
+  if (day === 'overall') return head + `<h2>${CLASSES[cls].name}: overall results</h2>${overallTable(cls, overallInfo(cls))}${footer()}`;
+  const i = DAYS.findIndex(d => d.id === day), info = dayInfo(cls, i), d = DAYS[i];
+  return head + `<h2>${CLASSES[cls].name}: ${d.label}, ${d.date} ${pill(info.s)}${practicePill(d)}</h2>
+    <div class="A-tabs"><a class="${sub !== 'task' ? 'on' : ''}" href="${href(cls, day)}">Results</a><a class="${sub === 'task' ? 'on' : ''}" href="${href(cls, day, 'task')}">Task</a></div>
+    ${sub === 'task' ? taskBody(cls, i, info) : resultsTable(cls, i, info)}${footer()}`;
+}
+
+// ---------------------------------------------------------------- Variant B: one class at a time, day strip
+function variantB(p) {
+  const cls = p[0] || 'club', o = overallInfo(cls);
+  const lastPublic = [...DAYS.keys()].reverse().find(i => dayInfo(cls, i).s !== 'none');
+  const day = p[1] || (lastPublic != null ? DAYS[lastPublic].id : 'overall'), sub = p[2];
+  const chips = DAYS.map((d, i) => { const info = dayInfo(cls, i);
+    return `<a class="B-chip ${d.practice ? 'practice' : ''} ${day === d.id ? 'on' : ''}" href="${href(cls, d.id)}">
+      <div class="d ${info.s === 'cxl' ? 'strike' : ''}">${d.practice ? 'Practice' : d.label}</div><div class="dt">${d.date}</div>
+      <div class="bar" style="background:var(--s-${info.s})"></div><div class="dt">${STATUS_LABEL[info.s]}</div></a>`; }).join('');
+  const overallChip = `<a class="B-chip overall ${day === 'overall' ? 'on' : ''}" href="${href(cls, 'overall')}"><div class="d">Overall</div>
+    <div class="dt">${o.included.length} days</div><div class="bar" style="background:var(--s-${o.s || 'none'})"></div><div class="dt">${o.s ? STATUS_LABEL[o.s] : 'none yet'}</div></a>`;
+  let body;
+  if (day === 'overall') body = `<h2>Overall results</h2>${overallTable(cls, o)}`;
+  else {
+    const i = DAYS.findIndex(d => d.id === day), info = dayInfo(cls, i), d = DAYS[i];
+    const showTask = sub === 'task' || !info.resultsPublic;
+    body = `<h2>${d.practice ? 'Practice day' : d.label} · ${d.date}</h2>
+      <div class="B-sub"><a class="${!showTask ? 'on' : ''}" href="${href(cls, day)}">Results</a><a class="${showTask ? 'on' : ''}" href="${href(cls, day, 'task')}">Task</a></div>
+      ${showTask ? (info.resultsPublic || info.s === 'cxl' || info.s === 'none' ? '' : `<div class="banner ${info.day.practice ? 'practice' : info.s}">${info.banner}</div>`) + taskBody(cls, i, info) : resultsTable(cls, i, info, { compact: true })}`;
+  }
+  return `<div class="crumbs"><a href="${href('directory')}">Keyhole</a></div><h1>${COMP.name}</h1>
+    <div class="muted small">${COMP.place} · ${COMP.from} to ${COMP.to} · <a href="#">Downloads</a></div>
+    <div class="B-classbar">${Object.entries(CLASSES).map(([k, c]) => `<a class="${cls === k ? 'on' : ''}" href="${href(k, day)}">${c.name}</a>`).join('')}</div>
+    <div class="B-strip">${chips}${overallChip}</div>${body}${footer()}`;
+}
+
+// ---------------------------------------------------------------- Variant C: matrix home, card results (mobile-first)
+function cards(cls, dayIdx, info) {
+  if (!info.resultsPublic) return `<div class="banner ${info.day.practice && info.s !== 'cxl' ? 'practice' : info.s}">${info.banner}</div>`;
+  const { rows: all, invalid } = results(cls, dayIdx), cxl = info.s === 'cxl';
+  const rows = cxl ? all.filter(r => !r.dnf).sort((a, b) => a.cn.localeCompare(b.cn)) : all;
+  return `<div class="banner ${info.s}">${info.banner}</div>${invalidBanner(invalid)}<div class="C-cards">
+    ${rows.map(r => `<div class="C-card ${r.dnf || r.hc ? 'dim' : ''}"><div class="rk">${cxl ? '' : rankCell(r)}</div>
+      <div><b>${r.cn}</b> ${r.crew}</div><div class="pts">${r.dnf || cxl ? '' : r.points}</div>
+      <div class="meta">${r.glider} (${r.h}) · ${r.club} · ${r.dnf ? 'did not fly' : r.speed ? `${r.speed.toFixed(1)} km/h, ${r.dur}` : `outlanded after ${r.dist.toFixed(1)} km`}
+      ${r.remark ? `<div class="remark">${r.remark}</div>` : ''}</div></div>`).join('')}</div>`;
+}
+function variantC(p) {
+  const [cls, day = "overall"] = p;
+  const hero = `<div class="C-hero"><div class="small"><a href="${href('directory')}">Keyhole</a></div><h1>${COMP.name}</h1>
+    <div>${COMP.place} · ${COMP.from} to ${COMP.to}</div></div>`;
+  if (!cls) {
+    return hero + `<div class="scroll"><table class="C-matrix" style="margin-top:14px"><tr><th></th>${DAYS.map(d => `<th>${d.practice ? 'Practice' : d.label}<div class="small muted">${d.date}</div></th>`).join('')}<th>Overall</th></tr>
+      ${Object.entries(CLASSES).map(([k, c]) => { const o = overallInfo(k);
+        return `<tr><th>${c.name}</th>${DAYS.map((d, i) => { const info = dayInfo(k, i);
+          return `<td>${info.s === 'none' ? `<span class="muted">–</span>` : `<a class="C-cell" href="${href(k, d.id)}">${pill(info.s)}</a>`}</td>`; }).join('')}
+          <td><a class="C-cell" href="${href(k, 'overall')}">${o.s ? pill(o.s) : '<span class="muted">–</span>'}</a></td></tr>`; }).join('')}
+      </table></div>
+      <h2>Downloads</h2><p class="small"><a href="#">Turnpoints (.cup)</a> · <a href="#">Airspace (OpenAir)</a> · <a href="#">Local procedures (PDF)</a></p>${footer()}`;
+  }
+  const back = `<div class="crumbs" style="margin-top:10px"><a href="${href()}">${COMP.name}</a> › ${CLASSES[cls].name}</div>`;
+  if (day === 'overall') { const o = overallInfo(cls); return hero + back + `<h2>${CLASSES[cls].name} · Overall</h2>${o.s ? `<div class="banner ${o.s}">${overallBanner(o)}</div><div class="C-cards">${overallRows(cls, o).map(r => `<div class="C-card ${r.hc ? 'dim' : ''}"><div class="rk">${r.hc ? 'HC' : r.rank}</div><div><b>${r.cn}</b> ${r.crew}</div><div class="pts">${r.total}</div><div class="meta">${o.included.map((x, j) => `${x.d.short}: ${r.days[j].points}`).join(' · ')}</div></div>`).join('')}</div>` : `<div class="banner none">${overallBanner(o)}</div>`}${footer()}`; }
+  const i = DAYS.findIndex(d => d.id === day), info = dayInfo(cls, i), d = DAYS[i];
+  return hero + back + `<h2>${CLASSES[cls].name} · ${d.practice ? 'Practice day' : d.label} · ${d.date}</h2>
+    ${resultsCardsOrTask()}${footer()}`;
+  function resultsCardsOrTask() {
+    // C stacks task and results on one page: task first until results exist, then results first.
+    return info.resultsPublic ? cards(cls, i, info) + `<h3>Task</h3>${taskBody(cls, i, info)}` : `${info.s === 'cxl' || info.s === 'none' ? '' : `<div class="banner ${d.practice ? 'practice' : info.s}">${info.banner}</div>`}<h3>Task</h3>${taskBody(cls, i, info)}`;
+  }
+}
+
+// ---------------------------------------------------------------- render and prototype chrome
+const VARIANTS = { A: ['Tabs and tables', variantA], B: ['Day strip', variantB], C: ['Matrix and cards', variantC] };
+function render() {
+  const p = route();
+  let html;
+  if (p[0] === 'directory') html = directory();
+  else if (!state.approved) html = notFound();
+  else {
+    html = VARIANTS[variant][1](p);
+    // Results URLs of a day without public results stay valid and explain why there is nothing yet.
+  }
+  document.getElementById('app').innerHTML = html;
+  renderControls(); renderSwitcher();
+}
+function renderControls() {
+  const el = document.getElementById('controls'), open = !el.classList.contains('closed');
+  el.innerHTML = `<button id="toggle">${open ? 'Hide' : 'Prototype controls'}</button><div class="body">
+    <h4>Competition</h4><label><input type="checkbox" id="approved" ${state.approved ? 'checked' : ''}> approved by Keyhole team</label>
+    <h4>Presets</h4>${Object.keys(PRESETS).map(k => `<button data-preset="${k}">${k}</button>`).join('')}
+    <h4>Day status per class day</h4><div class="grid"><b></b><b>Club</b><b>Mixed</b>
+    ${DAYS.map((d, i) => `<span>${d.practice ? 'P' : d.short}</span>${['club', 'mixed'].map(c => `<select data-c="${c}" data-i="${i}">${STATUSES.map(s => `<option value="${s}" ${state.status[c][i] === s ? 'selected' : ''}>${STATUS_LABEL[s]}</option>`).join('')}</select>`).join('')}`).join('')}</div>
+    <h4>Unofficial days</h4>
+    <label><input type="checkbox" id="deadline" ${state.deadlinePassed ? 'checked' : ''}> complaint deadline passed</label><br>
+    <h4>Cancelled and invalid days</h4>
+    <label><input type="checkbox" id="cxlLaunched" ${state.cxlLaunched ? 'checked' : ''}> cancelled days had launches</label><br>
+    ${['club', 'mixed'].map(c => `${c} invalid day (25% rule): <select data-invalid="${c}"><option value="">none</option>${DAYS.map((d, i) => `<option value="${i}" ${state.invalid[c] === i ? 'selected' : ''}>${d.practice ? 'P' : d.short}</option>`).join('')}</select>`).join('<br>')}
+    <h4>Mapping under test</h4><pre>${['club', 'mixed'].map(c => `${c}: overall = ${overallInfo(c).s ? STATUS_LABEL[overallInfo(c).s] : 'none'} from days ${overallInfo(c).included.map(x => x.d.short).join(',') || '–'}`).join('\n')}
+
+task page public:    not "No task"
+results public:      Preliminary, Unofficial, Final
+in overall:          those, minus practice
+cancelled:           task struck, flights
+                     without points if launched
+invalid (25% rule):  flown day, all 0, counted
+not approved:        every URL 404s,
+                     absent from directory</pre>
+    <h4>Pages</h4><a style="color:#9cf" href="${href('directory')}">directory</a> · <a style="color:#9cf" href="${href()}">home</a> · <a style="color:#9cf" href="${href('club', '5')}">club day 5</a> · <a style="color:#9cf" href="${href('club', 'overall')}">club overall</a> · <a style="color:#9cf" href="${href('mixed', 'p')}">mixed practice</a>
+  </div>`;
+  el.querySelector('#toggle').onclick = () => { el.classList.toggle('closed'); document.body.classList.toggle('controls-open'); renderControls(); };
+  el.querySelector('#approved').onchange = e => { state.approved = e.target.checked; render(); };
+  el.querySelector('#deadline').onchange = e => { state.deadlinePassed = e.target.checked; render(); };
+  el.querySelector('#cxlLaunched').onchange = e => { state.cxlLaunched = e.target.checked; render(); };
+  el.querySelectorAll('[data-invalid]').forEach(s => s.onchange = () => { state.invalid[s.dataset.invalid] = s.value === '' ? null : +s.value; render(); });
+  el.querySelectorAll('[data-preset]').forEach(b => b.onclick = () => { state.status = structuredClone(PRESETS[b.dataset.preset]); render(); });
+  el.querySelectorAll('select[data-c]').forEach(s => s.onchange = () => { state.status[s.dataset.c][+s.dataset.i] = s.value; render(); });
+}
+function renderSwitcher() {
+  const keys = Object.keys(VARIANTS);
+  document.getElementById('switcher').innerHTML = `<button id="prev">←</button><span>${variant} (${VARIANTS[variant][0]})</span><button id="next">→</button>`;
+  document.getElementById('prev').onclick = () => cycle(-1);
+  document.getElementById('next').onclick = () => cycle(1);
+  function cycle(step) { variant = keys[(keys.indexOf(variant) + step + keys.length) % keys.length];
+    const q = new URLSearchParams(location.search); q.set('variant', variant); history.replaceState(null, '', '?' + q + location.hash); render(); }
+}
+document.addEventListener('keydown', e => {
+  if (e.target.closest('input, textarea, select, [contenteditable]')) return;
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') document.getElementById(e.key === 'ArrowLeft' ? 'prev' : 'next').click();
+});
+window.addEventListener('hashchange', render);
+render();
+</script>
+</body>
+</html>
