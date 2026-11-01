@@ -124,6 +124,18 @@ _Avoid_: Gate
 An observation zone shaped as a circle of a given radius around its reference point, used for starts, turnpoints and finishes.
 _Avoid_: Ring, circle, barrel
 
+**Start procedure**:
+How starts work on a class day: the type of start and its options, such as a PEV start, with the start opening and closing times and the maximum start altitude and ground speed.
+_Avoid_: Start settings, start rules
+
+**Start opening time**:
+The time from which starts are valid on a class day.
+_Avoid_: Gate opening, start gate
+
+**Start closing time**:
+The time after which starts are no longer valid on a class day.
+_Avoid_: Gate closing
+
 **PEV**:
 A pilot event marker that the pilot sets by pressing a button on the logger, recorded in the IGC file. Some rule sets use it to time a start.
 _Avoid_: Marker, event button
