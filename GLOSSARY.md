@@ -194,8 +194,14 @@ Make a class day's results visible to the public as a fixed copy that stays unch
 _Avoid_: Release
 
 **Review status**:
-Whether a scorer still has to look at a flight result: check, OK or manually OK.
-_Avoid_: Flight status, check status
+Whether a scorer still has to look at a flight result:
+
+- **OK**: The analysis reported no warnings or errors, or the result is a manual result.
+- **Check**: The analysis reported warnings or errors that no scorer has reviewed.
+- **Reviewed**: A scorer reviewed the analysis output that is currently shown.
+- **Changed since review**: Analysis ran again after a scorer's review and produced a different output.
+
+_Avoid_: Flight status, check status, manually OK
 
 **Confirmation**:
 A scorer's recorded decision to depart from the rule set, such as publishing unofficial results while flights are still in check, with the scorer, time and rule concerned.
