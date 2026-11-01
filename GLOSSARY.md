@@ -24,6 +24,10 @@ _Avoid_: Contest, event
 A competition the Keyhole team has accepted, which makes it publicly visible and lifts the limits on competitions awaiting approval.
 _Avoid_: Confirmed, activated, verified competition
 
+**Archived competition**:
+A finished competition whose scoring work has been removed from Keyhole, leaving only its published results, which can no longer change.
+_Avoid_: Closed, deleted, completed competition
+
 **Admin**:
 A user who manages a competition, including who works on it.
 _Avoid_: Owner, competition director
