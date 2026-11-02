@@ -108,21 +108,57 @@ _Avoid_: Datum, geoid, earth radius
 
 ### Tasks
 
+**Task**:
+The course a class flies on a class day: an ordered list of turnpoints from start to finish, each with an observation zone. A class day has at most one published task, which keeps the letter of the candidate it was published from.
+_Avoid_: Route, course
+
+**Task candidate**:
+A task prepared for a class day under a letter such as A, B or C, with its own task sheet, which the scorer can publish as the class day's task. Candidates that are never published stay private.
+_Avoid_: Alternative task, task variant
+
+**Racing task**:
+A task whose turnpoints must be reached in order, scored by speed over the task distance.
+_Avoid_: Speed task, polygon
+
+**Assigned area task (AAT)**:
+A task whose assigned areas must be reached in order within a minimum task time, where pilots choose how deep to fly into each area.
+_Avoid_: Area task, turn area task
+
+**Minimum task time**:
+The shortest time an assigned area task is scored over. A pilot who finishes sooner is scored as if they had flown for this long.
+_Avoid_: Designated time, task time
+
+**Turnpoint file**:
+The competition's published list of turnpoints that its tasks may use.
+_Avoid_: Waypoint file, control point file
+
+**Turnpoint**:
+A named location from the turnpoint file that a task uses as its start, its finish or a point in between.
+_Avoid_: Waypoint, control point, task point
+
 **Observation zone**:
 The area or line around a reference point that a flight has to reach or cross, such as a line, cylinder, sector or keyhole.
 _Avoid_: OZ, turn area (when the shape matters)
 
 **Reference point**:
 The point an observation zone is built around and that task distance is measured from: a line's midpoint, a cylinder's centre or a sector's apex.
-_Avoid_: Task point, centre, waypoint (a waypoint is an entry in a turnpoint file)
+_Avoid_: Task point, centre, turnpoint (the named location a reference point is taken from)
 
 **Line**:
 An observation zone shaped as a straight line through its reference point, used for starts and finishes.
 _Avoid_: Gate
 
 **Cylinder**:
-An observation zone shaped as a circle of a given radius around its reference point, used for starts, turnpoints and finishes.
+An observation zone shaped as a circle of a given radius around its reference point, used for starts, turnpoints, assigned areas and finishes.
 _Avoid_: Ring, circle, barrel
+
+**Keyhole**:
+The SWO observation zone for racing task turnpoints between start and finish: a 10 km 90° slice of a circle facing away from the course, joined with a 0.5 km cylinder.
+_Avoid_: DAeC sector
+
+**Assigned area**:
+The observation zone around a turnpoint of an assigned area task, inside which pilots choose where to turn.
+_Avoid_: Turn area, AAT sector
 
 **Start procedure**:
 How starts work on a class day: the type of start and its options, such as a PEV start, with the start opening and closing times and the maximum start altitude and ground speed.
@@ -147,6 +183,10 @@ _Avoid_: Start position, start fix
 **Maximum loss of height (MLoH)**:
 The most height a pilot may lose between start and finish without a penalty, set per day.
 _Avoid_: Height limit, max height loss
+
+**Minimum finish height**:
+The lowest altitude in m MSL at which a flight may reach the finish without a penalty.
+_Avoid_: Finish altitude
 
 ### Airspace
 
