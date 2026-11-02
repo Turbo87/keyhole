@@ -92,6 +92,10 @@ _Avoid_: Flight recorder, FR, recorder
 The one logger of a competitor whose files are scored by default.
 _Avoid_: Main logger, first logger
 
+**Engine run**:
+A stretch of a flight where a logger's ENL, MOP or current channel stays at or above its threshold for at least the minimum duration, both set per logger. An engine run after the start ends the flight at its first fix above the threshold.
+_Avoid_: Motor run, engine use, MoP run
+
 ### Scoring rules
 
 **Rule set**:
@@ -187,6 +191,10 @@ _Avoid_: Height limit, max height loss
 **Minimum finish height**:
 The lowest altitude in m MSL at which a flight may reach the finish without a penalty.
 _Avoid_: Finish altitude
+
+**Tow altitude**:
+The highest altitude in m MSL that a class day allows for releasing from a launch or climbing on the engine before the start. Analysis warns when a flight exceeds it.
+_Avoid_: Release height, tow height
 
 ### Airspace
 
