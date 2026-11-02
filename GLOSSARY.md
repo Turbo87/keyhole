@@ -192,6 +192,10 @@ _Avoid_: Height limit, max height loss
 The lowest altitude in m MSL at which a flight may reach the finish without a penalty.
 _Avoid_: Finish altitude
 
+**Tow altitude**:
+The highest altitude in m MSL that a class day allows for releasing from a launch or climbing on the engine before the start. Analysis warns when a flight exceeds it.
+_Avoid_: Release height, tow height
+
 ### Airspace
 
 **Airspace file**:
