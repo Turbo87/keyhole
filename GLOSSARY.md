@@ -209,6 +209,10 @@ _Avoid_: Main file, active flight
 Make a class day's results visible to the public as a fixed copy that stays unchanged until the scorer publishes again.
 _Avoid_: Release
 
+**Results note**:
+A scorer's public remark published with a class day's results, such as which complaints led to changes or which flights are still missing.
+_Avoid_: Announcement, changelog, publication comment
+
 **Review status**:
 Whether a scorer still has to look at a flight result:
 
