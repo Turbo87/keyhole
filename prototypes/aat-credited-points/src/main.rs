@@ -61,6 +61,7 @@ struct Fix {
     t: i64,
     lat: f64,
     lon: f64,
+    engine: u16,
 }
 
 #[derive(Serialize, Default)]
@@ -103,6 +104,32 @@ struct FlightReport {
     sphere: ModelReport,
 }
 
+#[derive(Serialize)]
+struct OutlandingReport {
+    day: String,
+    cn: String,
+    pub_distance_m: f64,
+    end_reason: String,
+    wgs84: Outlanding,
+    sphere: Outlanding,
+}
+
+#[derive(Serialize, Default)]
+struct Outlanding {
+    /// Areas achieved in order.
+    achieved: usize,
+    /// Marking distance with the outlanding position at the flight end and
+    /// the point of the next area nearest to it.
+    end_nearest_m: f64,
+    /// The same with the next area's centre instead of its nearest point.
+    end_centre_m: f64,
+    /// The best fix after the last credited point as outlanding position.
+    best_nearest_m: f64,
+    /// The best fix with the last credited point fixed first, as the one
+    /// that maximises the distance through the achieved areas.
+    sequential_m: f64,
+}
+
 fn main() {
     let brute = env::var("BRUTE").is_ok();
     for dir in env::args().skip(1) {
@@ -126,13 +153,16 @@ fn main() {
             .deserialize()
             .filter_map(Result::ok)
             .collect();
-        let flights: Vec<(&ResultRow, Vec<Fix>, i64, i64)> = rows
+        let outlanders = env::var("OUTLANDERS").is_ok();
+        let flights: Vec<(&ResultRow, Vec<Fix>, i64, Option<i64>)> = rows
             .iter()
             .filter_map(|r| {
                 let start = parse_hms(&r.start_time_local)?;
-                let finish = parse_hms(&r.finish_time_local)?;
+                let finish = parse_hms(&r.finish_time_local);
                 let fixes = read_fixes(files.get(&r.cn)?);
-                (fixes.len() > 10).then_some((r, fixes, start, finish))
+                let distance = r.distance_km.parse::<f64>().unwrap_or(0.);
+                let wanted = if outlanders { finish.is_none() && distance > 0. } else { finish.is_some() };
+                (wanted && fixes.len() > 10).then_some((r, fixes, start, finish))
             })
             .collect();
         let Some(offset) = utc_offset(&flights, &task.task_points[0]) else {
@@ -146,10 +176,33 @@ fn main() {
             .map(|c| c.as_os_str().to_string_lossy())
             .collect::<Vec<_>>()
             .join("/");
+        if outlanders {
+            let reports: Vec<OutlandingReport> = flights
+                .par_iter()
+                .map(|(row, fixes, start, _)| {
+                    let g = Geodesic::wgs84();
+                    let from = fixes.partition_point(|f| f.t < start - offset);
+                    let (end, end_reason) = flight_end(fixes, &g, from);
+                    let window = &fixes[from..end.max(from + 1).min(fixes.len())];
+                    OutlandingReport {
+                        day: day.clone(),
+                        cn: row.cn.clone(),
+                        pub_distance_m: row.distance_km.parse::<f64>().unwrap_or(f64::NAN) * 1000.,
+                        end_reason,
+                        wgs84: outlanding(&task.task_points, window, &g),
+                        sphere: outlanding(&task.task_points, window, &Geodesic::new(6_371_000., 0.)),
+                    }
+                })
+                .collect();
+            for r in reports {
+                println!("{}", serde_json::to_string(&r).unwrap());
+            }
+            continue;
+        }
         let reports: Vec<FlightReport> = flights
             .par_iter()
             .map(|(row, fixes, start, finish)| {
-                let (from, to) = (start - offset, finish - offset);
+                let (from, to) = (start - offset, finish.unwrap() - offset);
                 let window: Vec<Fix> = fixes
                     .iter()
                     .copied()
@@ -188,7 +241,7 @@ fn median_interval(fixes: &[Fix]) -> f64 {
 }
 
 /// Whole-hour offset that puts the most published starts near the start point.
-fn utc_offset(flights: &[(&ResultRow, Vec<Fix>, i64, i64)], start: &TaskPoint) -> Option<i64> {
+fn utc_offset(flights: &[(&ResultRow, Vec<Fix>, i64, Option<i64>)], start: &TaskPoint) -> Option<i64> {
     let g = Geodesic::wgs84();
     (-12..=14)
         .map(|h| {
@@ -217,7 +270,20 @@ fn read_fixes(path: &Path) -> Vec<Fix> {
     let text = String::from_utf8_lossy(&bytes);
     let mut fixes: Vec<Fix> = Vec::new();
     let mut day_offset = 0;
+    let mut engine_cols: Vec<(usize, usize)> = Vec::new();
     for line in text.lines() {
+        if let Some(rest) = line.strip_prefix('I') {
+            for i in 0..rest.get(..2).and_then(|n| n.parse().ok()).unwrap_or(0) {
+                let Some(def) = rest.get(2 + i * 7..9 + i * 7) else {
+                    break;
+                };
+                if matches!(&def[4..], "ENL" | "MOP") {
+                    if let (Ok(s), Ok(e)) = (def[..2].parse(), def[2..4].parse()) {
+                        engine_cols.push((s, e));
+                    }
+                }
+            }
+        }
         let Ok(b) = igc::records::BRecord::parse(line) else {
             continue;
         };
@@ -236,6 +302,11 @@ fn read_fixes(path: &Path) -> Vec<Fix> {
             t,
             lat: b.pos.lat.into(),
             lon: b.pos.lon.into(),
+            engine: engine_cols
+                .iter()
+                .filter_map(|&(s, e): &(usize, usize)| line.get(s - 1..e)?.parse::<u16>().ok())
+                .max()
+                .unwrap_or(0),
         });
     }
     fixes
@@ -469,4 +540,144 @@ fn excess(points: &[TaskPoint], fixes: &[Fix], credited: &[usize], g: &Geodesic)
             s - tp.oz_radius1
         })
         .collect()
+}
+
+fn engine_threshold() -> u16 {
+    env::var("ENGINE_THRESHOLD").map_or(500, |v| v.parse().unwrap())
+}
+
+/// Index of the first fix after landing or engine start, searched from
+/// `from`, as in the start selection prototype.
+fn flight_end(fixes: &[Fix], g: &Geodesic, from: usize) -> (usize, String) {
+    let mut slow_since = None;
+    let mut engine_since = None;
+    for i in from.max(1)..fixes.len() {
+        let (a, b) = (&fixes[i - 1], &fixes[i]);
+        let dt = (b.t - a.t).max(1) as f64;
+        let s: f64 = g.inverse(a.lat, a.lon, b.lat, b.lon);
+        if s / dt < 5. {
+            let since = *slow_since.get_or_insert(i);
+            if b.t - fixes[since].t >= 30 {
+                return (since, "landed".into());
+            }
+        } else {
+            slow_since = None;
+        }
+        if b.engine >= engine_threshold() {
+            let since = *engine_since.get_or_insert(i);
+            if b.t - fixes[since].t >= 30 {
+                return (since + 1, "engine".into());
+            }
+        } else {
+            engine_since = None;
+        }
+    }
+    (fixes.len(), "end of log".into())
+}
+
+/// Point of a two-arc zone nearest to `p`, on a flat map around the centre.
+fn nearest_in_zone(tp: &TaskPoint, g: &Geodesic, p: (f64, f64)) -> (f64, f64) {
+    let e2 = g.f * (2. - g.f);
+    let phi = tp.latitude;
+    let w = 1. - e2 * phi.sin().powi(2);
+    let kx = (g.a / w.sqrt() * phi.cos()).to_radians();
+    let ky = (g.a * (1. - e2) / w.powf(1.5)).to_radians();
+    let (x, y) = ((p.1 - tp.lon()) * kx, (p.0 - tp.lat()) * ky);
+    let dir = tp.oz_angle12 + std::f64::consts::PI;
+    let mut arcs = vec![(tp.oz_radius1, tp.oz_angle1)];
+    if tp.oz_angle2 > 0. {
+        arcs.push((tp.oz_radius2, tp.oz_angle2));
+    }
+    let mut best = (f64::INFINITY, (0., 0.));
+    for (r, half) in arcs {
+        let mut cands: Vec<(f64, f64)> = vec![(0., 0.)];
+        let az = x.atan2(y);
+        let rho = x.hypot(y);
+        if angle_diff(az, dir) <= half + 1e-9 {
+            let rr = rho.min(r);
+            cands.push((rr * az.sin(), rr * az.cos()));
+        }
+        if half < std::f64::consts::PI {
+            for edge in [dir - half, dir + half] {
+                let (ex, ey) = (edge.sin(), edge.cos());
+                let t = (x * ex + y * ey).clamp(0., r);
+                cands.push((t * ex, t * ey));
+            }
+        }
+        for c in cands {
+            let d = (c.0 - x).hypot(c.1 - y);
+            if d < best.0 {
+                best = (d, c);
+            }
+        }
+    }
+    let (cx, cy) = best.1;
+    (tp.lat() + cy / ky, tp.lon() + cx / kx)
+}
+
+fn outlanding(points: &[TaskPoint], fixes: &[Fix], g: &Geodesic) -> Outlanding {
+    let dist = |a: (f64, f64), b: (f64, f64)| -> f64 { g.inverse(a.0, a.1, b.0, b.1) };
+    let start = (points[0].lat(), points[0].lon());
+    // Layers of (fix index, value) for the areas achieved in order.
+    let mut layers: Vec<Vec<(usize, f64)>> = vec![];
+    for a in 1..points.len() - 1 {
+        let cands: Vec<usize> = visits(points, a, fixes, g)
+            .iter()
+            .flat_map(|v| hull(fixes, v))
+            .collect();
+        let layer: Vec<(usize, f64)> = cands
+            .iter()
+            .filter_map(|&j| {
+                let pj = (fixes[j].lat, fixes[j].lon);
+                match layers.last() {
+                    None => Some((j, dist(start, pj))),
+                    Some(prev) => prev
+                        .iter()
+                        .filter(|(k, _)| *k <= j)
+                        .map(|&(k, v)| (j, v + dist((fixes[k].lat, fixes[k].lon), pj)))
+                        .max_by(|x, y| x.1.total_cmp(&y.1)),
+                }
+            })
+            .collect();
+        if layer.is_empty() {
+            break;
+        }
+        layers.push(layer);
+    }
+    let achieved = layers.len();
+    let next = &points[achieved + 1];
+    let last: Vec<(usize, f64)> = layers.last().cloned().unwrap_or_else(|| vec![(0, 0.)]);
+    let at = |k: usize| {
+        if achieved == 0 { start } else { (fixes[k].lat, fixes[k].lon) }
+    };
+    let leg = |k: usize, l: (f64, f64), n: (f64, f64)| (dist(at(k), n) - dist(l, n)).max(0.);
+    let end = fixes[fixes.len() - 1];
+    let end_p = (end.lat, end.lon);
+    let n_end = nearest_in_zone(next, g, end_p);
+    let centre = (next.lat(), next.lon());
+    let best_over = |f: &dyn Fn(usize, f64) -> f64| last.iter().map(|&(k, v)| f(k, v)).fold(0., f64::max);
+    let earliest = if achieved == 0 { 0 } else { last.iter().map(|x| x.0).min().unwrap() };
+    let &(kmax, vmax) = last.iter().max_by(|x, y| x.1.total_cmp(&y.1)).unwrap();
+    let mut sequential_m = 0.;
+    let mut best_nearest_m = 0.;
+    for l in &fixes[earliest..] {
+        let lp = (l.lat, l.lon);
+        let n = nearest_in_zone(next, g, lp);
+        let v = last
+            .iter()
+            .filter(|(k, _)| achieved == 0 || fixes[*k].t <= l.t)
+            .map(|&(k, v)| v + leg(k, lp, n))
+            .fold(0., f64::max);
+        best_nearest_m = f64::max(best_nearest_m, v);
+        if achieved == 0 || fixes[kmax].t <= l.t {
+            sequential_m = f64::max(sequential_m, vmax + leg(kmax, lp, n));
+        }
+    }
+    Outlanding {
+        achieved,
+        end_nearest_m: best_over(&|k, v| v + leg(k, end_p, n_end)),
+        end_centre_m: best_over(&|k, v| v + leg(k, end_p, centre)),
+        best_nearest_m,
+        sequential_m,
+    }
 }

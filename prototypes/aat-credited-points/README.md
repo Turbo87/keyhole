@@ -6,7 +6,7 @@ Throwaway spike for part of the question "How does Keyhole score an assigned are
 BRUTE=1 cargo run --release -- <soaringspot-downloader output>/<competition>/<class>/<date>... > flights.jsonl
 ```
 
-Only finishers on official AAT days are scored. The window is the published start to the published finish, with the UTC offset inferred per day from the start point. Every flight is scored on WGS84 and on the 6371 km FAI sphere.
+Finishers on official AAT days are scored by default. The window is the published start to the published finish, with the UTC offset inferred per day from the start point. Every flight is scored on WGS84 and on the 6371 km FAI sphere.
 
 | Variable | Effect |
 |---|---|
@@ -14,6 +14,7 @@ Only finishers on official AAT days are scored. The window is the published star
 | `SAMPLE=k` | Keeps only fixes on multiples of `k` seconds |
 | `ZONE_EARTH` | `sphere` or `wgs84`, tests zones on another earth model than distances |
 | `ZONE_MARGIN` | Widens the area radius by this many metres |
+| `OUTLANDERS` | Scores the outlanders instead of the finishers, with the flight end from the start selection prototype |
 
 ## Method
 
@@ -41,3 +42,21 @@ Findings beyond the search:
 
 - `oz_angle12` is the inner bisector on fixed AAT sectors as well, the same as on the symmetric keyhole.
 - The second arc with `A2=180` on the Szeged sectors is a full 25 km cylinder unioned with the 35 km semicircle, not an inner radius.
+
+## Minimum task time
+
+The published speed is the distance divided by `max(T, Tmin)` for 8330 of 8337 finishers with a published speed, 960 of them under `Tmin`. The other seven are under `Tmin` and carry speeds with two decimals, such as 130.00 km/h, so they look like manually entered results.
+
+## Outlanders
+
+With `OUTLANDERS=1`, the prototype scores the 1333 outlanders with a published distance. The marking distance runs through credited points in the areas achieved in order, to the point of the next area or the finish nearest to the outlanding position, less the distance from the outlanding position to that point, floored at zero on the last leg. Three choices of outlanding position were compared:
+
+| Outlanding position | Within 1 m | Within 30 m |
+|---|---|---|
+| Flight end (landing, engine run or end of log) | 15 | 140 |
+| Flight end, with the next area's centre instead of its nearest point | 9 | 90 |
+| Best fix after the last credited point, chosen jointly with the credited points | 90 | 658 |
+
+SeeYou uses the best fix, which matches the virtual outlanding rule (SWO 7.8.3, Annex A 7.7.2) applied to every outlanding. Choosing the last credited point first and the best fix afterwards fits worse. The hull pruning still applies because the last leg is convex in the last credited point once the outlanding position is fixed.
+
+On WGS84 days up to 2023, 72 of 313 outlanders within 1 km match within 1 m and 136 within 5 m, with the middle half from -1.5 to +19 m. The rest of the residual is not explained yet. Most outlanders that are more than 1 km longer than published carry a remark for an airspace infringement, leaving the competition area or a low finish, which are scorer inputs. Outlanders that are more than 1 km shorter point at a flight end detected too early.
