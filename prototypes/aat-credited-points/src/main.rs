@@ -68,6 +68,12 @@ struct Search {
     distance_m: f64,
     /// Fix indices of the credited points, one per area.
     credited: Vec<usize>,
+    /// (lat, lon) of the credited points.
+    credited_at: Vec<(f64, f64)>,
+    /// Distance of each credited point from its area centre minus the outer
+    /// radius, on WGS84 and on the FAI sphere.
+    excess_wgs84_m: Vec<f64>,
+    excess_sphere_m: Vec<f64>,
     candidates: usize,
     micros: u128,
 }
@@ -358,6 +364,9 @@ fn search(points: &[TaskPoint], fixes: &[Fix], cands: &[Vec<usize>], g: &Geodesi
     }
     Search {
         distance_m,
+        credited_at: credited.iter().map(|&i| (fixes[i].lat, fixes[i].lon)).collect(),
+        excess_wgs84_m: excess(points, fixes, &credited, &Geodesic::wgs84()),
+        excess_sphere_m: excess(points, fixes, &credited, &Geodesic::new(6_371_000., 0.)),
         credited,
         candidates: cands.iter().map(Vec::len).sum(),
         micros: t0.elapsed().as_micros(),
@@ -448,4 +457,16 @@ fn flat_distance(g: &Geodesic, ref_lat: f64, a: (f64, f64), b: (f64, f64)) -> f6
 /// `ZONE_MARGIN` widens the first arc by this many metres.
 fn zone_margin() -> f64 {
     env::var("ZONE_MARGIN").map_or(0., |v| v.parse().unwrap())
+}
+
+fn excess(points: &[TaskPoint], fixes: &[Fix], credited: &[usize], g: &Geodesic) -> Vec<f64> {
+    credited
+        .iter()
+        .enumerate()
+        .map(|(a, &i)| {
+            let tp = &points[a + 1];
+            let s: f64 = g.inverse(tp.lat(), tp.lon(), fixes[i].lat, fixes[i].lon);
+            s - tp.oz_radius1
+        })
+        .collect()
 }
