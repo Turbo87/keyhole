@@ -154,6 +154,10 @@ _Avoid_: Height limit, max height loss
 Working out from a flight's IGC file what the pilot achieved on the day's task.
 _Avoid_: Evaluation, check
 
+**Recorded date**:
+The date an IGC file states for its flight in its `HFDTE` header. It can differ from the class day the file is assigned to, mostly because some older loggers with faulty GPS modules record dates exactly 1024 weeks early after a GPS week number rollover.
+_Avoid_: File date, flight date
+
 **Analysis log**:
 The list of entries produced while analysing one uploaded IGC file, available even if parsing fails. Debug entries are hidden by default.
 _Avoid_: Timeline, event log
