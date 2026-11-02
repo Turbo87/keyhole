@@ -45,8 +45,16 @@ A class day that is flown and scored but doesn't count toward overall results.
 _Avoid_: Training day
 
 **Day status**:
-How far a class day has progressed toward final results: no task, task published, preliminary, unofficial, final or cancelled.
+How far a class day has progressed toward final results: unplanned, task published, preliminary, unofficial, final or cancelled.
 _Avoid_: Result status, day state
+
+**Cancelled day**:
+A class day the scorer has called off, with or without a task. It keeps its day number and does not count toward overall results.
+_Avoid_: Neutralised day, invalid day
+
+**Day number**:
+A class day's position within its class, counting every date of the competition in order, with practice days numbered separately.
+_Avoid_: Task number
 
 ### Classes
 
