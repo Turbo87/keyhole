@@ -14,6 +14,7 @@ Finishers on official AAT days are scored by default. The window is the publishe
 | `SAMPLE=k` | Keeps only fixes on multiples of `k` seconds |
 | `ZONE_EARTH` | `sphere` or `wgs84`, tests zones on another earth model than distances |
 | `ZONE_MARGIN` | Widens the area radius by this many metres |
+| `FLIGHT_END=log` | Ends outlanders' flights at the end of the log instead of the first landing or engine run |
 | `OUTLANDERS` | Scores the outlanders instead of the finishers, with the flight end from the start selection prototype |
 
 ## Method
@@ -59,4 +60,4 @@ With `OUTLANDERS=1`, the prototype scores the 1333 outlanders with a published d
 
 SeeYou uses the best fix, which matches the virtual outlanding rule (SWO 7.8.3, Annex A 7.7.2) applied to every outlanding. Choosing the last credited point first and the best fix afterwards fits worse. The hull pruning still applies because the last leg is convex in the last credited point once the outlanding position is fixed.
 
-On WGS84 days up to 2023, 72 of 313 outlanders within 1 km match within 1 m and 136 within 5 m, with the middle half from -1.5 to +19 m. The rest of the residual is not explained yet. Most outlanders that are more than 1 km longer than published carry a remark for an airspace infringement, leaving the competition area or a low finish, which are scorer inputs. Outlanders that are more than 1 km shorter point at a flight end detected too early.
+On WGS84 days up to 2023, 72 of 313 outlanders within 1 km match within 1 m and 136 within 5 m, with the middle half from -1.5 to +19 m. The rest of the residual is not explained yet. Most outlanders that are more than 1 km longer than published carry a remark for an airspace infringement, leaving the competition area or a low finish, which are scorer inputs. Of the 24 outlanders that are more than 1 km shorter than published, 7 come within about 100 m with `FLIGHT_END=log`, which ignores landings and engine runs, so SeeYou ended those flights later. For 7 more, all ended by an engine run, the end of the log gives up to 43 km too much, so SeeYou's flight end lies between the two. 8 are on `24th-fai-egc`, whose cylinder start with a credited start point this prototype does not model, and 2 are unexplained.

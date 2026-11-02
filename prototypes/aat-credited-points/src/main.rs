@@ -182,7 +182,12 @@ fn main() {
                 .map(|(row, fixes, start, _)| {
                     let g = Geodesic::wgs84();
                     let from = fixes.partition_point(|f| f.t < start - offset);
-                    let (end, end_reason) = flight_end(fixes, &g, from);
+                    // FLIGHT_END=log ignores landings and engine runs.
+                    let (end, end_reason) = if env::var("FLIGHT_END").is_ok_and(|v| v == "log") {
+                        (fixes.len(), "end of log".into())
+                    } else {
+                        flight_end(fixes, &g, from)
+                    };
                     let window = &fixes[from..end.max(from + 1).min(fixes.len())];
                     OutlandingReport {
                         day: day.clone(),
