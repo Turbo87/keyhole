@@ -148,6 +148,24 @@ _Avoid_: Start position, start fix
 The most height a pilot may lose between start and finish without a penalty, set per day.
 _Avoid_: Height limit, max height loss
 
+### Airspace
+
+**Airspace file**:
+The competition's OpenAir airspace file, as uploaded by the organiser and fixed once the first flight is uploaded.
+_Avoid_: Airspace data, airspace database
+
+**Closed airspace**:
+An airspace that competitors must not enter on a class day. Every airspace in the airspace file is closed unless the competition opens it or a class day's airspace exception opens it, and a class day's NOTAM airspaces are always closed.
+_Avoid_: Forbidden airspace, prohibited airspace (prohibited is an ICAO type), active airspace
+
+**Airspace exception**:
+A class day's change to whether one airspace of the airspace file is closed, for the whole day and in either direction.
+_Avoid_: Airspace override, activation
+
+**NOTAM airspace**:
+An airspace added to one class day only and closed on that day, such as a temporary restricted area published by NOTAM.
+_Avoid_: Temporary airspace, day airspace, additional airspace
+
 ### Flights and results
 
 **Flight analysis**:
