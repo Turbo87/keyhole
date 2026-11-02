@@ -3,8 +3,8 @@
 Usage: DATA=/path/to/soaringspot python3 summarise.py flights.jsonl [section...]
 
 Sections: survey, variants, gates, endfix, pure, prestart, noise, launch, fes,
-soaring. Without arguments all sections run. `endfix` rereads IGC files from
-DATA.
+cur, soaring. Without arguments all sections run. `endfix` and `cur` reread IGC
+files from DATA.
 """
 
 import collections
@@ -20,7 +20,7 @@ IDX = {"ENL": 0, "MOP": 1, "RPM": 2, "CUR": 3}
 
 F = [json.loads(line) for line in open(sys.argv[1])]
 SECTIONS = sys.argv[2:] or [
-    "survey", "variants", "gates", "endfix", "pure", "prestart", "noise", "launch", "fes", "soaring",
+    "survey", "variants", "gates", "endfix", "pure", "prestart", "noise", "launch", "fes", "cur", "soaring",
 ]
 
 
@@ -342,3 +342,112 @@ if "endfix" in SECTIONS:
                 d = 0 if R[0] <= e <= R[1] else min(abs(e - R[0]), abs(e - R[1]))
                 c["exact" if d == 0 else "<=5 s" if d <= 5 else "<=60 s" if d <= 60 else ">60 s"] += 1
             print(f"{name:42s} {rs:8s}", dict(c))
+
+if "cur" in SECTIONS:
+    show("CUR threshold: noise floor, run levels and detections at 30 s")
+    import re
+
+    DATA = os.environ["DATA"]
+    SENTINEL = {990, 999}
+    ELECTRIC = re.compile(r"(?i)FES|RES|e ?neo|8 ?e\b|8e |\b3F\b|3 ?e\b|Mini ?LAK|Diana|elektro")
+
+    def fixes(r):
+        cols, out, last, off = {}, [], -1, 0
+        for line in gzip.open(os.path.join(DATA, r["day"], r["file"]), "rt", errors="replace"):
+            if line.startswith("I"):
+                try:
+                    for i in range(int(line[1:3])):
+                        dd = line[3 + i * 7:10 + i * 7]
+                        cols[dd[4:]] = (int(dd[:2]), int(dd[2:4]))
+                except ValueError:
+                    pass
+            elif line.startswith("B") and len(line) >= 35 and line[1:7].isdigit():
+                t = int(line[1:3]) * 3600 + int(line[3:5]) * 60 + int(line[5:7]) + off
+                if last >= 0 and t < last - 43200:
+                    off += 86400
+                    t += 86400
+                if t <= last or not r["takeoff"] <= t <= r["landing"]:
+                    last = max(last, t)
+                    continue
+                last = t
+                v = {}
+                for c in ("ENL", "MOP", "RPM", "CUR"):
+                    if c in cols:
+                        x = line[cols[c][0] - 1:cols[c][1]]
+                        v[c] = int(x) if x.isdigit() else 0
+                out.append((t, v))
+        return out
+
+    def held(t, v, T, D=30):
+        out, rs = [], None
+        for i, x in enumerate(v + [-1]):
+            if x >= T:
+                rs = i if rs is None else rs
+            else:
+                if rs is not None and t[i - 1] - t[rs] >= D:
+                    out.append((t[rs], t[i - 1]))
+                rs = None
+        return out
+
+    def hold30(t, v):
+        """Highest value held at every fix for 30 s."""
+        best = 0
+        for i in range(len(t)):
+            j = i
+            while j < len(t) and t[j] - t[i] < 30:
+                j += 1
+            if j < len(t):
+                best = max(best, min(v[i:j + 1]))
+        return best
+
+    noise, levels, sweep = [], [], {T: C() for T in (10, 15, 20, 30, 50, 100)}
+    for r in F:
+        if "CUR" not in r["channels"] or r["takeoff"] is None:
+            continue
+        fx = fixes(r)
+        if len(fx) < 50:
+            continue
+        t = [x[0] for x in fx]
+        ch = {c: [x[1].get(c, 0) for x in fx] for c in ("ENL", "MOP", "RPM", "CUR")}
+        truth = held(t, ch["ENL"], 500) + held(t, ch["MOP"], 500) + held(t, ch["RPM"], 1000)
+        truth = [(a, b) for a, b in truth if b - a <= 1800]  # longer runs are stuck sensors
+        quiet = [
+            all(ch[c][i] < 200 for c in ("ENL", "MOP", "RPM")) and not any(a - 120 <= t[i] <= b + 120 for a, b in truth)
+            for i in range(len(t))
+        ]
+        i = 0
+        while i < len(t):
+            if not quiet[i]:
+                i += 1
+                continue
+            j = i
+            while j + 1 < len(t) and quiet[j + 1]:
+                j += 1
+            noise.append(hold30(t[i:j + 1], [0 if c in SENTINEL else c for c in ch["CUR"][i:j + 1]]))
+            i = j + 1
+        electric = ELECTRIC.search((r["row"] or {}).get("glider", "") + " " + r["header"]["glider_type"])
+        run_levels = []
+        for p0, p1 in truth:
+            a, b = t.index(p0), t.index(p1)
+            run_levels.append(hold30(t[max(0, a - 10):b + 11], ch["CUR"][max(0, a - 10):b + 11]))
+        if electric:
+            levels += run_levels
+        for T, c in sweep.items():
+            for p0, p1 in held(t, ch["CUR"], T):
+                vals = ch["CUR"][t.index(p0):t.index(p1) + 1]
+                if p1 - p0 > 1800 and len(set(vals)) <= 2:
+                    c["stuck"] += 1
+                elif any(a - 60 <= p1 and p0 <= b + 60 for a, b in truth):
+                    c["with ENL/MOP/RPM run"] += 1
+                elif len(set(vals)) == 1:
+                    c["constant"] += 1
+                else:
+                    c["CUR only"] += 1
+            if electric:
+                c["recall"] += sum(lvl >= T for lvl in run_levels)
+    noise.sort()
+    print("quiet stretches", len(noise), "CUR held 30 s: p99", q(noise, 0.99), "max", noise[-1])
+    print("ENL/MOP/RPM runs on electric types", len(levels), "CUR held 30 s quantiles",
+          [q(levels, p) for p in (0.05, 0.1, 0.2, 0.5)])
+    for T, c in sweep.items():
+        print(f"CUR >= {T} for 30 s", dict(c), f"recall {c['recall']}/{len(levels)}")

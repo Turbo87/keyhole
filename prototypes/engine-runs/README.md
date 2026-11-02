@@ -68,13 +68,34 @@ Annex A and national days reproduce much worse (21 of 80 and 12 of 29 exact). Ma
 - **Electric sustainers.** Of 84 flights with CUR >= 100 for 30 s, ENL >= 500 for 30 s accompanied it in 39, MOP in 61, neither in 11. FES needs MOP, and ENL alone misses most of them.
 - **SoaringBegin/SoaringEnd** are B record indices. They are set in 72 files only, begin near the release (median 14 s before the launch end found here) and end near the landing (median 40 s before), or at the engine start in 2 files. They are SeeYou's own soaring bounds, not scorer decisions, and too rare to be an oracle.
 
-## Recommendations
+## CUR threshold
 
-- **Threshold and duration.** ENL or MOP at least 500 for at least 30 s, with the flight end at the first fix at or above 500, plus an altitude gain gate. That reproduces SeeYou closely enough (51 of 62 DAeC ends within 5 s). Alternatives: no gate (13 times the false positives on DAeC), or 60 s (half the false positives, a few late detections).
-- **Dips.** Allow short dips below the threshold within a run (about 10 s), so fluctuating sustainers like NF are not missed. Backtracking to the start of the rise does not improve the fix match.
-- **Logger and glider dependence.** One threshold for both channels. Logger noise differs, but the gain gate removes most of it. Loggers with broken ENL scaling (Cambridge constant 996, Triadis) and stuck MOP sensors need a per-file "engine channel not usable" decision by the scorer instead of a per-manufacturer threshold. Don't gate on the glider: the PureGlider flag is wrong on motor gliders, and pure gliders' noise is handled by the gate.
-- **What the competition setting controls.** The ENL threshold (default 500) and the minimum duration (default 30 s), applied to ENL and MOP, plus a separate current threshold where CUR exists. SeeYou's own setting is a "High ENL" warning level, not the detection.
-- **Before the start.** Engine runs before the start are logged (info) but do not end the flight. A run in progress at a start crossing excludes that crossing, as in issue #24.
+`summarise.py cur` rereads the 593 files with a CUR column. All of them come from LXNAV LX8080, LX9000, LX9050 and LX9070 units with firmware 8 and 9. The independent ground truth is ENL or MOP >= 500 or RPM >= 1000 for 30 s. Runs over 30 minutes are dropped as stuck sensors. Noise is measured on airborne stretches more than 120 s from such a run, with ENL, MOP and RPM below 200.
+
+- **Units.** CUR is in amps. On the 172 files that also record VOL, CUR times VOL during runs gives 3 to 18 kW, which matches FES and JS RES motors. Three older LX9000 installations (firmware 9.0 to 9.03c: a Diana 2 FES in Australia 2023, a Discus 2c FES at Garray 2023, Narromine 2022) log 195 to 896 during runs. That is a larger scale, but it only makes runs easier to detect.
+- **Noise floor.** In gliding flight, CUR is 0 to 2. Per fix, the 99th percentile is 10 in cruise, thermalling and fast flight alike, and the maximum is 19. Held for 30 s, the 99th percentile is 1 and the maximum is 10 over 18254 quiet stretches. The value 990 appears as a sentinel, mostly on the ground, and never holds for 30 s in flight.
+- **Run levels.** Over 683 ENL, MOP or RPM runs on electric glider types, the CUR held for 30 s has a 10th percentile of 22 A and a median of 77 A. Of the 66 runs below 20 A, 44 come from installations where CUR stays 0 (Mini LAK FES, some Diana 2 and JS3 RES), and about 10 are JS3 RES low-power runs at 10 to 19 A.
+
+| CUR for 30 s | Runs with ENL, MOP or RPM | CUR only | Constant | Stuck | Recall |
+|---|---|---|---|---|---|
+| >= 10 | 303 | 21 | 3 | 18 | 625/683 |
+| >= 15 | 306 | 24 | 5 | 11 | 623/683 |
+| **>= 20** | **302** | **24** | **0** | **11** | **617/683** |
+| >= 30 | 307 | 21 | 0 | 11 | 608/683 |
+| >= 50 | 321 | 6 | 0 | 11 | 560/683 |
+| >= 100 | 119 | 4 | 0 | 11 | 228/683 |
+
+At 20 A for 30 s, every non-stuck CUR run is engine-like. 18 of the CUR-only runs were checked by hand: all have ENL peaks of 500 to 999 that last less than 30 s, and 17 fly level or climb where a straight glide in the same flight sinks at about 0.9 m/s. One is ambiguous. Below 20 A, one JS3 (`jenacup-2026-jena-schongleina-2026/18-meter/2026-07-28` YY) holds a constant 15 for up to 118 s without other engine signs. The 11 stuck runs are a single JS3 (`38th-fai-world-gliding-championship-uvalde-garner-field-2024/18-meter` 5M, 16 days) whose CUR reads 301 all flight while MOP reads 999. No threshold handles it, so that logger needs the channel switched off. All 11 runs from the FES section above that neither ENL nor MOP catch are found at 20 A, together with 24 CUR-only runs at 20 to 70 A. The default holds across all loggers that record CUR. The gap between the noise (at most 10 A held for 30 s) and the lower end of the runs (22 A) is narrow but has no overlap on this corpus.
+
+## Decision
+
+The user decided on issue #63, departing from the first-pass recommendations (climb gate, dip tolerance, competition setting):
+
+- **Detection.** A channel at or above its threshold for at least the minimum duration is an engine run. There is no climb gate and no dip tolerance. The flight end is the first fix at or above the threshold.
+- **Channels and defaults.** ENL and MOP default to 500, CUR to 20 A. The minimum duration is shared by all channels and defaults to 30 s.
+- **Per logger, not per competition.** Scorers set the thresholds and the duration per logger, which also handles noisy installations, stuck MOP sensors and Cambridge's constant 996. There is no competition-level setting and no gating on the glider or the PureGlider flag.
+- **Before the start.** A run before the start doesn't end the flight. It is an info entry in the analysis log with its levels, because competitors are expected to run their engine on the first day so scorers can calibrate the logger. A run in progress at a start crossing excludes that crossing, as in issue #24.
+- **Fixtures.** All proposed flights below join the oracle fixtures. Flights where SeeYou ends a few seconds off or flies on past a run are recorded as known deviations.
 
 ## Proposed fixtures
 
