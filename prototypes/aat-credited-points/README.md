@@ -27,7 +27,7 @@ The hull is built in raw (lon, lat). Every equirectangular flat map, cheap-ruler
 
 The download holds 7908 finishers with IGC files on 415 official AAT days. A finisher has a median of 3700 in-zone fixes, and the hulls keep a median of 131 of them (243 at p90, 1554 at most). No visit shared a fix with an adjacent area.
 
-On 52 sampled days, the hull search and the exhaustive search agree to 1e-6 m on all 1943 flight and earth model pairs, so the flat-map convexity argument held for geodesic distances on every sampled flight. The hull search takes a median of 1.2 ms (10 ms at p99) against 3.2 s (5.8 s at p99), 550 times faster at the median.
+On 52 sampled days, the hull search and the exhaustive search agree to 1e-6 m on all 1943 flight and earth model pairs, so the flat-map convexity argument held for geodesic distances on every sampled flight. The hull search takes a median of 1.2 ms (10 ms at p99) against 0.88 s (5.8 s at p99) for the exhaustive search. The per-flight speedup has a median of 550 times, from 59 times at p10 to 3500 times at p90, and the total search time drops by a factor of 720. Times are wall-clock times of the search alone, measured while flights ran in parallel.
 
 Against SoaringSpot:
 
