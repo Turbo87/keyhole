@@ -92,6 +92,10 @@ _Avoid_: Flight recorder, FR, recorder
 The one logger of a competitor whose files are scored by default.
 _Avoid_: Main logger, first logger
 
+**Engine run**:
+A stretch of a flight where a logger's ENL, MOP or current channel stays at or above its threshold for at least the minimum duration, both set per logger. An engine run after the start ends the flight at its first fix above the threshold.
+_Avoid_: Motor run, engine use, MoP run
+
 ### Scoring rules
 
 **Rule set**:
