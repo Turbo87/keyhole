@@ -1,0 +1,288 @@
+<!doctype html>
+<!--
+  PROTOTYPE, throwaway. Answers: "What do the printable daily and overall result pages contain?"
+  Three variants (?variant=A|B|C), one per answer to "public page or scorer page, snapshot or working state":
+    A  the public results page with a print stylesheet (prints the published snapshot)
+    B  a separate scorer notice-board sheet rendered from the published snapshot
+    C  a scorer printout of the working state, marked as unpublished when it differs
+  The dark panel sets page, status and unpublished edits. "Paper preview" applies the print layout on screen,
+  and the browser's print dialog (Cmd+P) shows the real thing. Open this file directly in a browser.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE · Keyhole printable results</title>
+<style>
+  :root { --fg:#1b1f24; --muted:#5d6670; --line:#d9dde2; --soft:#f4f6f8; --accent:#1f5fbf;
+    --s-pre:#c77700; --s-unoff:#1f6fd1; --s-final:#1d8a4e; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.45 system-ui, sans-serif; color:var(--fg); background:#e9ecef; }
+  #app { padding:20px 340px 100px 20px; }
+  .page { background:#fff; max-width:1100px; margin:0 auto; padding:20px 24px; box-shadow:0 1px 4px rgba(0,0,0,.15); }
+  body.paper .page { width:297mm; min-height:210mm; max-width:none; padding:10mm 12mm; font-size:11px; }
+  body.paper.portrait .page { width:210mm; min-height:297mm; }
+  h1 { font-size:22px; margin:2px 0; } h2 { font-size:17px; margin:14px 0 6px; }
+  .muted { color:var(--muted); } .small { font-size:12px; }
+  table { border-collapse:collapse; width:100%; font-size:13px; }
+  th, td { padding:3px 6px; border-bottom:1px solid var(--line); text-align:left; white-space:nowrap; }
+  th { background:var(--soft); font-weight:600; } .num { text-align:right; font-variant-numeric:tabular-nums; }
+  body.paper table { font-size:10.5px; } body.paper th, body.paper td { padding:2px 4px; }
+  .rm { font-size:11px; color:#9a3b00; white-space:normal; }
+  .internal { font-size:11px; color:#6b2fa3; white-space:normal; }
+  .ph { color:var(--muted); font-style:italic; }
+  .banner { border-left:5px solid; padding:8px 12px; margin:10px 0; border-radius:3px; }
+  .banner.pre { border-color:var(--s-pre); background:#fff6e8; } .banner.unoff { border-color:var(--s-unoff); background:#eaf2fd; }
+  .banner.final { border-color:var(--s-final); background:#e9f6ef; }
+  .note { border:1px solid var(--line); background:var(--soft); padding:6px 10px; margin:10px 0; white-space:pre-line; }
+  .foot { margin-top:16px; padding-top:6px; border-top:1px solid var(--line); color:var(--muted); font-size:11px; display:flex; justify-content:space-between; gap:12px; }
+  .qr { width:56px; height:56px; background:repeating-conic-gradient(#111 0 25%, #fff 0 50%) 0 0/8px 8px; border:3px solid #111; flex:none; }
+
+  /* A: public page */
+  .A-nav { display:flex; gap:2px; margin:10px 0 0; } .A-nav a { padding:5px 12px; background:var(--soft); border-radius:5px 5px 0 0; color:var(--fg); text-decoration:none; }
+  .A-nav a.on { background:var(--accent); color:#fff; }
+  .A-printbtn { float:right; border:1px solid var(--line); background:#fff; border-radius:5px; padding:4px 10px; cursor:pointer; }
+  .A-printonly { display:none; }
+  body.paper .A-nav, body.paper .A-printbtn, body.paper .A-screenonly { display:none; }
+  body.paper .A-printonly { display:block; }
+
+  /* B: notice-board sheet */
+  .B-title { display:grid; grid-template-columns:1fr auto; gap:12px; border-bottom:2px solid #111; padding-bottom:6px; }
+  .B-stamp { border:3px solid; padding:6px 12px; text-align:center; font-weight:800; text-transform:uppercase; letter-spacing:.04em; align-self:start; }
+  .B-stamp small { display:block; font-weight:600; text-transform:none; letter-spacing:0; font-size:12px; }
+  .B-stamp.pre { color:var(--s-pre); } .B-stamp.unoff { color:var(--s-unoff); } .B-stamp.final { color:var(--s-final); }
+  .B-meta { display:grid; grid-template-columns:repeat(4, auto); justify-content:start; gap:2px 24px; font-size:12px; margin:6px 0; }
+  .B-meta b { display:block; font-size:10px; text-transform:uppercase; color:var(--muted); }
+  .B-cols { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .B-sign { display:grid; grid-template-columns:1fr 1fr 1fr; gap:24px; margin-top:28px; font-size:11px; }
+  .B-sign div { border-top:1px solid #111; padding-top:3px; }
+
+  /* C: working-state printout */
+  .C-wm { position:relative; overflow:hidden; }
+  .C-wm.dirty::before { content:"WORKING STATE · NOT PUBLISHED"; position:absolute; top:40%; left:-5%; width:110%; text-align:center; transform:rotate(-14deg);
+    font-size:54px; font-weight:900; color:rgba(200,0,0,.12); pointer-events:none; }
+  .C-head { display:flex; justify-content:space-between; border-bottom:1px dashed #999; padding-bottom:6px; }
+  .rv { font-size:11px; padding:0 5px; border-radius:3px; } .rv.ok { background:#e9f6ef; } .rv.check { background:#fde2e2; } .rv.rev { background:#eaf2fd; } .rv.chg { background:#fff0c2; }
+  tr.diff td { background:#fff8d6; }
+  .diffmark { color:#c00; font-weight:700; }
+
+  @media print {
+    @page { size: A4 landscape; margin: 10mm; }
+    body { background:#fff; } #app { padding:0; } .page { box-shadow:none; max-width:none; width:auto; padding:0; font-size:11px; }
+    #controls, #switcher, .A-nav, .A-printbtn, .A-screenonly { display:none !important; }
+    .A-printonly { display:block; }
+    table { font-size:10.5px; } th, td { padding:2px 4px; }
+    tr { break-inside:avoid; } thead { display:table-header-group; }
+    .banner, .note, th, tr.diff td, .rv, .C-wm::before { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  }
+
+  /* Prototype chrome, deliberately not part of the design */
+  #controls { position:fixed; top:0; right:0; bottom:0; width:320px; background:#111; color:#eee; font:12px/1.4 ui-monospace, monospace; padding:10px 12px 70px; overflow-y:auto; z-index:20; }
+  #controls h4 { margin:12px 0 4px; color:#ffd166; font-size:12px; text-transform:uppercase; }
+  #controls label { display:block; margin:2px 0; } #controls select { background:#222; color:#eee; border:1px solid #444; font:inherit; }
+  #controls pre { white-space:pre-wrap; background:#1c1c1c; padding:6px; color:#9fe0a8; }
+  #controls .q { color:#ffd166; }
+  #switcher { position:fixed; bottom:16px; left:calc(50% - 160px); transform:translateX(-50%); background:#111; color:#fff; border-radius:24px;
+    padding:6px 10px; display:flex; gap:10px; align-items:center; font:13px ui-monospace, monospace; z-index:30; box-shadow:0 4px 14px rgba(0,0,0,.35); }
+  #switcher button { background:#333; color:#fff; border:0; border-radius:50%; width:28px; height:28px; cursor:pointer; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="controls"></div>
+<div id="switcher"></div>
+<script>
+// ---------------------------------------------------------------- fake data
+const COMP = { name: 'Regionalmeisterschaft Musterstadt 2027', place: 'Musterstadt (EDXM)', rules: 'DAeC SWO 2026 with local procedures',
+  slug: 'rm-musterstadt-2027', engine: 'keyhole-scoring 0.4.2', hash: 'rules 3f9a1c2e' };
+const CLS = { name: 'Club', handicapped: true };
+const DAY = { label: 'Day 3 · Task B', date: 'Mon 17 May 2027', task: 'Racing task 251.0 km · Musterstadt – Talheim Kirche – Bergheim AB-Kreuz – Oberwald Turm – Musterstadt',
+  dm: 100, d1: 250, validity: '1000 × f 0.92', n: 8, published: 'Mon 17 May 2027, 19:42 CEST', version: 2, deadline: 'Mon 17 May 2027, 21:42 CEST' };
+// cn, crew, club, glider, handicap, start, finish, time, speed, distance, points, penalty, public remark, internal remark, review status
+const ROWS = [
+  ['2T', 'Jonas Brandt', 'FSV Oberwald', 'LS4', 104, '13:12:04', '16:01:51', '2:49:47', 88.70, 251.0, 1000, 0, '', '', 'ok'],
+  ['KA', 'Anna Keller', 'LSV Musterstadt', 'Std Libelle', 98, '13:20:31', '16:24:10', '3:03:39', 82.00, 251.0, 961, 0, '', '', 'rev'],
+  ['MZ', 'Lea Hoffmann', 'SFG Talheim', 'Astir CS', 92, '13:08:44', '16:22:09', '3:13:25', 77.86, 251.0, 949, 0, 'Official warning: start altitude exceeded by 40 m (SWO 7.4)', 'Barogram checked against QNH 1016, margin 100 m', 'rev'],
+  ['X7', 'Felix Wagner', 'LSV Musterstadt', 'DG-100', 98, '13:31:02', '16:43:59', '3:12:57', 78.04, 251.0, 902, 25, 'Finish below minimum finish height by 32 m', 'Pilot informed by phone 18:10', 'rev'],
+  ['P2', 'Mia Schuster', 'AC Bergheim', 'Pegase', 102, '13:15:40', '', '', null, 203.6, 655, 0, '', '', 'chg'],
+  ['C3', 'Emma Vogt', 'SFG Talheim', 'Std Cirrus', 98, '13:27:18', '', '', null, 171.2, 560, 0, '', 'Field landing near Oberwald, retrieve by road', 'ok'],
+  ['RB', 'Lukas Bauer', 'AC Bergheim', 'ASW 15', 100, '', '', '', null, 0, 0, 0, '', '', 'ok'],
+  ['W9', 'Paul Richter', 'FSV Oberwald', 'ASW 19', 100, '13:18:12', '', '', null, null, null, 0, '', 'Logger file missing, pilot asked to deliver by 20:00', 'check'],
+];
+const OVERALL = [ // cn, crew, club, glider, day points (P, 1, 2, 3), total
+  ['2T', 'Jonas Brandt', 'FSV Oberwald', 'LS4', [612, 944, 871, 1000], 2815],
+  ['KA', 'Anna Keller', 'LSV Musterstadt', 'Std Libelle', [801, 1000, 812, 961], 2773],
+  ['MZ', 'Lea Hoffmann', 'SFG Talheim', 'Astir CS', [655, 902, 1000, 949], 2851],
+  ['X7', 'Felix Wagner', 'LSV Musterstadt', 'DG-100', [1000, 811, 790, 877], 2478],
+  ['P2', 'Mia Schuster', 'AC Bergheim', 'Pegase', [540, 870, 905, 655], 2430],
+  ['C3', 'Emma Vogt', 'SFG Talheim', 'Std Cirrus', [702, 760, 688, 560], 2008],
+  ['W9', 'Paul Richter', 'FSV Oberwald', 'ASW 19', [580, 702, 845, null], 1547],
+  ['RB', 'Lukas Bauer', 'AC Bergheim', 'ASW 15', [430, 655, 0, 0], 655],
+].sort((a, b) => b[5] - a[5]);
+const DAY_STATUS_OVERALL = ['Practice', 'Final', 'Final', null]; // day 3 follows the panel
+
+// ---------------------------------------------------------------- state
+const params = new URLSearchParams(location.search);
+const S = {
+  variant: params.get('variant') ?? 'A',
+  page: 'daily',        // daily | overall
+  status: 'unoff',      // pre | unoff | final
+  dirty: true,          // unpublished edits exist (P2 re-analysed, X7 penalty changed)
+  paper: false, portrait: false,
+};
+const STATUS = { pre: 'Preliminary', unoff: 'Unofficial', final: 'Final' };
+const VARIANTS = { A: 'Public page + print CSS', B: 'Notice-board sheet (snapshot)', C: 'Working-state printout' };
+
+// Published snapshot vs. working state: the working state has two edits the public has not seen yet.
+function rows(working) {
+  const rs = ROWS.map(r => [...r]);
+  if (working && S.dirty) {
+    rs[4][9] = 211.4; rs[4][10] = 681; rs[4].diff = true;
+    rs[3][11] = 50; rs[3][12] = 'Finish below minimum finish height by 64 m'; rs[3].diff = true;
+  }
+  rs.forEach(r => { r.net = r[10] == null ? null : Math.max(0, r[10] - r[11]); });
+  return rs;
+}
+function ranked(rs) {
+  const scored = rs.filter(r => r.net != null).sort((a, b) => b.net - a.net);
+  scored.forEach((r, i) => r.rank = i && scored[i - 1].net === r.net ? scored[i - 1].rank : i + 1);
+  return [...scored, ...rs.filter(r => r.net == null)];
+}
+const st = () => STATUS[S.status];
+const fmt = (v, d = 1) => v == null ? '' : v.toFixed(d);
+const overallStatus = () => S.status === 'pre' ? 'Preliminary' : S.status === 'unoff' ? 'Unofficial' : 'Final';
+
+// ---------------------------------------------------------------- shared tables
+function dailyTable(rs, { remarks = 'inline', review = false, internal = false } = {}) {
+  const rem = r => [r[12] && `<div class="rm">${r[12]}${r[11] ? ` (−${r[11]})` : ''}</div>`, internal && r[13] && `<div class="internal">Internal: ${r[13]}</div>`].filter(Boolean).join('');
+  return `<table><thead><tr><th class="num">#</th><th>CN</th><th>Crew</th><th>Club</th><th>Glider</th>${CLS.handicapped ? '<th class="num">Hcp</th>' : ''}
+    <th>Start</th><th>Finish</th><th>Time</th><th class="num">km/h</th><th class="num">km</th><th class="num">Pts</th><th class="num">Pen</th><th class="num">Day</th>${review ? '<th>Review</th>' : ''}</tr></thead><tbody>
+    ${rs.map(r => `<tr class="${r.diff ? 'diff' : ''}">
+      <td class="num">${r.rank ?? ''}</td><td>${r[0]}${r.diff ? ' <span class="diffmark">*</span>' : ''}</td>
+      <td style="white-space:normal">${r[1]}${remarks === 'inline' ? rem(r) : ''}</td><td>${r[2]}</td><td>${r[3]}</td>${CLS.handicapped ? `<td class="num">${r[4]}</td>` : ''}
+      <td>${r[5]}</td><td>${r[6]}</td><td>${r[7]}</td><td class="num">${fmt(r[8], 2)}</td>
+      <td class="num">${r[9] == null ? '' : fmt(r[9])}</td>
+      ${r[10] == null ? `<td colspan="3" class="ph">${S.status === 'pre' ? 'No result yet' : 'Did not fly'}</td>`
+        : `<td class="num">${r[10]}</td><td class="num">${r[11] || ''}</td><td class="num"><b>${r.net}</b></td>`}
+      ${review ? `<td><span class="rv ${r[14]}">${{ ok: 'OK', check: 'Check', rev: 'Reviewed', chg: 'Changed since review' }[r[14]]}</span></td>` : ''}
+    </tr>`).join('')}</tbody></table>`;
+}
+function remarksList(rs) {
+  const list = rs.filter(r => r[12]);
+  return list.length ? `<h2>Penalties and official warnings</h2><table><tbody>${list.map(r =>
+    `<tr><td>${r[0]}</td><td>${r[1]}</td><td style="white-space:normal">${r[12]}</td><td class="num">${r[11] ? '−' + r[11] : 'warning'}</td></tr>`).join('')}</tbody></table>` : '';
+}
+function overallTable() {
+  const days = ['P', '1', '2', '3'];
+  return `<table><thead><tr><th class="num">#</th><th>CN</th><th>Crew</th><th>Club</th><th>Glider</th>
+    ${days.map((d, i) => `<th class="num">${d === 'P' ? 'Practice' : 'Day ' + d}<div class="small muted" style="font-weight:400">${DAY_STATUS_OVERALL[i] ?? st()}</div></th>`).join('')}
+    <th class="num">Total</th></tr></thead><tbody>
+    ${OVERALL.map((r, i) => `<tr><td class="num">${i + 1}</td><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td>
+      ${r[4].map((p, j) => `<td class="num ${j === 0 ? 'muted' : ''}">${p == null ? (S.status === 'pre' ? '<span class="ph">–</span>' : 'DNF') : p}</td>`).join('')}
+      <td class="num"><b>${r[5]}</b></td></tr>`).join('')}</tbody></table>
+    <p class="small muted">Practice day points do not count toward the total.</p>`;
+}
+const NOTE = `Day 3: Results recomputed after the complaint by P2 (missing turnpoint fix), distance corrected.\nW9 logger file still missing.`;
+const deadline = () => S.status === 'unoff' ? `Complaints until ${DAY.deadline}` : S.status === 'pre' ? 'Preliminary results, subject to change without notice' : 'Final results';
+
+// ---------------------------------------------------------------- variant A: public page with print stylesheet
+function VariantA() {
+  const rs = ranked(rows(false)), daily = S.page === 'daily';
+  return `<div class="page">
+    <div class="small muted A-screenonly">keyhole.bieniek.cloud / ${COMP.slug} / ${CLS.name} / ${daily ? 'Day 3' : 'Overall'}</div>
+    <button class="A-printbtn" onclick="window.print()">Print</button>
+    <h1>${COMP.name}</h1>
+    <div class="muted">${COMP.place} · ${CLS.name} class · ${daily ? `${DAY.label} · ${DAY.date}` : 'Overall results after Day 3'}</div>
+    <div class="A-nav"><a>Task</a><a class="${daily ? 'on' : ''}">Day 3 results</a><a class="${daily ? '' : 'on'}">Overall</a><a>Competitors</a></div>
+    <div class="banner ${S.status}"><b>${daily ? st() : overallStatus()} results.</b> ${daily ? deadline() : `Includes ${st().toLowerCase()} Day 3.`}
+      <span class="small muted">Published ${DAY.published}.</span></div>
+    ${daily ? `<div class="small muted">${DAY.task}</div>` : ''}
+    ${daily ? `<div class="note">${NOTE}</div>` : ''}
+    ${daily ? dailyTable(rs) : overallTable()}
+    <div class="foot"><span>${COMP.rules} · Scored with ${COMP.engine} · ${COMP.hash}</span>
+      <span class="A-printonly">Printed from https://keyhole.bieniek.cloud/${COMP.slug}/club/${daily ? 'day-3' : 'overall'} · the live page is authoritative</span></div>
+  </div>`;
+}
+
+// ---------------------------------------------------------------- variant B: separate scorer notice-board sheet from the snapshot
+function VariantB() {
+  const rs = ranked(rows(false)), daily = S.page === 'daily';
+  return `<div class="page">
+    <div class="B-title">
+      <div><div class="small muted">${COMP.name} · ${COMP.place}</div>
+        <h1>${CLS.name} class · ${daily ? `${DAY.label} · ${DAY.date}` : 'Overall results after Day 3'}</h1>
+        <div class="small">${daily ? DAY.task : COMP.rules}</div></div>
+      <div class="B-stamp ${S.status}">${daily ? st() : overallStatus()}<small>${daily ? deadline() : (S.status === 'unoff' ? `Day 3 complaints until ${DAY.deadline}` : '')}</small></div>
+    </div>
+    <div class="B-meta">
+      <div><b>Published</b>${DAY.published}</div><div><b>Publication</b>Version ${DAY.version}</div>
+      ${daily ? `<div><b>Day parameters</b>Dm ${DAY.dm} km · D1 ${DAY.d1} km · N ${DAY.n}</div><div><b>Day factor</b>${DAY.validity}</div>` : ''}
+    </div>
+    ${daily ? dailyTable(rs, { remarks: 'separate' }) : overallTable()}
+    ${daily ? `<div class="B-cols"><div>${remarksList(rs)}</div><div><h2>Results note</h2><div class="note">${NOTE}</div></div></div>` : ''}
+    <div class="B-sign"><div>Scorer</div><div>Competition director</div><div>Posted on notice board (date, time)</div></div>
+    <div class="foot"><div>${COMP.rules}<br>Scored with ${COMP.engine} · ${COMP.hash}<br>Live results: keyhole.bieniek.cloud/${COMP.slug}</div><div class="qr"></div></div>
+  </div>`;
+}
+
+// ---------------------------------------------------------------- variant C: working-state printout for the scorer
+function VariantC() {
+  const rs = ranked(rows(true)), daily = S.page === 'daily', dirty = S.dirty;
+  return `<div class="page C-wm ${dirty ? 'dirty' : ''}">
+    <div class="C-head"><div><b>${COMP.name}</b> · ${CLS.name} · ${daily ? `${DAY.label} · ${DAY.date}` : 'Overall after Day 3'}</div>
+      <div class="small">Printed Mon 17 May 2027, 20:05 CEST by scorer Tobias B.</div></div>
+    <div class="banner ${S.status}"><b>Working state.</b> Last publish: ${st()}, ${DAY.published}.
+      ${dirty ? '<b>2 unpublished changes</b> (marked <span class="diffmark">*</span>). This sheet does not match the public results.' : 'Matches the published results.'}</div>
+    ${daily ? `<div class="small muted">${DAY.task} · Dm ${DAY.dm} km · D1 ${DAY.d1} km · N ${DAY.n} · ${DAY.validity}</div>` : ''}
+    ${daily ? dailyTable(rs, { review: true, internal: true }) : overallTable()}
+    ${daily ? `<h2>Results note (draft)</h2><div class="note">${NOTE}</div>
+      <div class="small"><b>Open before unofficial:</b> W9 in check, launch status unresolved for nobody · 1 stale file (P2)</div>` : ''}
+    <div class="foot"><span>${COMP.engine} · ${COMP.hash} · internal remarks shown, not for the notice board</span></div>
+  </div>`;
+}
+
+// ---------------------------------------------------------------- prototype chrome
+function controls() {
+  return `<h4>Prototype controls</h4>
+    <label>Page <select data-k="page"><option value="daily">Daily results</option><option value="overall">Overall results</option></select></label>
+    <label>Day 3 status <select data-k="status"><option value="pre">Preliminary</option><option value="unoff">Unofficial</option><option value="final">Final</option></select></label>
+    <label><input type="checkbox" data-k="dirty"> Unpublished edits exist</label>
+    <label><input type="checkbox" data-k="paper"> Paper preview</label>
+    <label><input type="checkbox" data-k="portrait"> Portrait instead of landscape</label>
+    <h4>Questions to react to</h4>
+    <div class="q">1. Public page + print CSS (A) or a separate scorer sheet (B, C)?</div>
+    <div class="q">2. Snapshot (A, B) or working state (C)? With edits, C diverges from the public page.</div>
+    <div class="q">3. Which of: status, complaint deadline, publish time + version, day parameters, signature line, results note, penalty remarks (inline or separate), engine + rules hash, link/QR?</div>
+    <h4>State</h4><pre>${JSON.stringify({ ...S, variantName: VARIANTS[S.variant] }, null, 1)}</pre>`;
+}
+function render() {
+  document.body.classList.toggle('paper', S.paper);
+  document.body.classList.toggle('portrait', S.portrait);
+  document.getElementById('app').innerHTML = { A: VariantA, B: VariantB, C: VariantC }[S.variant]();
+  const c = document.getElementById('controls'); c.innerHTML = controls();
+  c.querySelectorAll('[data-k]').forEach(el => {
+    const k = el.dataset.k;
+    if (el.type === 'checkbox') { el.checked = S[k]; el.onchange = () => { S[k] = el.checked; render(); }; }
+    else { el.value = S[k]; el.onchange = () => { S[k] = el.value; render(); }; }
+  });
+  document.getElementById('switcher').innerHTML = `<button id="prev">←</button><span>${S.variant} (${VARIANTS[S.variant]})</span><button id="next">→</button>`;
+  document.getElementById('prev').onclick = () => cycle(-1);
+  document.getElementById('next').onclick = () => cycle(1);
+  let pg = document.getElementById('pagestyle');
+  if (!pg) { pg = document.createElement('style'); pg.id = 'pagestyle'; document.head.append(pg); }
+  pg.textContent = `@media print { @page { size: A4 ${S.portrait ? 'portrait' : 'landscape'}; } }`;
+}
+function cycle(d) {
+  const keys = Object.keys(VARIANTS);
+  S.variant = keys[(keys.indexOf(S.variant) + d + keys.length) % keys.length];
+  const p = new URLSearchParams(location.search); p.set('variant', S.variant); history.replaceState(null, '', '?' + p);
+  render();
+}
+addEventListener('keydown', e => {
+  if (e.target.closest('input, textarea, select, [contenteditable]')) return;
+  if (e.key === 'ArrowLeft') cycle(-1); if (e.key === 'ArrowRight') cycle(1);
+});
+render();
+</script>
+</body>
+</html>
