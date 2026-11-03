@@ -37,11 +37,11 @@ A competition that staff have taken down, so that it looks like it does not exis
 _Avoid_: Suspended, frozen, hidden competition
 
 **Admin**:
-A user who manages a competition, including who works on it.
+A user who manages a competition's identity, its members and its lifecycle, and can do everything a scorer can.
 _Avoid_: Owner, competition director
 
 **Scorer**:
-A user who enters tasks, processes flights and releases results for a competition.
+A user who sets up, scores and publishes a competition.
 _Avoid_: Scorekeeper, operator
 
 **Class day**:
