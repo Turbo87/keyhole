@@ -1,0 +1,672 @@
+<!doctype html>
+<!--
+  PROTOTYPE, throwaway. Answers: "How do scorers move through setup, task entry, flight review and
+  publishing in the staff, admin and scorer interface, and how are its screens laid out?"
+  Three navigation structures (?variant=A|B|C) over the same in-memory competition. The leaf panels
+  (task candidate, flight detail, publish dialog) are shared so the variants differ in navigation,
+  information hierarchy and where class colour shows. Nothing persists. Open this file in a browser.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE · Keyhole scorer interface</title>
+<style>
+  :root { --fg:#1b1f24; --muted:#5d6670; --line:#d9dde2; --bg:#fff; --soft:#f4f6f8; --accent:#1f5fbf;
+    --s-unplanned:#8a939c; --s-task:#6b5bd6; --s-pre:#c77700; --s-unoff:#1f6fd1; --s-final:#1d8a4e; --s-cxl:#9aa1a8;
+    --ok:#1d8a4e; --check:#c77700; --rev:#1f6fd1; --chg:#b3261e; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.45 system-ui, sans-serif; color:var(--fg); background:var(--bg); }
+  body.controls-open { margin-right:300px; }
+  a { color:var(--accent); text-decoration:none; cursor:pointer; } a:hover { text-decoration:underline; }
+  h1 { font-size:20px; margin:0 0 4px; } h2 { font-size:17px; margin:16px 0 8px; } h3 { font-size:15px; margin:14px 0 6px; }
+  .muted { color:var(--muted); } .small { font-size:12px; }
+  table { border-collapse:collapse; width:100%; }
+  th, td { padding:4px 8px; border-bottom:1px solid var(--line); text-align:left; white-space:nowrap; }
+  th { background:var(--soft); font-weight:600; font-size:13px; } td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+  tr.click { cursor:pointer; } tr.click:hover td { background:#f0f5fd; } tr.sel td { background:#e3edfb; }
+  button { font:inherit; padding:4px 10px; border:1px solid #b9c0c8; background:#fff; border-radius:5px; cursor:pointer; }
+  button:hover { background:var(--soft); } button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button.primary:hover { background:#174a96; } button:disabled { opacity:.45; cursor:not-allowed; }
+  input, select, textarea { font:inherit; padding:3px 6px; border:1px solid #b9c0c8; border-radius:4px; }
+  label.f { display:grid; grid-template-columns:190px 1fr; gap:8px; align-items:center; margin:4px 0; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:0 24px; }
+  .pill { display:inline-block; padding:1px 8px; border-radius:10px; font-size:11px; font-weight:600; color:#fff; white-space:nowrap; }
+  .st-unplanned { background:var(--s-unplanned); } .st-task { background:var(--s-task); } .st-pre { background:var(--s-pre); }
+  .st-unoff { background:var(--s-unoff); } .st-final { background:var(--s-final); } .st-cxl { background:var(--s-cxl); }
+  .rv { font-size:11px; font-weight:600; padding:1px 6px; border-radius:4px; white-space:nowrap; }
+  .rv-ok { color:var(--ok); background:#e9f6ef; } .rv-check { color:var(--check); background:#fff3df; }
+  .rv-reviewed { color:var(--rev); background:#eaf2fd; } .rv-changed { color:var(--chg); background:#fde9e7; }
+  .tag { font-size:11px; padding:0 5px; border-radius:3px; background:var(--soft); border:1px solid var(--line); color:var(--muted); white-space:nowrap; }
+  .tag.stale { background:#fff3df; border-color:#f0c37a; color:#8a4f00; }
+  .tag.warn { background:#fde9e7; border-color:#f2b8b3; color:#8c1d18; }
+  .swatch { display:inline-block; width:10px; height:10px; border-radius:2px; vertical-align:baseline; margin-right:5px; border:1px solid rgba(0,0,0,.25); }
+  .swatch.none { background:repeating-linear-gradient(45deg,#fff 0 2px,#ccc 2px 4px); }
+  .card { border:1px solid var(--line); border-radius:8px; padding:10px 12px; background:#fff; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .spacer { flex:1; }
+  .lv-debug { color:#8a939c; } .lv-info { color:var(--muted); } .lv-warning { color:#8a4f00; font-weight:600; } .lv-error { color:#b3261e; font-weight:700; }
+  .tabs { display:flex; gap:2px; border-bottom:1px solid var(--line); margin:8px 0; flex-wrap:wrap; }
+  .tabs a { padding:5px 12px; color:var(--muted); border-bottom:2px solid transparent; }
+  .tabs a.on { color:var(--fg); border-bottom-color:var(--fg); font-weight:600; } .tabs a:hover { text-decoration:none; color:var(--fg); }
+  .banner { border-left:4px solid var(--s-pre); background:#fff6e8; padding:6px 10px; border-radius:4px; margin:8px 0; }
+  .banner.info { border-color:var(--accent); background:#eaf2fd; } .banner.bad { border-color:var(--chg); background:#fde9e7; }
+  .qbox { border:2px dashed #e0a800; background:#fffbe6; padding:6px 10px; font-size:12px; margin:8px 0; border-radius:4px; }
+  .qbox::before { content:"OPEN QUESTION: "; font-weight:700; }
+  .modal-bg { position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:30; display:flex; align-items:flex-start; justify-content:center; padding-top:60px; }
+  .modal { background:#fff; border-radius:10px; width:620px; max-height:80vh; overflow:auto; padding:16px 20px; box-shadow:0 10px 40px rgba(0,0,0,.3); }
+  .check-list li { margin:3px 0; } .check-list .bad { color:var(--chg); } .check-list .warn { color:#8a4f00; } .check-list .good { color:var(--ok); }
+  .scroll { overflow:auto; }
+
+  /* ---------- Variant A: menu bar, context sidebar, overview matrix (StrePla-like) */
+  .A-top { background:#24313f; color:#fff; display:flex; align-items:center; gap:0; padding:0 12px; height:40px; }
+  .A-top .brand { font-weight:700; margin-right:18px; }
+  .A-menu { position:relative; } .A-menu > a { color:#dfe6ee; padding:0 12px; line-height:40px; display:block; }
+  .A-menu > a.on { background:#3a4b5e; color:#fff; } .A-menu:hover .A-drop { display:block; }
+  .A-drop { display:none; position:absolute; top:40px; left:0; background:#fff; border:1px solid var(--line); box-shadow:0 4px 12px rgba(0,0,0,.15); min-width:200px; z-index:10; }
+  .A-drop a { display:block; padding:6px 12px; color:var(--fg); } .A-drop a:hover { background:var(--soft); text-decoration:none; }
+  .A-body { display:grid; grid-template-columns:230px 1fr; min-height:calc(100vh - 40px); }
+  .A-side { background:var(--soft); border-right:1px solid var(--line); padding:10px; }
+  .A-side label { display:block; font-size:12px; color:var(--muted); margin-top:8px; } .A-side select, .A-side input { width:100%; }
+  .A-actions a { display:block; padding:5px 8px; margin:2px 0; border-radius:4px; color:var(--fg); background:#fff; border:1px solid var(--line); }
+  .A-actions a.on { background:var(--accent); color:#fff; border-color:var(--accent); } .A-actions a:hover { text-decoration:none; border-color:var(--accent); }
+  .A-actions .count { float:right; font-size:11px; }
+  .A-main { padding:14px 20px 100px; min-width:0; }
+  .A-matrix td, .A-matrix th { text-align:center; } .A-matrix td:first-child, .A-matrix th:first-child { text-align:left; }
+  .A-matrix td.cell { cursor:pointer; } .A-matrix td.cell:hover { background:#f0f5fd; }
+  .A-dayhead { display:flex; gap:12px; align-items:center; border-bottom:2px solid var(--line); padding-bottom:8px; margin-bottom:8px; }
+
+  /* ---------- Variant B: competition-day board with class columns and a drawer */
+  .B-top { display:flex; align-items:center; gap:12px; padding:10px 16px; border-bottom:1px solid var(--line); }
+  .B-top .brand { font-weight:700; }
+  .B-date { display:flex; align-items:center; gap:6px; margin:0 auto; font-size:16px; font-weight:600; }
+  .B-date button { font-size:16px; }
+  .B-strip { display:flex; gap:4px; padding:8px 16px; overflow-x:auto; border-bottom:1px solid var(--line); background:var(--soft); }
+  .B-strip a { flex:0 0 auto; padding:3px 9px; border-radius:12px; font-size:12px; color:var(--fg); background:#fff; border:1px solid var(--line); }
+  .B-strip a.on { background:var(--fg); color:#fff; border-color:var(--fg); }
+  .B-board { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(300px, 1fr); gap:16px; padding:16px 16px 100px; }
+  .B-col { border:1px solid var(--line); border-radius:10px; overflow:hidden; background:#fff; }
+  .B-colhead { padding:10px 12px; color:#fff; display:flex; align-items:center; gap:8px; }
+  .B-colhead.none { background:#5d6670; }
+  .B-step { border-top:1px solid var(--line); padding:10px 12px; cursor:pointer; position:relative; }
+  .B-step:hover { background:#f6f9fe; } .B-step.on { background:#e3edfb; }
+  .B-step .n { display:inline-flex; width:20px; height:20px; border-radius:50%; background:var(--soft); border:1px solid var(--line); align-items:center; justify-content:center; font-size:11px; font-weight:700; margin-right:6px; }
+  .B-step.done .n { background:var(--ok); color:#fff; border-color:var(--ok); }
+  .B-step.todo .n { background:var(--check); color:#fff; border-color:var(--check); }
+  .B-step .sum { margin:4px 0 0 26px; font-size:12px; color:var(--muted); }
+  .B-drawer { position:fixed; top:0; right:0; bottom:0; width:min(900px, 70vw); background:#fff; box-shadow:-8px 0 24px rgba(0,0,0,.18); z-index:15; display:flex; flex-direction:column; }
+  body.controls-open .B-drawer { right:300px; width:min(900px, calc(70vw - 300px)); }
+  .B-drawer .hd { padding:10px 16px; display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--line); }
+  .B-drawer .bd { padding:10px 16px 100px; overflow:auto; flex:1; }
+  .B-setup { display:grid; grid-template-columns:260px 1fr; min-height:calc(100vh - 54px); }
+  .B-setup .list { border-right:1px solid var(--line); padding:12px; background:var(--soft); }
+  .B-setup .list a { display:flex; gap:8px; padding:6px 8px; color:var(--fg); border-radius:5px; }
+  .B-setup .list a.on { background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.12); } .B-setup .list a:hover { text-decoration:none; background:#fff; }
+  .B-setup .tick { width:18px; text-align:center; }
+  .B-setup .main { padding:14px 20px 100px; }
+
+  /* ---------- Variant C: three-pane review desk */
+  .C-wrap { display:grid; grid-template-columns:240px 420px 1fr; height:100vh; }
+  .C-rail { background:#1e2731; color:#d5dde6; overflow:auto; padding:8px 0 80px; font-size:13px; }
+  .C-rail .brand { color:#fff; font-weight:700; padding:4px 14px 10px; }
+  .C-rail .grp { padding:10px 14px 3px; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:#8da0b3; }
+  .C-rail a { display:flex; align-items:center; gap:6px; padding:4px 14px 4px 10px; color:#d5dde6; border-left:4px solid transparent; }
+  .C-rail a:hover { background:#2a3542; text-decoration:none; } .C-rail a.on { background:#33475c; color:#fff; }
+  .C-rail .pill { margin-left:auto; }
+  .C-mid { border-right:1px solid var(--line); overflow:auto; display:flex; flex-direction:column; }
+  .C-mid .hd { padding:10px 12px 0; border-bottom:1px solid var(--line); position:sticky; top:0; background:#fff; z-index:2; }
+  .C-chips { display:flex; gap:4px; flex-wrap:wrap; padding:6px 0; }
+  .C-chips a { font-size:12px; padding:1px 8px; border-radius:10px; border:1px solid var(--line); color:var(--fg); }
+  .C-chips a.on { background:var(--fg); color:#fff; border-color:var(--fg); }
+  .C-item { display:grid; grid-template-columns:44px 1fr auto; gap:0 8px; padding:6px 12px; border-bottom:1px solid var(--line); cursor:pointer; border-left:4px solid transparent; }
+  .C-item:hover { background:#f6f9fe; } .C-item.sel { background:#e3edfb; }
+  .C-item .cn { font-weight:700; font-size:15px; } .C-item .meta { font-size:12px; color:var(--muted); grid-column:2 / 4; }
+  .C-right { overflow:auto; padding:12px 18px 100px; }
+  body.controls-open .C-wrap { grid-template-columns:220px 360px 1fr; }
+
+  /* ---------- Prototype chrome, deliberately not part of the design */
+  #controls { position:fixed; top:0; right:0; bottom:0; width:300px; background:#111; color:#eee; font:12px/1.4 ui-monospace, monospace;
+    padding:10px 12px 70px; overflow-y:auto; z-index:40; }
+  #controls.closed { width:auto; bottom:auto; padding:6px; background:transparent; }
+  #controls.closed .inner { display:none; }
+  #controls h4 { margin:12px 0 4px; color:#9fd; font-size:12px; } #controls select { width:100%; font:inherit; }
+  #controls pre { white-space:pre-wrap; background:#000; padding:6px; border-radius:4px; color:#cfc; }
+  #controls .toggle { background:#333; color:#fff; border:0; border-radius:4px; padding:3px 8px; }
+  #switcher { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:#111; color:#fff; border-radius:24px;
+    padding:6px 10px; display:flex; gap:10px; align-items:center; z-index:50; box-shadow:0 4px 16px rgba(0,0,0,.4); font:13px system-ui; }
+  #switcher button { background:#333; color:#fff; border:0; border-radius:50%; width:28px; height:28px; cursor:pointer; font-size:14px; padding:0; }
+</style>
+</head>
+<body class="controls-open">
+<div id="app"></div>
+<div id="modal"></div>
+<div id="controls"></div>
+<div id="switcher"></div>
+<script>
+// ======================================================================== mock data
+let seed = 7;
+function rnd() { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }
+function pick(a) { return a[Math.floor(rnd() * a.length)]; }
+
+const FIRST = ['Anna','Jonas','Lena','Felix','Marie','Paul','Sophie','Lukas','Clara','Max','Emma','Leon','Hanna','Tim','Julia','Moritz','Laura','Ben','Nina','Erik','Sarah','David','Lisa','Jan'];
+const LAST = ['Becker','Hoffmann','Krüger','Wagner','Schulz','Neumann','Brandt','Vogel','Keller','Franke','Lorenz','Seidel','Busch','Haas','Kraus','Roth','Engel','Kuhn','Peters','Albrecht'];
+const CLUBS = ['LSV Nordheide','FSV Musterstadt','SFG Talblick','AC Weserbergland','LSG Hochmoor'];
+const TYPES_CLUB = [['LS4',1.03],['ASW 19',1.00],['Std. Cirrus',0.98],['DG-300',1.03],['Astir CS',0.92],['Discus a',1.07]];
+const TYPES_MIX = [['ASG 29E',1.21],['Ventus 3',1.22],['JS3',1.23],['Discus 2c',1.09],['LS8',1.07],['ASW 28',1.08],['Arcus M',1.21]];
+
+const comp = {
+  name:'Regionalmeisterschaft Nord 2026', slug:'rm-nord-2026', organiser:'LSV Nordheide e.V.', location:'Flugplatz Heidekamp',
+  country:'DE', tz:'Europe/Berlin', ruleSet:'DAeC SWO 2026', airfield:'Heidekamp (53.12N 9.87E), 54 m',
+  dates:['2026-05-13','2026-05-14','2026-05-15','2026-05-16','2026-05-17','2026-05-18','2026-05-19','2026-05-20','2026-05-21','2026-05-22','2026-05-23','2026-05-24'],
+  practiceDates:['2026-05-13'],
+  standingNotes:'Start frequency 122.505, emergency phone +49 4321 98765, relight area west of the airfield only.',
+  turnpointFile:'heidekamp2026.cup (214 turnpoints)', airspaceFile:'rm-nord-2026.txt (312 airspaces, locked since first upload)',
+  members:[['Tobias B.','admin'],['Kerstin M.','scorer'],['Rolf A.','scorer']],
+  classes:[
+    { id:'club', name:'Club', colour:'#f2c200', template:'Club', handicapped:true, scale:'1.000', dm:'100 km', d1:'250 km', list:'DAeC Indexliste 2026' },
+    { id:'mix', name:'Gemischte', colour:'#2f7fd8', template:null, handicapped:true, scale:'100', dm:'100 km', d1:'300 km', list:'DAeC Indexliste 2026' },
+    { id:'hasen', name:'Hasen', colour:null, template:null, handicapped:true, scale:'1.000', dm:'50 km', d1:'200 km', list:'DAeC Indexliste 2026' },
+  ],
+};
+const TODAY = '2026-05-21';
+
+const competitors = [];
+comp.classes.forEach(c => {
+  const n = c.id === 'hasen' ? 7 : 12;
+  for (let i = 0; i < n; i++) {
+    const [type, hc] = pick(c.id === 'club' ? TYPES_CLUB : TYPES_MIX);
+    const cn = (c.id === 'club' ? ['A','B','C','K','L'] : c.id === 'mix' ? ['S','T','X','Z','V'] : ['H'])[i % (c.id === 'hasen' ? 1 : 5)] + (Math.floor(rnd() * 9) + 1) + (c.id === 'hasen' ? i : '');
+    competitors.push({ id:c.id + i, classId:c.id, cn, crew:pick(FIRST) + ' ' + pick(LAST), club:pick(CLUBS), type,
+      reg:'D-' + String(1000 + Math.floor(rnd() * 8999)), hc:c.scale === '100' ? Math.round(hc * 100) : hc.toFixed(3),
+      loggers:[{ id:pick(['LXV','FLA','LXN','NAV']) + '-' + Math.random().toString(36).slice(2, 5).toUpperCase(), primary:true }] });
+  }
+});
+
+function makeTask(letter, type) {
+  const tps = type === 'AAT'
+    ? [['Heidekamp Start','Line 10 km'],['Soltau','Cylinder 20 km'],['Lüneburg','Cylinder 25 km'],['Celle','Cylinder 20 km'],['Heidekamp','Cylinder 3 km, min 400 m']]
+    : [['Heidekamp Start','Line 10 km'],['Walsrode','Keyhole'],['Uelzen','Keyhole'],['Gifhorn','Keyhole'],['Heidekamp','Line 1 km']];
+  return { letter, type, tps, dist:type === 'AAT' ? '212–418 km' : (300 + Math.floor(rnd() * 80)) + '.4 km', minTime:type === 'AAT' ? '3:00' : null,
+    dayNotes:'Grid 10:30, first launch 11:15, runway 26.' };
+}
+
+const days = [];
+comp.classes.forEach(c => {
+  let n = 0, p = 0;
+  comp.dates.forEach(date => {
+    const practice = comp.practiceDates.includes(date);
+    const number = practice ? 'P' + (++p) : String(++n);
+    let status = 'unplanned';
+    if (date < TODAY) status = date === '2026-05-16' ? 'cancelled' : 'final';
+    if (date === '2026-05-20') status = 'unofficial';
+    if (date === TODAY) status = c.id === 'club' ? 'preliminary' : 'task published';
+    const d = { id:c.id + '-' + date, classId:c.id, date, number, practice, status, candidates:[], published:null,
+      startOpen:'12:40', startClose:'', maxStartAlt:'1400', maxGs:'', pev:false, maxAlt:'2300', scoringEnd:'', towAlt:'', qnh:'1017',
+      password:Math.random().toString(36).slice(2, 8), airspaceExceptions:[['ED-R 37 Munster','opened']], notams:[], resultsNote:'',
+      publishedAt:null, complaintDeadline:null, files:[], flights:[] };
+    if (status !== 'unplanned' && !(status === 'cancelled')) {
+      d.candidates = [makeTask('A', 'Racing'), makeTask('B', 'AAT'), makeTask('C', 'AAT')];
+      d.published = date === TODAY && c.id === 'mix' ? 'B' : 'A';
+    }
+    if (date === '2026-05-22') { d.candidates = [makeTask('A', 'Racing'), makeTask('B', 'AAT')]; }
+    days.push(d);
+  });
+});
+
+const LOGS = [
+  ['warning','14:12:07','Possible airspace infringement: ED-R 37 Munster, 180 m inside, 34 s'],
+  ['warning','12:51:40','Start altitude 1452 m MSL above maximum start altitude 1400 m MSL'],
+  ['warning','13:02:11','Near miss: TP 2 Uelzen missed by 0.21 km'],
+  ['warning','11:42:30','Engine run before start: ENL 640 for 48 s'],
+  ['warning','15:58:02','Maximum altitude 2300 m MSL exceeded by 46 m'],
+  ['error','—','G-record validation: no supported validator for this logger'],
+];
+function makeFlights(d) {
+  const cs = competitors.filter(x => x.classId === d.classId);
+  d.flights = cs.map((c, i) => {
+    const r = rnd();
+    const launch = d.status === 'task published' ? (r < .6 ? 'launched' : 'unresolved') : r < .08 ? 'did not fly' : r < .16 && d.status === 'preliminary' ? 'unresolved' : 'launched';
+    const hasFile = launch === 'launched' && (d.status !== 'task published' || r < .3);
+    const finished = hasFile && rnd() < .7;
+    const warns = hasFile && rnd() < .35 ? [pick(LOGS)] : [];
+    let review = !hasFile ? (launch === 'launched' ? 'ok' : null) : warns.length ? 'check' : 'ok';
+    if (d.status === 'final' || d.status === 'unofficial') { if (review === 'check') review = 'reviewed'; }
+    if (review === 'reviewed' && rnd() < .15 && d.date >= '2026-05-20') review = 'changed';
+    const manual = launch === 'launched' && !hasFile;
+    const startH = 12 + Math.floor(rnd() * 2), startM = 40 + Math.floor(rnd() * 19);
+    const dist = finished ? null : Math.round(80 + rnd() * 220);
+    return { id:d.id + '-' + c.id, competitor:c, launch, review, stale:hasFile && rnd() < .12, manual,
+      files:hasFile ? [{ name:d.date.slice(5).replace('-', '') + '_' + c.loggers[0].id + '.igc', from:'pilot upload', at:'17:' + String(10 + i).padStart(2, '0') }] : [],
+      start:launch === 'launched' ? startH + ':' + String(startM).padStart(2, '0') + ':' + String(Math.floor(rnd() * 59)).padStart(2, '0') : '',
+      finish:finished ? (16 + Math.floor(rnd() * 2)) + ':' + String(Math.floor(rnd() * 59)).padStart(2, '0') + ':12' : '',
+      dist:finished ? '342.6' : dist ? String(dist) + '.0' : '', speed:finished ? (88 + rnd() * 25).toFixed(1) : '',
+      points:launch === 'launched' ? Math.round(finished ? 820 + rnd() * 180 : 200 + rnd() * 400) : 0, penalty:0, publicRemark:'', internalRemark:'',
+      log:[['info','10:58:21','Take-off at Heidekamp'],['info','11:06:40','Aerotow release at 612 m MSL'],['info','12:41:13','Candidate start 12:41:13, 1260 m MSL, 121 km/h'],
+           ['debug','12:41:13','Start line crossing interpolated between fixes 4211 and 4212'], ...warns, ['info','16:42:55', finished ? 'Finish crossed' : 'Landing (outlanding)']] };
+  });
+  d.files = d.status === 'preliminary' ? [{ name:'5KLGQRB1.igc', logger:'LXN-QRB', recorded:'2026-05-21', cn:'K7?', from:'scorer upload' }] : [];
+}
+days.filter(d => d.status !== 'unplanned' && d.status !== 'cancelled').forEach(makeFlights);
+(function pinReviewCases() {
+  const d = day('club', TODAY), [a, b, c] = [d.flights[2], d.flights[5], d.flights[8]];
+  for (const f of [a, b]) if (!f.files.length) { f.launch = 'launched'; f.manual = false; f.start = f.start || '12:47:05'; f.files = [{ name:'0521_' + f.competitor.loggers[0].id + '.igc', from:'pilot upload', at:'17:40' }]; }
+  a.review = 'check'; a.log.splice(4, 0, LOGS[0]);
+  b.stale = true;
+  c.launch = 'unresolved'; c.files = []; c.review = null; c.start = c.finish = c.dist = c.speed = ''; c.points = 0;
+  const y = day('club', '2026-05-20').flights[3]; y.review = 'changed';
+})();
+
+const staff = {
+  users:[['Tobias B.','staff','—',3],['Kerstin M.','user','Tobias B.',2],['Rolf A.','user','Kerstin M.',0],['Spam Bot','blocked','Rolf A.',0]],
+  comps:[['Regionalmeisterschaft Nord 2026','public'],['Hahnweide Testcup 2026','public'],['Sale!!! Cheap gliders','blocked']],
+};
+
+// ======================================================================== state
+const params = new URLSearchParams(location.search);
+let variant = params.get('variant') || 'A';
+const S = { role:'admin', classId:'club', date:TODAY, view:'overview', panel:'task', setup:'master', flightId:null, candidate:'A',
+  filter:'attention', drawer:null, logDebug:false, publishedCount:0, events:[] };
+
+function cls(id) { return comp.classes.find(c => c.id === id); }
+function day(classId = S.classId, date = S.date) { return days.find(d => d.classId === classId && d.date === date); }
+function flight(id = S.flightId) { for (const d of days) { const f = d.flights.find(f => f.id === id); if (f) return f; } }
+function log(msg) { S.events.unshift(new Date().toLocaleTimeString() + ' ' + msg); S.events.length = Math.min(S.events.length, 8); }
+function set(patch) { Object.assign(S, patch); render(); }
+function can(what) { // admin adds members, identity, archive and delete; staff can do everything
+  if (what === 'staff') return S.role === 'staff';
+  if (what === 'admin') return S.role === 'staff' || S.role === 'admin';
+  return true;
+}
+
+// ======================================================================== shared fragments
+const STATUS_CLASS = { 'unplanned':'st-unplanned', 'task published':'st-task', 'preliminary':'st-pre', 'unofficial':'st-unoff', 'final':'st-final', 'cancelled':'st-cxl' };
+function statusPill(s) { return `<span class="pill ${STATUS_CLASS[s]}">${s}</span>`; }
+const RV = { ok:['rv-ok','OK'], check:['rv-check','Check'], reviewed:['rv-reviewed','Reviewed'], changed:['rv-changed','Changed since review'] };
+function rv(r) { return r ? `<span class="rv ${RV[r][0]}">${RV[r][1]}</span>` : ''; }
+function swatch(c) { return c.colour ? `<span class="swatch" style="background:${c.colour}"></span>` : `<span class="swatch none" title="no colour"></span>`; }
+function className(c) { return swatch(c) + c.name; }
+function fmtDate(d) { const x = new Date(d + 'T12:00:00'); return x.toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short' }); }
+function dayLabel(d) { return (d.practice ? 'Practice ' + d.number.slice(1) : 'Day ' + d.number) + ' · ' + fmtDate(d.date); }
+function attention(f) { return f.review === 'check' || f.review === 'changed' || f.stale || f.launch === 'unresolved'; }
+function counts(d) {
+  const c = { check:0, changed:0, stale:0, unresolved:0, dnf:0, ok:0, reviewed:0, files:d.files.length, total:d.flights.length };
+  d.flights.forEach(f => { if (f.review) c[f.review]++; if (f.stale) c.stale++; if (f.launch === 'unresolved') c.unresolved++; if (f.launch === 'did not fly') c.dnf++; });
+  return c;
+}
+function countTags(d) {
+  const c = counts(d), t = [];
+  if (c.check) t.push(`<span class="rv rv-check">${c.check} check</span>`);
+  if (c.changed) t.push(`<span class="rv rv-changed">${c.changed} changed</span>`);
+  if (c.stale) t.push(`<span class="tag stale">${c.stale} stale</span>`);
+  if (c.unresolved) t.push(`<span class="tag">${c.unresolved} unresolved</span>`);
+  if (c.files) t.push(`<span class="tag warn">${c.files} unassigned file</span>`);
+  return t.join(' ') || '<span class="muted small">nothing to review</span>';
+}
+function firstOpen(d) { return d.flights.find(attention); }
+
+function taskPanel(d) {
+  const c = cls(d.classId);
+  if (d.status === 'cancelled') return `<div class="banner info">${dayLabel(d)} is cancelled. <a onclick="act('uncancel')">Undo cancellation</a></div>`;
+  const cand = d.candidates.find(t => t.letter === S.candidate) || d.candidates[0];
+  const tabs = d.candidates.map(t => `<a class="${cand && t.letter === cand.letter ? 'on' : ''}" onclick="set({candidate:'${t.letter}'})">Task ${t.letter}${d.published === t.letter ? ' ✔ published' : ''}</a>`).join('');
+  return `
+  <div class="row"><b>Task candidates</b><span class="spacer"></span>
+    <button onclick="act('newCandidate')">+ New candidate</button><button onclick="act('importCup')">Import CUP…</button>
+    ${d.status === 'unplanned' ? `<button onclick="act('cancelDay')">Cancel day</button>` : ''}</div>
+  <div class="tabs">${tabs || '<span class="muted" style="padding:6px">No candidates yet. Create one or import a CUP file.</span>'}</div>
+  ${cand ? `
+  <div class="grid2">
+    <div>
+      <label class="f">Task type <select><option ${cand.type === 'Racing' ? 'selected' : ''}>Racing task</option><option ${cand.type === 'AAT' ? 'selected' : ''}>Assigned area task</option></select></label>
+      ${cand.minTime ? `<label class="f">Minimum task time <input value="${cand.minTime}" size="6"></label>` : ''}
+      <table><tr><th>#</th><th>Turnpoint</th><th>Observation zone</th></tr>
+      ${cand.tps.map((t, i) => `<tr><td>${i === 0 ? 'Start' : i === cand.tps.length - 1 ? 'Finish' : i}</td><td>${t[0]}</td><td>${t[1]}</td></tr>`).join('')}</table>
+      <p class="muted small">Task distance ${cand.dist}</p>
+      <label class="f">Day notes <textarea rows="2" style="width:100%">${cand.dayNotes}</textarea></label>
+    </div>
+    <div><div class="card" style="height:220px;display:flex;align-items:center;justify-content:center;color:var(--muted)">task map (task, airspace, airfield)</div></div>
+  </div>
+  <div class="row" style="margin-top:8px"><button onclick="act('print','task sheet ${cand.letter}')">Print task sheet ${cand.letter}</button>
+    <span class="spacer"></span>
+    ${d.published === cand.letter ? `<span class="muted">Published task. Edits go public with </span><button onclick="act('publishTask')">Republish task ${cand.letter}</button>`
+      : `<button class="primary" onclick="act('publishTask')" ${d.status === 'final' ? 'disabled' : ''}>Publish task ${cand.letter}${d.published ? ' (replaces ' + d.published + ')' : ''}</button>`}
+  </div>` : ''}
+  <h3>Class day settings <span class="muted small">(layered: rule set → competition → class → class day)</span></h3>
+  <div class="grid2">
+    <div>
+      <b class="small">Start procedure</b>
+      <label class="f">Start opening time <input value="${d.startOpen}" size="6"> <span class="muted small">local</span></label>
+      <label class="f">Start closing time <input value="${d.startClose}" size="6" placeholder="not checked"></label>
+      <label class="f">Max start altitude <span><input value="${d.maxStartAlt}" size="6"> m MSL</span></label>
+      <label class="f">Max start ground speed <span><input value="${d.maxGs}" size="6" placeholder="not checked"> km/h</span></label>
+      <label class="f">PEV start <input type="checkbox" ${d.pev ? 'checked' : ''}></label>
+      <b class="small">Limits</b>
+      <label class="f">Maximum altitude <span><input value="${d.maxAlt}" size="6"> m MSL <span class="muted small">from competition</span></span></label>
+      <label class="f">Scoring end time <input value="${d.scoringEnd}" size="6" placeholder="none"></label>
+      <label class="f">Tow altitude <span><input value="${d.towAlt}" size="6" placeholder="none"> m MSL</span></label>
+    </div>
+    <div>
+      <label class="f">QNH <span><input value="${d.qnh}" size="6"> hPa</span></label>
+      <label class="f">Daily password <span><code>${d.password}</code> <a onclick="act('regenPassword')">regenerate</a> · <a>share with other classes…</a></span></label>
+      <b class="small">Airspace</b>
+      <table><tr><th>Airspace</th><th>Today</th></tr>${d.airspaceExceptions.map(a => `<tr><td>${a[0]}</td><td>${a[1]}</td></tr>`).join('')}
+      <tr><td colspan="2"><a>+ airspace exception</a> · <a>+ NOTAM airspace</a></td></tr></table>
+    </div>
+  </div>`;
+}
+
+function flightTable(d, onclick = 'openFlight') {
+  return `<table><tr><th>CN</th><th>Crew</th><th>Launch</th><th>Review</th><th>Start</th><th>Finish</th><th class="num">Dist</th><th class="num">Speed</th><th class="num">Pts</th></tr>
+  ${d.flights.map(f => `<tr class="click ${f.id === S.flightId ? 'sel' : ''}" onclick="${onclick}('${f.id}')">
+    <td><b>${f.competitor.cn}</b></td><td>${f.competitor.crew}</td><td>${f.launch}</td>
+    <td>${rv(f.review)} ${f.stale ? '<span class="tag stale">stale</span>' : ''} ${f.manual && f.launch === 'launched' ? '<span class="tag">manual</span>' : ''}</td>
+    <td>${f.start}</td><td>${f.finish}</td><td class="num">${f.dist}</td><td class="num">${f.speed}</td><td class="num">${f.launch === 'launched' ? f.points : ''}</td></tr>`).join('')}</table>`;
+}
+
+function filesPanel(d) {
+  return d.files.length ? `<table><tr><th>File</th><th>Logger</th><th>Recorded date</th><th>CN in file</th><th>From</th><th>Assign to</th></tr>
+    ${d.files.map(x => `<tr><td>${x.name}</td><td>${x.logger}</td><td>${x.recorded}</td><td>${x.cn}</td><td>${x.from}</td>
+    <td><select><option>choose competitor…</option>${d.flights.map(f => `<option>${f.competitor.cn} ${f.competitor.crew}</option>`).join('')}</select> <button onclick="act('assignFile')">Assign</button></td></tr>`).join('')}</table>`
+    : '<p class="muted">No unassigned files for this class day.</p>';
+}
+
+function flightDetail(f, nav = '') {
+  if (!f) return '<p class="muted">Select a competitor.</p>';
+  const c = f.competitor, d = days.find(x => f.id.startsWith(x.id));
+  return `
+  <div class="row">${nav}<h2 style="margin:0">${c.cn} · ${c.crew}</h2><span class="muted">${c.type}, ${c.reg}, handicap ${c.hc}, ${c.club}</span></div>
+  ${f.stale ? `<div class="banner">Stale analysis: the class day's airspace exceptions changed after this file was analysed. <button onclick="act('rerun')">Analyse again</button></div>` : ''}
+  ${f.review === 'changed' ? `<div class="banner bad">Changed since review: the start moved from 12:41:13 to 12:44:02 after the last analysis.</div>` : ''}
+  <div class="row" style="margin:8px 0">
+    <label>Launch status <select onchange="act('launch', this.value)">${['unresolved','launched','did not fly'].map(x => `<option ${x === f.launch ? 'selected' : ''}>${x}</option>`).join('')}</select></label>
+    <span>Review ${rv(f.review)}</span>
+    <span class="spacer"></span>
+    ${f.review === 'check' || f.review === 'changed' ? `<button class="primary" onclick="act('reviewed')">Mark reviewed <span class="small">(r)</span></button>` : ''}
+  </div>
+  <div class="grid2">
+    <div>
+      <h3>Flight result ${f.manual ? '<span class="tag">manual result</span>' : ''}</h3>
+      <table>
+        <tr><td>Scored file</td><td>${f.files.length ? `<select>${f.files.map(x => `<option>${x.name} (${x.from} ${x.at})</option>`).join('')}</select>` : '<span class="muted">none</span>'}</td></tr>
+        <tr><td>Start</td><td>${f.start || '—'} <a class="small">choose other candidate…</a></td></tr>
+        <tr><td>Finish / landing</td><td>${f.finish || (f.dist ? 'outlanding' : '—')}</td></tr>
+        <tr><td>Distance</td><td>${f.dist ? f.dist + ' km' : '—'}</td></tr>
+        <tr><td>Speed</td><td>${f.speed ? f.speed + ' km/h' : '—'}</td></tr>
+        <tr><td>Points</td><td>${f.points}</td></tr>
+      </table>
+      <div class="row small" style="margin-top:6px"><a>Override start</a>·<a>Override flight end</a>·<a>Turnpoint credit</a>·<a>Override finish</a>·<a>${f.manual ? 'Switch to scored file' : 'Switch to manual result'}</a></div>
+      <h3>Penalty</h3>
+      <label class="f">Points <input value="${f.penalty}" size="5"></label>
+      <label class="f">Public remark <input value="${f.publicRemark}" style="width:100%"></label>
+      <label class="f">Internal remark <input value="${f.internalRemark}" style="width:100%"></label>
+    </div>
+    <div>
+      <h3>Analysis log <label class="small muted" style="font-weight:400"><input type="checkbox" ${S.logDebug ? 'checked' : ''} onchange="set({logDebug:this.checked})"> show debug</label></h3>
+      ${f.files.length ? `<table>${f.log.filter(l => S.logDebug || l[0] !== 'debug').map(l => `<tr><td class="small">${l[1]}</td><td class="lv-${l[0]} small">${l[0]}</td><td class="small" style="white-space:normal">${l[2]}${l[0] === 'warning' ? ' <a>suggest flight end</a>' : ''}</td></tr>`).join('')}</table>`
+        : '<p class="muted">No file. The result is a manual result or the launch is unresolved.</p>'}
+      <div class="card" style="height:160px;margin-top:8px;display:flex;align-items:center;justify-content:center;color:var(--muted)">flight map + barogram</div>
+    </div>
+  </div>`;
+}
+
+function resultsPreview(d) {
+  const rows = d.flights.filter(f => f.launch !== 'unresolved').slice().sort((a, b) => b.points - a.points);
+  return `<p class="muted small">Working state, not yet published. Last publish: ${d.publishedAt || 'never'}.</p>
+  <table><tr><th>#</th><th>CN</th><th>Crew</th><th>Start</th><th>Finish</th><th class="num">Dist</th><th class="num">Speed</th><th class="num">Points</th><th></th></tr>
+  ${rows.map((f, i) => `<tr><td>${f.launch === 'launched' ? i + 1 : ''}</td><td>${f.competitor.cn}</td><td>${f.competitor.crew}</td><td>${f.start}</td><td>${f.finish}</td>
+    <td class="num">${f.dist}</td><td class="num">${f.speed}</td><td class="num">${f.launch === 'launched' ? f.points : 'DNF'}</td><td>${rv(f.review)}</td></tr>`).join('')}
+  ${d.flights.filter(f => f.launch === 'unresolved').map(f => `<tr class="muted"><td></td><td>${f.competitor.cn}</td><td>${f.competitor.crew}</td><td colspan="5">No result yet (placeholder result counts toward day parameters)</td><td></td></tr>`).join('')}
+  </table>
+  <div class="row" style="margin-top:8px"><button onclick="act('print','results sheet')">Print results sheet</button><span class="spacer"></span><button class="primary" onclick="openPublish()">Publish results…</button></div>`;
+}
+
+// ---------------------------------------------------------------- publish dialog: the decisions of #13, #75, #76 in one place
+function openPublish(classId = S.classId) { S.publishFor = classId; renderModal(); }
+function renderModal() {
+  const m = document.getElementById('modal');
+  if (!S.publishFor) { m.innerHTML = ''; return; }
+  const d = day(S.publishFor), c = counts(d), cl = cls(d.classId);
+  const blocked = c.unresolved > 0;
+  const choice = S.publishStatus || 'preliminary';
+  const needConfirm = c.check + c.changed > 0 && choice !== 'preliminary';
+  m.innerHTML = `<div class="modal-bg" onclick="if(event.target===this){S.publishFor=null;renderModal()}"><div class="modal">
+    <h2 style="margin-top:0">Publish results · ${className(cl)} · ${dayLabel(d)}</h2>
+    <ul class="check-list">
+      <li class="${c.unresolved ? 'bad' : 'good'}">${c.unresolved ? '✖ ' + c.unresolved + ' competitors with unresolved launch status: unofficial and final are blocked' : '✔ every launch status is resolved'}</li>
+      <li class="${c.check + c.changed ? 'warn' : 'good'}">${c.check + c.changed ? '⚠ ' + (c.check + c.changed) + ' flights in check or changed since review' : '✔ every flight is reviewed or OK'}</li>
+      <li class="${c.stale ? 'warn' : 'good'}">${c.stale ? '⚠ ' + c.stale + ' stale analyses (publishing needs a confirmation)' : '✔ no stale analyses'}</li>
+      <li class="${c.files ? 'warn' : 'good'}">${c.files ? '⚠ ' + c.files + ' unassigned file' : '✔ no unassigned files'}</li>
+    </ul>
+    <label class="f">Status
+      <span>${['preliminary','unofficial','final'].map(s => `<label style="margin-right:10px"><input type="radio" name="ps" ${choice === s ? 'checked' : ''} ${blocked && s !== 'preliminary' ? 'disabled' : ''} onchange="S.publishStatus='${s}';renderModal()"> ${s}</label>`).join('')}</span></label>
+    <label class="f">Complaint deadline <input value="${choice === 'final' ? '—' : 'tomorrow 09:00'}" ${choice === 'final' ? 'disabled' : ''}></label>
+    <label class="f">Results note <textarea rows="2" style="width:100%" placeholder="public, carries over between publications">${d.resultsNote}</textarea></label>
+    ${needConfirm ? `<div class="banner bad"><label><input type="checkbox" id="confirm"> I confirm publishing ${choice} results with flights still in check (recorded with my name, time and the rule concerned)</label></div>` : ''}
+    ${c.stale ? `<div class="banner"><label><input type="checkbox" id="confirmStale"> Publish with ${c.stale} stale analyses</label></div>` : ''}
+    <div class="row"><span class="spacer"></span><button onclick="S.publishFor=null;renderModal()">Cancel</button>
+      <button class="primary" onclick="doPublish()">Publish ${choice}</button></div>
+  </div></div>`;
+}
+function doPublish() {
+  const need = document.getElementById('confirm'), stale = document.getElementById('confirmStale');
+  if ((need && !need.checked) || (stale && !stale.checked)) { alert('Tick the confirmations first.'); return; }
+  const d = day(S.publishFor); d.status = S.publishStatus || 'preliminary'; d.publishedAt = 'just now';
+  log('published ' + d.status + ' results for ' + cls(d.classId).name + ' ' + dayLabel(d));
+  S.publishFor = null; S.publishStatus = null; renderModal(); render();
+}
+
+// ---------------------------------------------------------------- setup panels, shared content
+const SETUP = [
+  ['master','Competition', 'admin'], ['classes','Classes'], ['competitors','Competitors & loggers'], ['turnpoints','Turnpoint file'],
+  ['airspace','Airspace file'], ['procedures','Local procedures'], ['notes','Standing notes'], ['members','Members', 'admin'], ['lifecycle','Archive & delete', 'admin'],
+];
+function setupPanel(key) {
+  switch (key) {
+    case 'master': return `<h2>Competition</h2>
+      ${['Name:' + comp.name, 'Slug:' + comp.slug + ' (fixed)', 'Organiser:' + comp.organiser, 'Location:' + comp.location, 'Country:' + comp.country, 'Time zone:' + comp.tz, 'Rule set edition:' + comp.ruleSet, 'Airfield:' + comp.airfield, 'Dates:13 to 24 May 2026, practice 13 May']
+        .map(x => { const [k, v] = x.split(/:(.*)/); return `<label class="f">${k}<input value="${v}" style="width:100%" ${!can('admin') && ['Name','Slug','Organiser'].includes(k) ? 'disabled title="admins only"' : ''}></label>`; }).join('')}`;
+    case 'classes': return `<h2>Classes</h2><table><tr><th>Class</th><th>Colour</th><th>Template</th><th>Handicapped</th><th>Scale</th><th>Dm</th><th>D1</th><th>Handicap list</th></tr>
+      ${comp.classes.map(c => `<tr><td>${className(c)}</td><td><input value="${c.colour || ''}" size="8" placeholder="none"> <span class="small muted">yellow · blue · green · pink</span></td><td>${c.template || 'local'}</td><td>${c.handicapped ? 'yes' : 'no'}</td><td>${c.scale}</td><td>${c.dm}</td><td>${c.d1}</td><td>${c.list}</td></tr>`).join('')}</table>
+      <p><button>+ Class from template</button> <button>+ Local class</button></p>
+      <h3>Class days</h3><p class="muted small">Grid of dates by class. Clicking a cell creates the class day lazily or cancels it.</p>
+      <table><tr><th></th>${comp.dates.map(d => `<th class="small">${d.slice(8)}</th>`).join('')}</tr>
+      ${comp.classes.map(c => `<tr><td>${className(c)}</td>${comp.dates.map(dt => { const d = day(c.id, dt); return `<td class="small">${d.practice ? 'P' : d.number}</td>`; }).join('')}</tr>`).join('')}</table>`;
+    case 'competitors': return `<h2>Competitors & loggers</h2><p><button>+ Competitor</button> <button>Import CSV…</button></p>
+      <table><tr><th>Class</th><th>CN</th><th>Crew</th><th>Glider</th><th>Handicap</th><th>Loggers</th></tr>
+      ${competitors.map(c => `<tr><td>${className(cls(c.classId))}</td><td><b>${c.cn}</b></td><td>${c.crew}</td><td>${c.type} ${c.reg}</td><td>${c.hc}</td><td>${c.loggers.map(l => l.id + (l.primary ? ' (primary)' : '')).join(', ')}</td></tr>`).join('')}</table>`;
+    case 'turnpoints': return `<h2>Turnpoint file</h2><p>${comp.turnpointFile} <button>Replace…</button></p>`;
+    case 'airspace': return `<h2>Airspace file</h2><p>${comp.airspaceFile}</p><p class="muted">Every airspace is closed unless opened here.</p><table><tr><th>Airspace</th><th>Competition</th></tr><tr><td>Glider sector Heidekamp West</td><td>opened</td></tr><tr><td>ED-R 37 Munster</td><td>closed</td></tr></table>`;
+    case 'procedures': return `<h2>Local procedures</h2><p class="muted">Competition-wide values over ${comp.ruleSet}: earth model WGS84, maximum altitude 2300 m MSL, delivery period 45 min.</p>`;
+    case 'notes': return `<h2>Standing notes</h2><textarea rows="4" style="width:100%">${comp.standingNotes}</textarea>`;
+    case 'members': return can('admin') ? `<h2>Members</h2><table><tr><th>User</th><th>Role</th></tr>${comp.members.map(m => `<tr><td>${m[0]}</td><td>${m[1]}</td></tr>`).join('')}</table><p><button>Invite scorer or admin…</button></p>` : '<p class="muted">Admins only.</p>';
+    case 'lifecycle': return can('admin') ? `<h2>Archive & delete</h2><p><button>Archive competition…</button> <button>Delete competition…</button></p>` : '<p class="muted">Admins only.</p>';
+  }
+}
+function staffPanel() {
+  return `<h2>Staff</h2><h3>Users</h3><table><tr><th>User</th><th>Status</th><th>Invited by</th><th>Open invitations</th><th></th></tr>
+    ${staff.users.map(u => `<tr><td>${u[0]}</td><td>${u[1]}</td><td>${u[2]}</td><td>${u[3]} / 10</td><td><a>${u[1] === 'blocked' ? 'unblock' : 'block'}</a> · <a>revoke sessions</a></td></tr>`).join('')}</table>
+    <h3>Competitions</h3><table><tr><th>Competition</th><th>Status</th><th></th></tr>${staff.comps.map(c => `<tr><td>${c[0]}</td><td>${c[1]}</td><td><a>${c[1] === 'blocked' ? 'unblock · delete' : 'block'}</a></td></tr>`).join('')}</table>`;
+}
+function homePanel(go) {
+  return `<h1>Your competitions</h1><table><tr><th>Competition</th><th>Your role</th><th>Dates</th><th>Today</th></tr>
+    <tr class="click" onclick="${go}"><td><b>${comp.name}</b></td><td>${S.role}</td><td>13–24 May 2026</td><td>${comp.classes.map(c => className(c) + ' ' + statusPill(day(c.id, TODAY).status)).join(' &nbsp; ')}</td></tr>
+    <tr class="muted"><td>Hahnweide Testcup 2026</td><td>scorer</td><td>2–9 Aug 2026</td><td>not started</td></tr></table>
+    <p><button>+ Create competition</button> <button>Invite a user…</button> <span class="muted small">7 of 10 invitations left</span></p>`;
+}
+
+// ---------------------------------------------------------------- actions
+function openFlight(id) { set({ flightId:id }); }
+function act(what, arg) {
+  const d = day(), f = flight();
+  switch (what) {
+    case 'reviewed': if (f) { f.review = 'reviewed'; log('marked ' + f.competitor.cn + ' reviewed'); const n = firstOpen(d); if (n && variant === 'C') S.flightId = n.id; } break;
+    case 'rerun': if (f) { f.stale = false; log('re-analysed ' + f.competitor.cn); } break;
+    case 'launch': if (f) { f.launch = arg; log(f.competitor.cn + ' launch status ' + arg); } break;
+    case 'publishTask': d.published = S.candidate; if (d.status === 'unplanned') { d.status = 'task published'; makeFlights(d); d.flights.forEach(x => { x.launch = 'unresolved'; x.files = []; x.review = null; }); } log('published task ' + S.candidate + ' for ' + cls(d.classId).name); break;
+    case 'newCandidate': { const l = String.fromCharCode(65 + d.candidates.length); d.candidates.push(makeTask(l, 'Racing')); S.candidate = l; log('new candidate ' + l); break; }
+    case 'importCup': log('CUP import dialog (blocks on unmatched turnpoints)'); break;
+    case 'cancelDay': d.status = 'cancelled'; log('cancelled ' + dayLabel(d)); break;
+    case 'uncancel': d.status = 'unplanned'; break;
+    case 'assignFile': d.files.shift(); log('assigned file, logger bound to competitor'); break;
+    case 'print': log('opened printable ' + arg); break;
+    case 'regenPassword': d.password = Math.random().toString(36).slice(2, 8); break;
+  }
+  render();
+}
+
+// ======================================================================== Variant A: menu bar, context sidebar, overview matrix
+function variantA() {
+  const d = day(), c = cls(S.classId), cn = counts(d);
+  const menu = (label, on, items) => `<div class="A-menu"><a class="${on ? 'on' : ''}">${label} ▾</a><div class="A-drop">${items}</div></div>`;
+  let main;
+  if (S.view === 'home') main = homePanel("set({view:'overview'})");
+  else if (S.view === 'staff') main = staffPanel();
+  else if (S.view === 'setup') main = setupPanel(S.setup);
+  else if (S.view === 'overview') main = `<h1>Overview of all class days</h1>
+    <table class="A-matrix"><tr><th>Date</th>${comp.classes.map(c => `<th>${className(c)}</th>`).join('')}</tr>
+    ${comp.dates.map(dt => `<tr><td>${fmtDate(dt)}${dt === TODAY ? ' <b>(today)</b>' : ''}</td>${comp.classes.map(c => { const x = day(c.id, dt);
+      return `<td class="cell" onclick="set({classId:'${c.id}',date:'${dt}',view:'day',panel:'${x.status === 'unplanned' ? 'task' : x.status === 'task published' ? 'flights' : 'flights'}',flightId:null})">
+        <span class="small muted">${x.practice ? 'P' : x.number}</span> ${statusPill(x.status)}<br>${['preliminary','task published','unofficial'].includes(x.status) ? '<span class="small">' + countTags(x) + '</span>' : ''}</td>`; }).join('')}</tr>`).join('')}</table>`;
+  else {
+    const f = flight();
+    const idx = d.flights.findIndex(x => x.id === S.flightId);
+    const nav = `<button onclick="openFlight('${(d.flights[idx - 1] || d.flights[d.flights.length - 1]).id}')">‹ Previous</button><button onclick="openFlight('${(d.flights[idx + 1] || d.flights[0]).id}')">Next ›</button><button onclick="set({flightId:null})">Back to list</button>`;
+    const body = {
+      task:() => taskPanel(d),
+      flights:() => f ? flightDetail(f, nav) : flightTable(d),
+      files:() => filesPanel(d),
+      results:() => resultsPreview(d),
+    }[S.panel]();
+    main = `<div class="A-dayhead"><h1 style="margin:0">${className(c)} · ${dayLabel(d)}</h1>${statusPill(d.status)}<span class="spacer"></span>
+      ${['task published','preliminary','unofficial','final'].includes(d.status) ? `<button class="primary" onclick="openPublish()">Publish results…</button>` : ''}</div>${body}`;
+  }
+  const dayList = days.filter(x => x.classId === S.classId);
+  return `<div class="A-top"><span class="brand">Keyhole</span>
+      ${menu('Competitions', S.view === 'home', `<a onclick="set({view:'home'})">Your competitions</a>`)}
+      ${menu('Setup', S.view === 'setup', SETUP.filter(s => !s[2] || can(s[2])).map(s => `<a onclick="set({view:'setup',setup:'${s[0]}'})">${s[1]}</a>`).join(''))}
+      ${menu('Scoring', S.view === 'overview' || S.view === 'day', `<a onclick="set({view:'overview'})">Overview</a><a onclick="set({view:'day'})">Current class day</a>`)}
+      ${can('staff') ? `<div class="A-menu"><a class="${S.view === 'staff' ? 'on' : ''}" onclick="set({view:'staff'})">Staff</a></div>` : ''}
+      <span class="spacer"></span><span class="small" style="color:#aab">${comp.name} · ${S.role}</span></div>
+    <div class="A-body"><div class="A-side">
+      <b class="small">${comp.name}</b>
+      <label>Competition ID</label><div class="row"><input id="cnjump" placeholder="e.g. A3" style="width:120px" onkeydown="if(event.key==='Enter'){const f=day().flights.find(x=>x.competitor.cn.toLowerCase()===this.value.toLowerCase());if(f)set({view:'day',panel:'flights',flightId:f.id})}"><button>Go</button></div>
+      <label>Class</label><select onchange="set({classId:this.value,flightId:null})">${comp.classes.map(x => `<option value="${x.id}" ${x.id === S.classId ? 'selected' : ''}>${x.name}</option>`).join('')}</select>
+      <label>Class day</label><select onchange="set({date:this.value,view:'day',flightId:null})">${dayList.map(x => `<option value="${x.date}" ${x.date === S.date ? 'selected' : ''}>${dayLabel(x)} · ${x.status}</option>`).join('')}</select>
+      <div class="A-actions" style="margin-top:12px">
+        ${[['task','Task & day settings'],['flights','Flights', cn.check + cn.changed + cn.unresolved],['files','Unassigned files', cn.files],['results','Results preview']].map(a =>
+          `<a class="${S.view === 'day' && S.panel === a[0] ? 'on' : ''}" onclick="set({view:'day',panel:'${a[0]}',flightId:null})">${a[1]}${a[2] ? `<span class="count">${a[2]}</span>` : ''}</a>`).join('')}
+        <a onclick="act('print','task sheet')">Print task sheet</a>
+        <a onclick="act('print','results sheet')">Print results sheet</a>
+      </div>
+      <div class="qbox">StrePla's structure: menu bar for master data, an overview grid of dates × classes, and a context sidebar with class, day and per-day actions.</div>
+    </div><div class="A-main">${main}</div></div>`;
+}
+
+// ======================================================================== Variant B: competition-day board
+function variantB() {
+  if (S.view === 'home') return `<div class="B-top"><span class="brand">Keyhole</span></div><div style="padding:16px">${homePanel("set({view:'board'})")}</div>`;
+  const top = `<div class="B-top"><span class="brand">Keyhole</span><a onclick="set({view:'home'})">${comp.name}</a>
+      ${S.view === 'board' ? `<div class="B-date"><button onclick="shiftDate(-1)">‹</button>${fmtDate(S.date)}${S.date === TODAY ? ' · today' : ''}<button onclick="shiftDate(1)">›</button></div>` : '<span class="spacer"></span>'}
+      <button class="${S.view === 'board' ? 'primary' : ''}" onclick="set({view:'board'})">Competition days</button>
+      <button class="${S.view === 'setup' ? 'primary' : ''}" onclick="set({view:'setup'})">Setup</button>
+      ${can('staff') ? `<button class="${S.view === 'staff' ? 'primary' : ''}" onclick="set({view:'staff'})">Staff</button>` : ''}</div>`;
+  if (S.view === 'staff') return top + `<div style="padding:16px">${staffPanel()}</div>`;
+  if (S.view === 'setup') {
+    const done = { master:true, classes:true, competitors:true, turnpoints:true, airspace:true, procedures:true, notes:true, members:true, lifecycle:null };
+    return top + `<div class="B-setup"><div class="list"><b>Setup checklist</b><p class="small muted">Work top to bottom before the practice day.</p>
+      ${SETUP.filter(s => !s[2] || can(s[2])).map(s => `<a class="${S.setup === s[0] ? 'on' : ''}" onclick="set({setup:'${s[0]}'})"><span class="tick">${done[s[0]] === null ? '' : done[s[0]] ? '✔' : '○'}</span>${s[1]}</a>`).join('')}
+      </div><div class="main">${setupPanel(S.setup)}</div></div>`;
+  }
+  const strip = `<div class="B-strip">${comp.dates.map(dt => { const x = days.filter(y => y.date === dt); const prac = x[0].practice;
+    return `<a class="${dt === S.date ? 'on' : ''}" onclick="set({date:'${dt}',drawer:null})">${prac ? 'P' : x[0].number} · ${dt.slice(8)}.${dt.slice(5, 7)}. ${x.map(y => `<span class="swatch" style="background:${cls(y.classId).colour || '#ccc'};opacity:${y.status === 'final' ? 1 : y.status === 'unplanned' ? .25 : .65}"></span>`).join('')}</a>`; }).join('')}</div>`;
+  const cols = comp.classes.map(c => {
+    const d = day(c.id), cn = counts(d), taskDone = !!d.published, flightsTodo = cn.check + cn.changed + cn.stale + cn.unresolved + cn.files;
+    const step = (key, n, title, sum, state) => `<div class="B-step ${state} ${S.drawer && S.drawer.classId === c.id && S.drawer.panel === key ? 'on' : ''}" onclick="set({classId:'${c.id}',drawer:{classId:'${c.id}',panel:'${key}'},flightId:null})">
+      <span class="n">${n}</span><b>${title}</b><div class="sum">${sum}</div></div>`;
+    const fg = c.colour && parseInt(c.colour.slice(1, 3), 16) > 200 ? '#1b1f24' : '#fff';
+    return `<div class="B-col"><div class="B-colhead ${c.colour ? '' : 'none'}" style="${c.colour ? `background:${c.colour};color:${fg}` : ''}"><b style="font-size:16px">${c.name}</b><span>${d.practice ? 'Practice' : 'Day ' + d.number}</span><span class="spacer"></span>${statusPill(d.status)}</div>
+      ${d.status === 'cancelled' ? `<div class="B-step">Cancelled. <a onclick="act('uncancel')">Undo</a></div>` : `
+      ${step('task', 1, 'Task', taskDone ? `Task ${d.published} published · ${d.candidates.length} candidates · start opens ${d.startOpen}` : d.candidates.length ? d.candidates.length + ' candidates, none published' : 'No candidates yet', taskDone ? 'done' : 'todo')}
+      ${step('flights', 2, 'Flights', d.status === 'unplanned' ? 'after the task is published' : `${cn.total - cn.unresolved - cn.dnf} launched · ${cn.dnf} did not fly<br>${countTags(d)}`, d.status === 'unplanned' ? '' : flightsTodo ? 'todo' : 'done')}
+      ${step('results', 3, 'Results', d.publishedAt ? 'Published ' + d.publishedAt : ['final','unofficial'].includes(d.status) ? 'Published ' + d.status : 'Not published yet', '')}
+      <div class="B-step" onclick="openPublish('${c.id}')"><span class="n">4</span><b>Publish</b><div class="sum">${cn.unresolved ? 'Only preliminary while ' + cn.unresolved + ' launches are unresolved' : 'Ready for unofficial'}</div></div>`}
+    </div>`;
+  }).join('');
+  let drawer = '';
+  if (S.drawer) {
+    const d = day(S.drawer.classId), c = cls(S.drawer.classId), f = flight();
+    const body = { task:() => taskPanel(d), flights:() => (f ? flightDetail(f, `<button onclick="set({flightId:null})">‹ All flights</button>`) : `<div class="tabs"><a class="on">Flights</a><a onclick="set({drawer:{classId:'${c.id}',panel:'files'}})">Unassigned files (${d.files.length})</a></div>` + flightTable(d)),
+      files:() => `<div class="tabs"><a onclick="set({drawer:{classId:'${c.id}',panel:'flights'}})">Flights</a><a class="on">Unassigned files (${d.files.length})</a></div>` + filesPanel(d), results:() => resultsPreview(d) }[S.drawer.panel]();
+    drawer = `<div class="B-drawer"><div class="hd" style="border-top:6px solid ${c.colour || '#ccc'}"><b>${c.name} · ${dayLabel(d)}</b>${statusPill(d.status)}
+      <div class="tabs" style="margin:0 0 0 12px;border:0">${['task','flights','results'].map(p => `<a class="${S.drawer.panel === p || (p === 'flights' && S.drawer.panel === 'files') ? 'on' : ''}" onclick="set({drawer:{classId:'${c.id}',panel:'${p}'},flightId:null})">${p}</a>`).join('')}</div>
+      <span class="spacer"></span><button onclick="set({drawer:null,flightId:null})">✕</button></div><div class="bd">${body}</div></div>`;
+  }
+  return top + strip + `<div class="B-board">${cols}</div>` + drawer;
+}
+function shiftDate(n) { const i = comp.dates.indexOf(S.date) + n; if (i >= 0 && i < comp.dates.length) set({ date:comp.dates[i], drawer:null }); }
+
+// ======================================================================== Variant C: three-pane review desk
+function variantC() {
+  const rail = `<div class="C-rail"><div class="brand">Keyhole</div><div style="padding:0 14px 6px"><select style="width:100%;background:#2a3542;color:#fff;border-color:#445"><option>${comp.name}</option><option>Hahnweide Testcup 2026</option></select></div>
+    ${comp.dates.slice().reverse().filter(dt => dt <= '2026-05-22').map(dt => `<div class="grp">${fmtDate(dt)}${dt === TODAY ? ' · today' : ''}</div>
+      ${comp.classes.map(c => { const x = day(c.id, dt); return `<a class="${S.view === 'desk' && S.classId === c.id && S.date === dt ? 'on' : ''}" style="border-left-color:${c.colour || '#556'}" onclick="set({view:'desk',classId:'${c.id}',date:'${dt}',flightId:null,panel:'${x.status === 'unplanned' ? 'task' : 'flights'}'})">
+        ${c.name} <span class="small" style="color:#8da0b3">${x.practice ? 'P' : x.number}</span>${statusPill(x.status)}</a>`; }).join('')}`).join('')}
+    <div class="grp">Later</div><a onclick="set({view:'setup',setup:'classes'})">23–24 May (plan in class days grid)</a>
+    <div class="grp">Competition</div>${SETUP.filter(s => !s[2] || can(s[2])).map(s => `<a class="${S.view === 'setup' && S.setup === s[0] ? 'on' : ''}" onclick="set({view:'setup',setup:'${s[0]}'})">${s[1]}</a>`).join('')}
+    ${can('staff') ? `<div class="grp">Platform</div><a class="${S.view === 'staff' ? 'on' : ''}" onclick="set({view:'staff'})">Staff</a>` : ''}</div>`;
+  if (S.view === 'setup' || S.view === 'staff' || S.view === 'home') return `<div class="C-wrap" style="grid-template-columns:240px 1fr">${rail}<div class="C-right">${S.view === 'staff' ? staffPanel() : S.view === 'home' ? homePanel("set({view:'desk'})") : setupPanel(S.setup)}</div></div>`;
+  const d = day(), c = cls(S.classId), cn = counts(d);
+  const FILTERS = [['attention','Needs attention', d.flights.filter(attention).length], ['all','All', d.flights.length], ['files','Unassigned files', d.files.length]];
+  const list = S.filter === 'files' ? d.files.map(x => `<div class="C-item"><span class="cn">?</span><span>${x.name}<br><span class="small muted">${x.logger}, CN in file ${x.cn}</span></span><span class="tag warn">unassigned</span></div>`).join('')
+    : d.flights.filter(f => S.filter === 'all' || attention(f)).sort((a, b) => attention(b) - attention(a)).map(f => `<div class="C-item ${f.id === S.flightId ? 'sel' : ''}" style="border-left-color:${c.colour || 'transparent'}" onclick="set({flightId:'${f.id}',panel:'flights'})">
+      <span class="cn">${f.competitor.cn}</span><span>${f.competitor.crew}</span><span>${rv(f.review)} ${f.stale ? '<span class="tag stale">stale</span>' : ''}</span>
+      <span class="meta">${f.launch === 'launched' ? (f.finish ? 'finished ' + f.finish + ' · ' + f.speed + ' km/h' : f.dist ? 'outlanded ' + f.dist + ' km' : 'launched, no file') : f.launch}</span></div>`).join('') || '<p class="muted" style="padding:12px">Nothing needs attention. 🎉</p>';
+  const mid = `<div class="C-mid"><div class="hd">
+      <div class="row"><b style="font-size:16px">${className(c)} · ${dayLabel(d)}</b>${statusPill(d.status)}</div>
+      <div class="tabs" style="margin:6px 0 0;border:0">${[['task','Task'],['flights','Flights'],['results','Results']].map(p => `<a class="${S.panel === p[0] ? 'on' : ''}" onclick="set({panel:'${p[0]}',flightId:null})">${p[1]}</a>`).join('')}
+        <span class="spacer"></span><button class="primary" style="margin-bottom:4px" onclick="openPublish()" ${d.status === 'unplanned' ? 'disabled' : ''}>Publish…</button></div>
+      ${S.panel === 'flights' ? `<div class="C-chips">${FILTERS.map(x => `<a class="${S.filter === x[0] ? 'on' : ''}" onclick="set({filter:'${x[0]}'})">${x[1]} ${x[2]}</a>`).join('')}</div>` : ''}
+    </div>${S.panel === 'flights' ? list : S.panel === 'task' ? `<div style="padding:10px 12px" class="small">${d.candidates.map(t => `<div class="C-item ${S.candidate === t.letter ? 'sel' : ''}" onclick="set({candidate:'${t.letter}'})"><span class="cn">${t.letter}</span><span>${t.type} · ${t.dist}</span><span>${d.published === t.letter ? '✔ published' : ''}</span></div>`).join('') || 'No candidates.'}</div>`
+      : `<div style="padding:10px 12px">${countTags(d)}</div>`}</div>`;
+  const right = `<div class="C-right">${S.panel === 'task' ? taskPanel(d) : S.panel === 'results' ? resultsPreview(d)
+    : S.filter === 'files' ? filesPanel(d) : flightDetail(flight()) + (flight() ? '<p class="small muted" style="margin-top:12px">Keys: j / k next and previous in list, r mark reviewed</p>' : '')}</div>`;
+  return `<div class="C-wrap">${rail}${mid}${right}</div>`;
+}
+
+// ======================================================================== render, controls, switcher
+const VARIANTS = { A:['Menu bar and context sidebar', variantA], B:['Competition-day board', variantB], C:['Three-pane review desk', variantC] };
+function render() {
+  if (variant === 'B' && !['home','board','setup','staff'].includes(S.view)) S.view = 'board';
+  if (variant === 'C' && !['home','desk','setup','staff'].includes(S.view)) S.view = 'desk';
+  if (variant === 'A' && !['home','overview','day','setup','staff'].includes(S.view)) S.view = 'overview';
+  if (S.view === 'staff' && !can('staff')) S.view = variant === 'A' ? 'overview' : variant === 'B' ? 'board' : 'desk';
+  document.getElementById('app').innerHTML = VARIANTS[variant][1]();
+  const d = day();
+  document.getElementById('controls').innerHTML = `<button class="toggle" onclick="toggleControls()">${document.body.classList.contains('controls-open') ? 'hide ›' : '‹ prototype controls'}</button>
+    <div class="inner"><h4>Role</h4><select onchange="set({role:this.value})">${['staff','admin','scorer'].map(r => `<option ${r === S.role ? 'selected' : ''}>${r}</option>`).join('')}</select>
+    <h4>Jump to</h4><select onchange="const [c,dt]=this.value.split('|');set({classId:c,date:dt,flightId:null})">${days.filter(x => x.date >= '2026-05-19' && x.date <= '2026-05-22').map(x => `<option value="${x.classId}|${x.date}" ${x === d ? 'selected' : ''}>${cls(x.classId).name} ${x.date} (${x.status})</option>`).join('')}</select>
+    <h4>Current context</h4><pre>${JSON.stringify({ variant, view:S.view, class:S.classId, date:S.date, panel:S.drawer ? S.drawer.panel : S.panel, flight:flight() ? flight().competitor.cn : null, dayStatus:d.status, counts:counts(d) }, null, 1)}</pre>
+    <h4>Event log</h4><pre>${S.events.join('\n') || '—'}</pre>
+    <h4>Questions to react to</h4><pre>· Where does a scorer land after login?
+· How many clicks from "file arrived" to "reviewed"?
+· Is the day or the class the primary axis?
+· Where does class colour carry meaning?</pre></div>`;
+  const keys = Object.keys(VARIANTS);
+  document.getElementById('switcher').innerHTML = `<button onclick="cycle(-1)">←</button><span>${variant} (${VARIANTS[variant][0]})</span><button onclick="cycle(1)">→</button>`;
+}
+function toggleControls() { document.body.classList.toggle('controls-open'); document.getElementById('controls').classList.toggle('closed'); render(); }
+function cycle(n) { const k = Object.keys(VARIANTS); variant = k[(k.indexOf(variant) + n + k.length) % k.length]; const p = new URLSearchParams(location.search); p.set('variant', variant); history.replaceState(null, '', '?' + p); S.drawer = null; render(); }
+document.addEventListener('keydown', e => {
+  if (e.target.closest('input, textarea, select, [contenteditable]')) return;
+  if (e.key === 'ArrowLeft') cycle(-1); if (e.key === 'ArrowRight') cycle(1);
+  if (variant === 'C' && S.view === 'desk' && S.panel === 'flights') {
+    const d = day(), list = d.flights.filter(f => S.filter === 'all' || attention(f)).sort((a, b) => attention(b) - attention(a)), i = list.findIndex(f => f.id === S.flightId);
+    if (e.key === 'j' && list.length) set({ flightId:list[Math.min(i + 1, list.length - 1)].id });
+    if (e.key === 'k' && list.length) set({ flightId:list[Math.max(i - 1, 0)].id });
+    if (e.key === 'r' && S.flightId) act('reviewed');
+  }
+});
+render();
+</script>
+</body>
+</html>
