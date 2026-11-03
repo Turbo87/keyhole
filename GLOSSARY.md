@@ -204,6 +204,14 @@ _Avoid_: Finish altitude
 The highest altitude in m MSL that a class day allows for releasing from a launch or climbing on the engine before the start. Analysis warns when a flight exceeds it.
 _Avoid_: Release height, tow height
 
+**Maximum altitude**:
+The highest altitude in m MSL that a flight may reach at any point on a class day, usually set once for the whole competition.
+_Avoid_: Ceiling, max height, sporting limit
+
+**Scoring end time**:
+The time on a class day after which a flight earns no further distance or speed, as if it had landed then.
+_Avoid_: Scoring end, finish closing time
+
 ### Airspace
 
 **Airspace file**:
