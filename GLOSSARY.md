@@ -101,11 +101,11 @@ A competitor who is scored and shown but does not rank and does not affect other
 _Avoid_: Guest, HC (in prose), non-competing
 
 **Logger**:
-A flight recorder identified by its manufacturer and serial, linked to at most one competitor per competition, that produces IGC files.
+A flight recorder identified by its manufacturer and serial that produces IGC files, linked to at most one competitor on any date.
 _Avoid_: Flight recorder, FR, recorder
 
 **Primary logger**:
-The one logger of a competitor whose files are scored by default.
+The logger a competitor declares as their main logger from a given date. The rule sets prefer its file for scoring and accept PEVs only from it.
 _Avoid_: Main logger, first logger
 
 **Engine run**:
@@ -269,7 +269,7 @@ A file's flight analysis whose inputs, or the version of Keyhole that analysed i
 _Avoid_: Outdated analysis, invalid analysis
 
 **Recorded date**:
-The date an IGC file states for its flight in its `HFDTE` header. It can differ from the class day the file is assigned to, mostly because some older loggers with faulty GPS modules record dates exactly 1024 weeks early after a GPS week number rollover.
+The date an IGC file states for its flight in its `HFDTE` header. It can differ from the class day the file belongs to, mostly because some older loggers with faulty GPS modules record dates exactly 1024 weeks early after a GPS week number rollover.
 _Avoid_: File date, flight date
 
 **Analysis log**:
@@ -291,24 +291,24 @@ What an analysis log entry means:
 Debug and info entries do not require review. Errors indicate incomplete or failed processing; acknowledging an error does not make the missing analysis complete.
 _Avoid_: Severity
 
-**Flight result**:
-What a pilot achieved on a day (start, turnpoints, finish or landing, distance and time), whether from flight analysis or entered by the scorer.
-_Avoid_: Performance, score
+**Result**:
+One competitor's outcome on one class day: its result status and what the pilot achieved (start, turnpoints, finish or landing, distance and time), analysed from its scored file or entered as a manual result.
+_Avoid_: Flight result, competitor day, entry, performance, score
 
 **Manual result**:
-A flight result entered by the scorer instead of analysed from a scored file.
+A result whose achievements are entered by the scorer instead of analysed from a scored file.
 _Avoid_: Manual entry, virtual result
 
 **Override**:
-A scorer's correction of one part of an analysed flight result, such as the start or the flight end, that stays in place when the flight is analysed again.
+A scorer's correction of one part of an analysed result, such as the start or the flight end, that stays in place when the flight is analysed again.
 _Avoid_: Correction, adjustment
 
 **Result status**:
-Where a competitor's result for a class day stands: unknown, did not fly, scored file or manual result. Every competitor except those who did not fly counts toward the day's number of competitors.
+Where a result stands: unknown, did not fly, scored file or manual result. Every competitor except those who did not fly counts toward the day's number of competitors.
 _Avoid_: Launch status, start status, DNS, DNF
 
 **Placeholder result**:
-The best result of a class day so far, which preliminary scoring assumes for a competitor with unknown result status until their flight result arrives. It counts toward the day's parameters but gets no points or rank.
+The best result of a class day so far, which preliminary scoring assumes for a competitor with unknown result status until their result is known. It counts toward the day's parameters but gets no points or rank.
 _Avoid_: Hidden finisher, pending competitor, assumed result
 
 **Penalty**:
@@ -320,7 +320,7 @@ A public remark about a rule breach that deducts no points.
 _Avoid_: Warning (alone), caution, Verwarnung (in prose)
 
 **Scored file**:
-The one IGC file a flight result is analysed and scored from.
+The one IGC file a result is analysed and scored from, chosen by a scorer.
 _Avoid_: Main file, active flight
 
 **Publish**:
@@ -336,11 +336,11 @@ The printed daily or overall results of a class, rendered from the last publish,
 _Avoid_: Score sheet, results printout
 
 **Review status**:
-Whether a scorer still has to look at a competitor's class day:
+Whether a scorer still has to look at a result:
 
 - **OK**: The analysis reported no warnings or errors, or the competitor has no scored file and no file a scorer hasn't reviewed.
-- **Check**: The analysis reported warnings or errors, or a file is assigned to a competitor without a scored file, and no scorer has reviewed it.
-- **Reviewed**: A scorer reviewed the analysis output or assigned files that are currently shown.
+- **Check**: The analysis reported warnings or errors, or a file belongs to a result without a scored file, and no scorer has reviewed it.
+- **Reviewed**: A scorer reviewed the analysis output or the files of the result that are currently shown.
 - **Changed since review**: Analysis ran again after a scorer's review and produced a different output.
 
 _Avoid_: Flight status, check status, manually OK
