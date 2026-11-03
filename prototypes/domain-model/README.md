@@ -117,7 +117,7 @@ ClassDay
 
 | Entity | Fields |
 |---|---|
-| IgcFile | SHA-256 (exact duplicates ignored), delivery time (server receive time), recorded date (`HFDTE`, never rewritten), date correction (automatic 1024-week rollover), date override (set by a scorer), suggested class and competition ID (the pilot's choice), G-record validation (valid, invalid or no validator, run once), private flag (keeps its hash out of published results), reviewed flag (implied by the review status rules) |
+| IgcFile | SHA-256 (exact duplicates ignored), delivery time (server receive time), recorded date (`HFDTE`, never rewritten), local take-off date (derived, picks the logger link and class day), date correction (automatic 1024-week rollover), date override (set by a scorer), suggested class and competition ID (the pilot's choice), G-record validation (valid, invalid or no validator, run once), private flag (keeps its hash out of published results), reviewed flag (implied by the review status rules) |
 | Analysis | engine version, Mapterhorn version, state (pending or done), output (start, credited points, finish or landing, distance, time), previous output (for changed since review) |
 | AnalysisLogEntry | level (debug, info, warning or error), kind (maps to a rule clause per edition), evidence (a moment, an interval or the whole file), suggestion (a flight end or another candidate start) |
 | StaleReason | reason (task, start procedure, airspace, logger settings, logger link role, rule overrides, engine version) |
@@ -133,6 +133,8 @@ ClassDay
 Derived and never stored: the day number, placeholder results, working day scores, overall results, the AAT nominal, minimum and maximum distances and the public CUP download. The public JSON files (directory, `competition.json`, `task.json`, `results.json` and `overall.json`) are renderings of the entities above.
 
 ## Lifetimes
+
+This table hasn't been reviewed yet.
 
 | Lifetime | Entities and fields |
 |---|---|
@@ -160,24 +162,29 @@ These came out of reviewing the draft and revise earlier decisions.
 
 ## Contradictions and gaps
 
-Each item is a candidate for its own ticket. None is settled here.
+My own pass and two independent reviews, one by Claude and one by Codex, found these open questions. Each is now its own ticket:
 
-1. **Which date resolves a file to a logger link and class day.** [Is the primary logger's file scored ahead of a secondary that arrives first?](https://github.com/Turbo87/keyhole/issues/105) takes "its date from the IGC file", which is the UTC `HFDTE` date, while [Which analysis log entries does flight analysis report, and how are they reviewed?](https://github.com/Turbo87/keyhole/issues/26) and [How does Keyhole assign an IGC file whose recorded date doesn't match the class day?](https://github.com/Turbo87/keyhole/issues/57) use the local take-off date. They differ for flights that cross UTC midnight, such as Australian mornings.
-2. **Which IGC files are public, and what archiving deletes.** [How long does Keyhole keep results and IGC files, and are IGC downloads public?](https://github.com/Turbo87/keyhole/issues/50) makes scored files public, lets a scorer keep a file private by unlinking it and has archiving delete unlinked files. Files can no longer be unlinked since [Is the primary logger's file scored ahead of a secondary that arrives first?](https://github.com/Turbo87/keyhole/issues/105). A file that was scored in a published snapshot and later replaced is still referenced by that snapshot's hash.
-3. **Overrides when the scored file changes.** Overrides belong to the scored file branch of a result, but a start override can pick a candidate crossing and an AAT override pins a fix, both of which belong to one file. Nothing says whether overrides survive a switch of the scored file or a link edit that moves the scored file away.
-4. **Analysis of a file that moves to another result.** A link edit, a role change or a date override can move a file to another competitor or class day. [Which input changes re-analyse flights automatically, and which only mark them stale?](https://github.com/Turbo87/keyhole/issues/75) lists only uploads, overrides and scored file switches as automatic, and a role change marks stale. Whether a moved file is analysed automatically against its new task or only marked stale is open.
-5. **Where the review state lives.** The review status sits on the result per [Should a competitor's class day carry one state of unknown, did not fly, scored file or manual result?](https://github.com/Turbo87/keyhole/issues/102), but "a file no scorer has reviewed" and "the file shows up unreviewed on its new result" imply a per-file reviewed flag. Whether it exists, and whether it resets when a file moves, isn't stated.
-6. **Which published snapshots are kept.** Overall results read only the latest results publish, but reverting a cancellation restores the previous status, and reopening republishes the existing snapshot. Whether earlier publishes are kept as history or only the latest and the pre-cancellation one is open, and so is whether task publishes are kept.
-7. **Where the day status lives.** [Which day and flight statuses does Keyhole have, and what do they lock and publish?](https://github.com/Turbo87/keyhole/issues/13) stores the status with the snapshot and gives working results none, while the glossary and the public schedule treat it as a class day field that also covers unplanned and task published. Whether the status is a stored class day field or derived from the latest task and results publishes affects locking and the schedule in `competition.json`.
-8. **Logger IDs in the public competition file under dated links.** [How does a pilot upload a flight, and how is the competitor chosen?](https://github.com/Turbo87/keyhole/issues/95) lists each competitor's logger IDs for upload prefill. With dated links, a logger can point to different competitors on different dates, and the file doesn't say which link entries it publishes or how the upload page picks the date.
-9. **Which class day the daily password is checked against.** The password belongs to a class day, and the file's date now decides the class day. The upload request carries only the class and competitor, so whether the password must match the file's class day, today's class day or any open class day of the chosen class is unstated.
-10. **The audit log.** Many decisions rely on it as the only history (switches, crew edits, class moves, link edits), but no ticket says what it records, who can read it, whether erasure requests and archiving remove entries, or how long it is kept.
-11. **Deleting a competitor under dated links.** [How are competitors, gliders and loggers modelled, including primary and secondary loggers?](https://github.com/Turbo87/keyhole/issues/21) allows deletion only without a result on a published day and returns files to an unassigned pool. Every competitor now has a result per class day, the pool is gone, and what happens to link entries that point to the deleted competitor is open.
-12. **Dm and D1 layers.** [Which scoring formulas and parameters do SWO and IGC Annex A define?](https://github.com/Turbo87/keyhole/issues/2) and [Where are the scoring engine's boundaries?](https://github.com/Turbo87/keyhole/issues/8) layer rule overrides over competition, class and class day, while [How are classes configured: local classes, per-class Dm and D1, and which handicap list from which source?](https://github.com/Turbo87/keyhole/issues/22) has no competition layer for Dm and D1. The model keeps Dm and D1 on the class and class day only, which a regional competition with one Dm for all classes would set per class.
-13. **PEV start settings.** The start procedure carries "PEV starts", but no decision lists its fields, such as the PEV window, wait time and the per-day or per-launch PEV limit that [Which start rule settings does a class day carry, and how are they entered with the task?](https://github.com/Turbo87/keyhole/issues/45) says the rule sets count differently.
-14. **Turnpoint file replacement.** The airspace file locks at the first flight upload, but the turnpoint file has no rule. Task points link by name and copy coordinates, so replacing the file can leave candidates pointing to names that no longer exist, and the public download would no longer match published tasks.
-15. **Airspace identity across a file replacement.** Airspace exceptions and the competition's open selection reference single airspaces, and the file can be replaced until the first flight upload. Nothing says how those references carry over to the new file, since OpenAir has no stable airspace ID.
-16. **Organiser terms acceptance.** [Which legal documents, terms and attributions does Keyhole need before launch?](https://github.com/Turbo87/keyhole/issues/52) has the admin accept the organiser terms with an Article 26 arrangement at creation and confirm they may act for the organiser, but the model stores no acceptance, terms version or time.
+- [How is a class day's status stored, and which published results are kept?](https://github.com/Turbo87/keyhole/issues/123)
+- [Is a result's review status stored or derived, and do files carry their own reviewed flag?](https://github.com/Turbo87/keyhole/issues/124)
+- [What replaces the first competition-day launch as the cut-off for class changes?](https://github.com/Turbo87/keyhole/issues/125)
+- [What happens to logger links and published rows when a competitor is deleted?](https://github.com/Turbo87/keyhole/issues/126)
+- [What happens to overrides and analysis when the scored file changes or a file moves to another result?](https://github.com/Turbo87/keyhole/issues/127)
+- [What does the audit log record, who can read it, and how long is it kept?](https://github.com/Turbo87/keyhole/issues/128)
+- [Which logger IDs does the public competition file list under dated logger links?](https://github.com/Turbo87/keyhole/issues/129)
+- [Which class day is the daily password checked against?](https://github.com/Turbo87/keyhole/issues/130)
+- [What happens to task points when the turnpoint file is replaced?](https://github.com/Turbo87/keyhole/issues/131)
+- [When can an IGC file be deleted?](https://github.com/Turbo87/keyhole/issues/132)
+- [On which class days does a late entrant get a result?](https://github.com/Turbo87/keyhole/issues/133)
+- [Which settings make up a PEV start procedure?](https://github.com/Turbo87/keyhole/issues/134)
+- [How do airspace exceptions and the open selection carry over when the airspace file is replaced?](https://github.com/Turbo87/keyhole/issues/135)
+- [Do changes to the airfield or time zone mark files stale?](https://github.com/Turbo87/keyhole/issues/136)
+- [Is the reopen reason stored?](https://github.com/Turbo87/keyhole/issues/137)
+- [When can classes, class days and task candidates be deleted?](https://github.com/Turbo87/keyhole/issues/138)
+- [Can a task candidate be re-lettered after it is published?](https://github.com/Turbo87/keyhole/issues/139)
+- [What happens to a soft-deleted user's competition memberships?](https://github.com/Turbo87/keyhole/issues/140)
+- [Is acceptance of the organiser terms recorded?](https://github.com/Turbo87/keyhole/issues/141)
+
+A file's date is its local take-off date in the competition's time zone, as [Which analysis log entries does flight analysis report, and how are they reviewed?](https://github.com/Turbo87/keyhole/issues/26), [How does Keyhole assign an IGC file whose recorded date doesn't match the class day?](https://github.com/Turbo87/keyhole/issues/57) and [Which master data does a competition carry, and how are its classes' class days created and changed?](https://github.com/Turbo87/keyhole/issues/67) already decide, so the `HFDTE` date never picks a logger link directly.
 
 ## Not modelled
 
