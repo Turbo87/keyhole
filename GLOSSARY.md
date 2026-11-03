@@ -291,10 +291,6 @@ What an analysis log entry means:
 Debug and info entries do not require review. Errors indicate incomplete or failed processing; acknowledging an error does not make the missing analysis complete.
 _Avoid_: Severity
 
-**Review item**:
-Something about a competitor's class day that the scorer has to settle, such as a file arriving for a competitor marked did not fly, raised outside flight analysis. Unlike an analysis log entry, it does not come from a file's analysis.
-_Avoid_: Notice, discrepancy, conflict
-
 **Flight result**:
 What a pilot achieved on a day (start, turnpoints, finish or landing, distance and time), whether from flight analysis or entered by the scorer.
 _Avoid_: Performance, score
@@ -307,12 +303,12 @@ _Avoid_: Manual entry, virtual result
 A scorer's correction of one part of an analysed flight result, such as the start or the flight end, that stays in place when the flight is analysed again.
 _Avoid_: Correction, adjustment
 
-**Launch status**:
-Whether a competitor launched on a class day: unresolved, launched or did not fly. Competitors who launched count toward the day's number of competitors.
-_Avoid_: Start status, DNS, DNF
+**Result status**:
+Where a competitor's result for a class day stands: unknown, did not fly, scored file or manual result. Every competitor except those who did not fly counts toward the day's number of competitors.
+_Avoid_: Launch status, start status, DNS, DNF
 
 **Placeholder result**:
-The best result of a class day so far, which preliminary scoring assumes for a competitor with unresolved launch status until their flight result arrives. It counts toward the day's parameters but gets no points or rank.
+The best result of a class day so far, which preliminary scoring assumes for a competitor with unknown result status until their flight result arrives. It counts toward the day's parameters but gets no points or rank.
 _Avoid_: Hidden finisher, pending competitor, assumed result
 
 **Penalty**:
@@ -340,11 +336,11 @@ The printed daily or overall results of a class, rendered from the last publish,
 _Avoid_: Score sheet, results printout
 
 **Review status**:
-Whether a scorer still has to look at a flight result:
+Whether a scorer still has to look at a competitor's class day:
 
-- **OK**: The analysis reported no warnings or errors, or the result is a manual result.
-- **Check**: The analysis reported warnings or errors that no scorer has reviewed.
-- **Reviewed**: A scorer reviewed the analysis output that is currently shown.
+- **OK**: The analysis reported no warnings or errors, or the competitor has no scored file and no file a scorer hasn't reviewed.
+- **Check**: The analysis reported warnings or errors, or a file is assigned to a competitor without a scored file, and no scorer has reviewed it.
+- **Reviewed**: A scorer reviewed the analysis output or assigned files that are currently shown.
 - **Changed since review**: Analysis ran again after a scorer's review and produced a different output.
 
 _Avoid_: Flight status, check status, manually OK
