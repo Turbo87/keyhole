@@ -118,6 +118,10 @@ _Avoid_: Motor run, engine use, MoP run
 A published body of competition rules that defines how flights are scored, such as the DAeC SWO or the IGC Sporting Code Annex A.
 _Avoid_: Scoring script, ruleset formula
 
+**Rule set edition**:
+One dated version of a rule set, such as the DAeC SWO 2026 or the IGC Sporting Code Annex A 2025a, that a competition is scored under.
+_Avoid_: Rule set version, rules year
+
 **Local procedures**:
 Competition-specific adjustments to the rule set's parameters, such as a minimum scoring distance of 50 km instead of 100 km.
 _Avoid_: Overrides, custom rules
