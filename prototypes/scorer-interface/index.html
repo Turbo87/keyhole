@@ -441,7 +441,7 @@ function renderModal() {
       <span>${['preliminary','unofficial','final'].map(s => `<label style="margin-right:10px"><input type="radio" name="ps" ${choice === s ? 'checked' : ''} ${blocked && s !== 'preliminary' ? 'disabled' : ''} onchange="S.publishStatus='${s}';renderModal()"> ${s}</label>`).join('')}</span></label>
     <label class="f">Complaint deadline <input value="${choice === 'final' ? '—' : 'tomorrow 09:00'}" ${choice === 'final' ? 'disabled' : ''}></label>
     <label class="f">Results note <textarea rows="2" style="width:100%" placeholder="public, carries over between publications">${d.resultsNote}</textarea></label>
-    ${needConfirm ? `<div class="banner bad"><label><input type="checkbox" id="confirm"> I confirm publishing ${choice} results with flights still in check (recorded with my name, time and the rule concerned)</label></div>` : ''}
+    ${needConfirm ? `<div class="banner bad"><label><input type="checkbox" id="confirm"> I confirm publishing ${choice} results with flights still in check</label></div>` : ''}
     ${c.stale ? `<div class="banner"><label><input type="checkbox" id="confirmStale"> Publish with ${c.stale} stale analyses</label></div>` : ''}
     <div class="row"><span class="spacer"></span><button onclick="S.publishFor=null;renderModal()">Cancel</button>
       <button class="primary" onclick="doPublish()">Publish ${choice}</button></div>
