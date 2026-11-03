@@ -228,6 +228,10 @@ _Avoid_: Temporary airspace, day airspace, additional airspace
 Working out from a flight's IGC file what the pilot achieved on the day's task.
 _Avoid_: Evaluation, check
 
+**Stale analysis**:
+A file's flight analysis whose inputs, or the version of Keyhole that analysed it, changed after it ran. It keeps its result until the scorer analyses the file again, and records why it became stale.
+_Avoid_: Outdated analysis, invalid analysis
+
 **Recorded date**:
 The date an IGC file states for its flight in its `HFDTE` header. It can differ from the class day the file is assigned to, mostly because some older loggers with faulty GPS modules record dates exactly 1024 weeks early after a GPS week number rollover.
 _Avoid_: File date, flight date
