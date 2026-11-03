@@ -6,16 +6,20 @@ Keyhole is a hosted scoring system for centralised gliding competitions. Users s
 
 ### Platform
 
-**Keyhole team**:
-The people running the Keyhole platform.
-_Avoid_: Operator, admin, owner, host
+**Staff**:
+The people running the Keyhole platform, with access to every competition.
+_Avoid_: Keyhole team, operator, admin, owner, host
 
 **User**:
-A person with a Keyhole login who works on one or more competitions.
+A person with a Keyhole login, who joined through an invitation from staff or another user.
 _Avoid_: Account, member
 
+**Invitation**:
+An email offer to join Keyhole, optionally as an admin or scorer of a competition, which records the inviting user.
+_Avoid_: Referral, signup link
+
 **Blocked user**:
-A user whom the Keyhole team has barred from logging in.
+A user whom staff have barred from logging in.
 _Avoid_: Banned, suspended user
 
 ### Competitions
@@ -24,16 +28,12 @@ _Avoid_: Banned, suspended user
 A gliding contest run on Keyhole with its own classes, days and results.
 _Avoid_: Contest, event
 
-**Approved competition**:
-A competition the Keyhole team has accepted, which makes it publicly visible and lifts the limits on competitions awaiting approval.
-_Avoid_: Confirmed, activated, verified competition
-
 **Archived competition**:
 A finished competition whose scoring work has been removed from Keyhole, leaving only its published results, which can no longer change.
 _Avoid_: Closed, deleted, completed competition
 
 **Blocked competition**:
-An approved competition that the Keyhole team has taken down, so that it looks like it does not exist to everyone outside the team.
+A competition that staff have taken down, so that it looks like it does not exist to everyone except staff.
 _Avoid_: Suspended, frozen, hidden competition
 
 **Admin**:
