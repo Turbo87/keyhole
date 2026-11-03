@@ -101,7 +101,7 @@ A competitor who is scored and shown but does not rank and does not affect other
 _Avoid_: Guest, HC (in prose), non-competing
 
 **Logger**:
-A flight recorder identified by its manufacturer and serial, assigned to a competitor, that produces IGC files.
+A flight recorder identified by its manufacturer and serial, linked to at most one competitor per competition, that produces IGC files.
 _Avoid_: Flight recorder, FR, recorder
 
 **Primary logger**:
