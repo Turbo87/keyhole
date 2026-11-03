@@ -292,7 +292,7 @@ The one IGC file a flight result is analysed and scored from.
 _Avoid_: Main file, active flight
 
 **Publish**:
-Make a class day's results visible to the public as a fixed copy that stays unchanged until the scorer publishes again.
+Make a class day's task or results visible to the public as a fixed copy that stays unchanged until the scorer publishes it again.
 _Avoid_: Release
 
 **Results note**:
