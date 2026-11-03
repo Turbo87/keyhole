@@ -1,8 +1,8 @@
 <!doctype html>
 <!--
-  PROTOTYPE, throwaway. Answers: "What do the printable daily and overall result pages contain?"
+  PROTOTYPE, throwaway. Answers: "What do the printable task sheet and daily and overall result pages contain?"
   Three variants (?variant=A|B|C), one per answer to "public page or scorer page, snapshot or working state":
-    A  the public results page with a print stylesheet (prints the published snapshot)
+    A  the public page with a print stylesheet (prints the published snapshot)
     B  a separate scorer notice-board sheet rendered from the published snapshot
     C  a scorer printout of the working state, marked as unpublished when it differs
   The dark panel sets page, status and unpublished edits. "Paper preview" applies the print layout on screen,
@@ -36,6 +36,12 @@
   .banner.final { border-color:var(--s-final); background:#e9f6ef; }
   .note { border:1px solid var(--line); background:var(--soft); padding:6px 10px; margin:10px 0; white-space:pre-line; }
   .foot { margin-top:16px; padding-top:6px; border-top:1px solid var(--line); color:var(--muted); font-size:11px; display:flex; justify-content:space-between; gap:12px; }
+  h3 { font-size:13px; margin:10px 0 3px; text-transform:uppercase; letter-spacing:.03em; }
+  table.kv th { width:42%; background:none; font-weight:600; } table.kv { font-size:12px; }
+  .map { width:100%; height:auto; display:block; margin-top:10px; }
+  .pw { border:2px solid #111; padding:6px 10px; margin:10px 0; font-size:13px; }
+  .pw .blank { display:inline-block; width:160px; border-bottom:1px solid #111; }
+  body.paper .page { filter:grayscale(1); }
   .qr { width:56px; height:56px; background:repeating-conic-gradient(#111 0 25%, #fff 0 50%) 0 0/8px 8px; border:3px solid #111; flex:none; }
 
   /* A: public page */
@@ -73,6 +79,7 @@
     .A-printonly { display:block; }
     table { font-size:10.5px; } th, td { padding:2px 4px; }
     tr { break-inside:avoid; } thead { display:table-header-group; }
+    .page { filter:grayscale(1); }
     .banner, .note, th, tr.diff td, .rv, .C-wm::before { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   }
 
@@ -121,13 +128,32 @@ const OVERALL = [ // cn, crew, club, glider, day points (P, 1, 2, 3), total
 ].sort((a, b) => b[5] - a[5]);
 const DAY_STATUS_OVERALL = ['Practice', 'Final', 'Final', null]; // day 3 follows the panel
 
+// Task sheet data: everything below comes from decided task, start procedure, limit and airspace fields,
+// except NOTES, which stands in for the free text StrePla filled from templates (QNH, frequencies, briefing).
+const TASK = {
+  kind: 'Racing task', dist: 251.0, published: 'Mon 17 May 2027, 09:58 CEST', version: 1, letter: 'B', candidates: ['A', 'B', 'C'],
+  // nr, name, elevation m, leg km, course °, zone, lat, lon (map units)
+  points: [
+    ['Start', '001 Musterstadt', 312, null, null, 'Line 10 km', 50, 50],
+    ['1', '046 Talheim Kirche', 388, 61.2, 47, 'Cylinder 0.5 km', 82, 18],
+    ['2', '128 Bergheim AB-Kreuz', 245, 72.8, 152, 'Cylinder 0.5 km', 112, 80],
+    ['3', '042 Oberwald Turm', 512, 68.4, 265, 'Cylinder 0.5 km', 40, 92],
+    ['Finish', '001 Musterstadt', 312, 48.6, 12, 'Cylinder 3 km, min. 200 m AGL (512 m MSL)', 50, 50],
+  ],
+  start: [['Start opening', '13:05 local'], ['Start closing', '15:05 local'], ['Max. start altitude', '1500 m MSL'], ['Max. start ground speed', '170 km/h'], ['PEV starts', 'no']],
+  limits: [['Max. altitude', '2500 m MSL'], ['Tow altitude', '800 m MSL'], ['Scoring end', '19:30 local'], ['Sunset at airfield', '21:12 local']],
+  airspace: [['Airspace file', 'Musterstadt 2027 v3 (all airspace closed unless opened)'], ['Open today', 'Glider sector Talheim, ED-R 137 (inactive)'], ['Closed today', 'TMZ Bergheim (opened on days 1–2)'], ['NOTAM airspace', 'Airshow Oberwald, GND–FL100, 12:00–17:00']],
+  password: 'kx7m2q',
+};
+const NOTES = `Briefing 10:30 in the hangar · QNH 1016 hPa\nStart and landing frequency 122.880 MHz · safety frequency 123.405 MHz\nOutlanding phone 06427 930412\nStart opening announced on frequency, earliest last launch + 20 min`;
+
 // ---------------------------------------------------------------- state
 const params = new URLSearchParams(location.search);
 const S = {
   variant: params.get('variant') ?? 'A',
-  page: 'daily',        // daily | overall
+  page: 'daily',        // task | daily | overall
   status: 'unoff',      // pre | unoff | final
-  dirty: true,          // unpublished edits exist (P2 re-analysed, X7 penalty changed)
+  dirty: true,          // unpublished edits exist (results: P2 re-analysed, X7 penalty changed; task: start closing moved)
   paper: false, portrait: false,
 };
 const STATUS = { pre: 'Preliminary', unoff: 'Unofficial', final: 'Final' };
@@ -185,8 +211,79 @@ function overallTable() {
 const NOTE = `Day 3: Results recomputed after the complaint by P2 (missing turnpoint fix), distance corrected.\nW9 logger file still missing.`;
 const deadline = () => S.status === 'unoff' ? `Complaints until ${DAY.deadline}` : S.status === 'pre' ? 'Preliminary results, subject to change without notice' : 'Final results';
 
+// ---------------------------------------------------------------- shared task sheet parts
+function taskTable() {
+  return `<table><thead><tr><th>Nr.</th><th>Turnpoint</th><th class="num">Elevation</th><th class="num">Leg</th><th class="num">Course</th><th>Observation zone</th></tr></thead><tbody>
+    ${TASK.points.map(p => `<tr><td>${p[0]}</td><td>${p[1]}</td><td class="num">${p[2]} m</td><td class="num">${p[3] == null ? '' : fmt(p[3]) + ' km'}</td>
+      <td class="num">${p[4] == null ? '' : p[4] + '°'}</td><td style="white-space:normal">${p[5]}</td></tr>`).join('')}
+    <tr><td></td><td><b>Task distance</b></td><td></td><td class="num"><b>${fmt(TASK.dist)} km</b></td><td></td><td></td></tr></tbody></table>`;
+}
+const kv = (title, list) => `<h3>${title}</h3><table class="kv"><tbody>${list.map(([k, v]) => `<tr><th>${k}</th><td style="white-space:normal">${v}</td></tr>`).join('')}</tbody></table>`;
+function startList(working) {
+  return TASK.start.map(([k, v]) => [k, working && S.dirty && k === 'Start closing' ? `15:35 local <span class="diffmark">*</span>` : v]);
+}
+function mapSvg() {
+  const p = TASK.points, pts = p.map(x => `${x[6] * 2},${x[7] * 2}`).join(' ');
+  return `<svg viewBox="0 0 280 220" class="map"><rect width="280" height="220" fill="#fff" stroke="#111"/>
+    <path d="M150 10 L270 40 L250 120 L180 90 Z" fill="#ddd" stroke="#555"/><circle cx="210" cy="190" r="22" fill="none" stroke="#555" stroke-dasharray="3 2"/>
+    <polyline points="${pts}" fill="none" stroke="#111" stroke-width="1.5"/>
+    ${p.slice(1, -1).map(x => `<circle cx="${x[6] * 2}" cy="${x[7] * 2}" r="5" fill="none" stroke="#111"/><text x="${x[6] * 2 + 7}" y="${x[7] * 2 - 5}" font-size="9">${x[0]}. ${x[1]}</text>`).join('')}
+    <circle cx="100" cy="100" r="14" fill="none" stroke="#111"/><text x="60" y="122" font-size="9">Start / finish</text>
+    <text x="6" y="214" font-size="8" fill="#555">Map: task, closed airspace (grey), NOTAM airspace (dashed)</text></svg>`;
+}
+const pwBlank = () => `<div class="pw">Daily password: <span class="blank"></span></div>`;
+const pwPrinted = () => `<div class="pw">Daily password for flight upload: <b>${TASK.password}</b> · keyhole.bieniek.cloud/${COMP.slug}/upload</div>`;
+
+function TaskA() {
+  return `<div class="page">
+    <div class="small muted A-screenonly">keyhole.bieniek.cloud / ${COMP.slug} / ${CLS.name} / Day 3 task</div>
+    <button class="A-printbtn" onclick="window.print()">Print</button>
+    <h1>${COMP.name}</h1>
+    <div class="muted">${COMP.place} · ${CLS.name} class · ${DAY.label} · ${DAY.date}</div>
+    <div class="A-nav"><a class="on">Task</a><a>Day 3 results</a><a>Overall</a><a>Competitors</a></div>
+    <div class="banner unoff"><b>Task published.</b> <span class="small muted">Published ${TASK.published}, version ${TASK.version}.</span></div>
+    <h2>${TASK.kind} · ${fmt(TASK.dist)} km</h2>${taskTable()}
+    <div class="B-cols"><div>${kv('Start procedure', TASK.start)}${kv('Limits', TASK.limits)}</div><div>${mapSvg()}</div></div>
+    ${kv('Airspace', TASK.airspace)}
+    <div class="A-screenonly small muted">Download CUP · the daily password is handed out at the briefing and never appears on public pages.</div>
+    <div class="A-printonly">${pwBlank()}<div class="small muted">Briefing notes are not part of the public page.</div></div>
+    <div class="foot"><span>${COMP.rules}</span><span class="A-printonly">Printed from https://keyhole.bieniek.cloud/${COMP.slug}/club/day-3/task</span></div>
+  </div>`;
+}
+function TaskB() {
+  return `<div class="page">
+    <div class="B-title">
+      <div><div class="small muted">${COMP.name} · ${COMP.place}</div>
+        <h1>${CLS.name} class · ${DAY.label} · ${DAY.date}</h1>
+        <div>${TASK.kind} · ${fmt(TASK.dist)} km</div></div>
+      <div class="B-stamp unoff">Task ${TASK.letter}<small>Published ${TASK.published}</small></div>
+    </div>
+    ${taskTable()}
+    <div class="B-cols" style="grid-template-columns:1fr 1.3fr"><div>
+      ${kv('Start procedure', TASK.start)}${kv('Limits', TASK.limits)}${kv('Airspace', TASK.airspace.slice(1))}
+      <h3>Notes</h3><div class="note">${NOTES}</div>${pwPrinted()}</div>
+      <div>${mapSvg()}<div style="display:flex;gap:10px;align-items:center;margin-top:8px"><div class="qr"></div><div class="small">Scan to load the task (CUP) in the flight computer</div></div></div></div>
+    <div class="foot"><span>${COMP.rules} · ${TASK.airspace[0][1]}</span><span>Task version ${TASK.version} · scorer only, contains the daily password</span></div>
+  </div>`;
+}
+function TaskC() {
+  const dirty = S.dirty;
+  return `<div class="page C-wm ${dirty ? 'dirty' : ''}">
+    <div class="C-head"><div><b>${COMP.name}</b> · ${CLS.name} class · ${DAY.label.replace(/Task \w/, '')}${DAY.date} · <b>Candidate ${TASK.letter}</b> of ${TASK.candidates.join(', ')}</div>
+      <div class="small">Printed Mon 17 May 2027, 09:40 CEST by scorer Tobias B.</div></div>
+    <div class="banner ${dirty ? 'pre' : 'unoff'}"><b>Task candidate ${TASK.letter}.</b> ${dirty
+      ? 'Published version 1 differs: <b>1 unpublished change</b> (marked <span class="diffmark">*</span>). Publish before handing this out.'
+      : `Matches the published task (${TASK.published}).`}</div>
+    <h2>${TASK.kind} · ${fmt(TASK.dist)} km</h2>${taskTable()}
+    <div class="B-cols"><div>${kv('Start procedure', startList(true))}${kv('Limits', TASK.limits)}</div><div>${mapSvg()}</div></div>
+    ${kv('Airspace', TASK.airspace)}<h3>Notes</h3><div class="note">${NOTES}</div>${pwPrinted()}
+    <div class="foot"><span>Working state of the candidate · scorer only</span></div>
+  </div>`;
+}
+
 // ---------------------------------------------------------------- variant A: public page with print stylesheet
 function VariantA() {
+  if (S.page === 'task') return TaskA();
   const rs = ranked(rows(false)), daily = S.page === 'daily';
   return `<div class="page">
     <div class="small muted A-screenonly">keyhole.bieniek.cloud / ${COMP.slug} / ${CLS.name} / ${daily ? 'Day 3' : 'Overall'}</div>
@@ -206,6 +303,7 @@ function VariantA() {
 
 // ---------------------------------------------------------------- variant B: separate scorer notice-board sheet from the snapshot
 function VariantB() {
+  if (S.page === 'task') return TaskB();
   const rs = ranked(rows(false)), daily = S.page === 'daily';
   return `<div class="page">
     <div class="B-title">
@@ -227,9 +325,10 @@ function VariantB() {
 
 // ---------------------------------------------------------------- variant C: working-state printout for the scorer
 function VariantC() {
+  if (S.page === 'task') return TaskC();
   const rs = ranked(rows(true)), daily = S.page === 'daily', dirty = S.dirty;
   return `<div class="page C-wm ${dirty ? 'dirty' : ''}">
-    <div class="C-head"><div><b>${COMP.name}</b> · ${CLS.name} · ${daily ? `${DAY.label} · ${DAY.date}` : 'Overall after Day 3'}</div>
+    <div class="C-head"><div><b>${COMP.name}</b> · ${CLS.name} class · ${daily ? `${DAY.label} · ${DAY.date}` : 'Overall after Day 3'}</div>
       <div class="small">Printed Mon 17 May 2027, 20:05 CEST by scorer Tobias B.</div></div>
     <div class="banner ${S.status}"><b>Working state.</b> Last publish: ${st()}, ${DAY.published}.
       ${dirty ? '<b>2 unpublished changes</b> (marked <span class="diffmark">*</span>). This sheet does not match the public results.' : 'Matches the published results.'}</div>
@@ -244,7 +343,7 @@ function VariantC() {
 // ---------------------------------------------------------------- prototype chrome
 function controls() {
   return `<h4>Prototype controls</h4>
-    <label>Page <select data-k="page"><option value="daily">Daily results</option><option value="overall">Overall results</option></select></label>
+    <label>Page <select data-k="page"><option value="task">Task sheet</option><option value="daily">Daily results</option><option value="overall">Overall results</option></select></label>
     <label>Day 3 status <select data-k="status"><option value="pre">Preliminary</option><option value="unoff">Unofficial</option><option value="final">Final</option></select></label>
     <label><input type="checkbox" data-k="dirty"> Unpublished edits exist</label>
     <label><input type="checkbox" data-k="paper"> Paper preview</label>
@@ -253,6 +352,8 @@ function controls() {
     <div class="q">1. Public page + print CSS (A) or a separate scorer sheet (B, C)?</div>
     <div class="q">2. Snapshot (A, B) or working state (C)? With edits, C diverges from the public page.</div>
     <div class="q">3. Which of: status, complaint deadline, publish time + version, day parameters, signature line, results note, penalty remarks (inline or separate), engine + rules hash, link/QR?</div>
+    <div class="q">4. Task sheet: the public task page printed with a blank for the daily password (A), a scorer sheet with the password printed (B), or the working state of a task candidate (C)?</div>
+    <div class="q">5. Task sheet: fixed fields from the task settings plus one free notes field, or StrePla-style templates with placeholders? Is the map needed, and in greyscale?</div>
     <h4>State</h4><pre>${JSON.stringify({ ...S, variantName: VARIANTS[S.variant] }, null, 1)}</pre>`;
 }
 function render() {
