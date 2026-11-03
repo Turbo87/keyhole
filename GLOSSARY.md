@@ -271,6 +271,10 @@ _Avoid_: Correction, adjustment
 Whether a competitor launched on a class day: unresolved, launched or did not fly. Competitors who launched count toward the day's number of competitors.
 _Avoid_: Start status, DNS, DNF
 
+**Placeholder result**:
+The best result of a class day so far, which preliminary scoring assumes for a competitor with unresolved launch status until their flight result arrives. It counts toward the day's parameters but gets no points or rank.
+_Avoid_: Hidden finisher, pending competitor, assumed result
+
 **Penalty**:
 Points a scorer deducts from a competitor's day score for a rule breach, shown with a public remark. A day score never goes below zero, so a large penalty disqualifies the competitor for the day.
 _Avoid_: Deduction, Strafpunkte
