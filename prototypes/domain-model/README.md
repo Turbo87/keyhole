@@ -2,7 +2,7 @@
 
 Throwaway draft for [What entities, fields and relationships make up Keyhole's domain model?](https://github.com/Turbo87/keyhole/issues/120). It is drawn from the closed decisions of [Wayfinder: Keyhole MVP](https://github.com/Turbo87/keyhole/issues/1) and `GLOSSARY.md`. Fields are domain fields, not columns. Types are loose labels: `text`, `number`, `date` (local calendar date), `time` (instant), `enum`, `point`, `ref` and `list`.
 
-Each tree shows what an entity owns. No suffix is exactly one, `*` is zero or more, `+` is one or more, `?` is zero or one, and `··>` is a reference to an entity owned elsewhere. Each relationship is drawn once, from the side that owns or references it, and reverse sides such as a competitor's results are not drawn. Each entity's lifetime is in [Lifetimes](#lifetimes), and everything that didn't fit cleanly is in [Contradictions and gaps](#contradictions-and-gaps).
+Each tree shows what an entity owns, and the field tables list every entity's relationships first, with `→` for a reference and `?` for an optional one. No suffix is exactly one, `*` is zero or more, `+` is one or more, `?` is zero or one, and `··>` is a reference to an entity owned elsewhere. Each relationship is drawn once, from the side that owns or references it, and reverse sides such as a competitor's results are not drawn. Everything that didn't fit cleanly is in [Contradictions and gaps](#contradictions-and-gaps).
 
 ## Platform and membership
 
@@ -11,9 +11,9 @@ User
 ├── inviter ··> User?                 never changes, empty only for the first staff user
 ├── Session*
 ├── LoginToken*
-├── Invitation*                       sent, brings a new person onto Keyhole
+├── Invitation*                       sent, brings a new person onto Keyhole, removed once accepted
 │   └── competition ··> Competition?  role granted on acceptance
-├── CompetitionInvitation*            sent to an existing user, who accepts or ignores it
+├── CompetitionInvitation*            sent to an existing user, who accepts or ignores it, removed once accepted
 │   ├── invitee ··> User
 │   └── competition ··> Competition
 └── Membership*
@@ -22,12 +22,12 @@ User
 
 | Entity | Fields |
 |---|---|
-| User | email and name (both removed on soft deletion), staff flag, inviter, invitation limit (10 by default, staff change it, staff have none), block (staff member, time, internal note), deleted flag |
-| Invitation | email, inviter, optional competition and role, expiry (7 days), revoked time, accepted time. Every open or accepted invitation counts toward the inviter's limit, and accepting one sets the new user's inviter |
-| CompetitionInvitation | role, expiry (7 days), revoked time, accepted time. Never counts toward the limit and never changes the inviter |
-| Membership | role |
-| Session | expiry, 30 days after last use, extended at most once a day |
-| LoginToken | magic link and 6-digit code, single use, valid 60 minutes, code locks after 5 wrong attempts |
+| User | email and name (both removed on soft deletion), staff flag, inviter → User? (never changes, empty only for the first staff user), invitation limit (10 by default, set by staff, no limit for staff), block (staff member, time, internal note), deleted flag |
+| Invitation | inviter → User, email, competition → Competition? with role, expiry (7 days). Accepting it creates the user and removes it, and revoking removes it. The limit counts the users someone invited plus their unexpired invitations |
+| CompetitionInvitation | sender → User, invitee → User, competition → Competition, role, expiry (7 days). Accepting it creates the membership and removes it, and revoking removes it. Never counts toward the limit |
+| Membership | user → User, competition → Competition, role (admin or scorer, at least one admin per competition) |
+| Session | user → User, expiry (30 days after last use, extended at most once a day) |
+| LoginToken | user → User, magic link and 6-digit code (single use, valid 60 minutes, the code locks after 5 wrong attempts) |
 
 ## Competition setup
 
@@ -69,25 +69,25 @@ Competition
 | Entity | Fields |
 |---|---|
 | RuleSetEdition | ID (`DAeC SWO 2026`, `FAI Annex A 2025a`), allowed earth models, parameter defaults (Dm, D1, zones, delivery period, margins, complaint period) |
-| ClassTemplate | name (Club, Standard, 18 m), Dm, D1, handicapped flag |
+| ClassTemplate | rule set edition → RuleSetEdition, name (Club, Standard, 18 m), Dm, D1, handicapped flag, handicap list → HandicapList? |
 | HandicapList | ID (`daec-2026`), scale (1.000 or 100) |
-| HandicapListEntry | glider type, handicap |
-| Competition | name, slug (fixed at creation, unique including tombstones), organising club or person, location, country, IANA time zone, first and last date, optional website, airfield point and elevation in m MSL (optional at creation, needed for analysis), standing notes, flight levels, lifecycle (live, or archived as a tombstone with the directory fields). Deleting removes the competition entirely and frees the slug, block (staff member, time, internal note) |
-| RuleOverrides | earth model, finish measured to the cylinder edge, delivery period, default zones per role (competition only), Dm and D1 (class day only, overriding the class), start procedure (opening and closing time, maximum start altitude and ground speed, PEV settings), tow altitude, maximum altitude, scoring end time. Every field is optional and overrides the layer above |
-| AirspaceFile | OpenAir text as uploaded, lock time (first flight upload of the competition) |
-| Airspace | name, category (`AC` and `AY`), opened flag (closed unless opened) |
-| TurnpointFile | CUP text as uploaded |
-| Turnpoint | name, position, elevation |
-| Class | name, optional colour (sRGB hex), Dm, D1, handicapped flag, scale |
-| ClassDay | date (fixed), practice flag, daily password (generated at creation), QNH in hPa, results note (working value, copied into each results publish), cancelled flag |
-| TaskCandidate | letter (A, B, C, reorderable), task type (racing or AAT), minimum task time (AAT only), day notes |
-| TaskPoint | position and elevation (copied from the turnpoint), zone (line length, or R1, A1, R2, A2 and orientation), minimum finish height in m MSL (finish only) |
-| AirspaceException | direction (open or close) |
-| NotamAirspace | OpenAir text |
-| Competitor | competition ID (unique per class, up to 5 characters), glider type, optional registration, optional display name (otherwise the crew joined with "&"), handicap (0 means not set in handicapped classes), pure glider flag, hors concours flag |
-| CrewMember | position, first name, last name, club, country (ISO code), optional IGC Ranking List ID (scorer interface only) |
-| Logger | manufacturer and serial (from the `A` record), ENL threshold (500), MOP threshold (500), CUR threshold (20 A), minimum duration (30 s) |
-| LoggerLink | from date (empty means from the start), role (primary or secondary, at most one primary per competitor and date) |
+| HandicapListEntry | handicap list → HandicapList, glider type, handicap |
+| Competition | rule set edition → RuleSetEdition, name, slug (fixed at creation, unique including tombstones), organising club or person, location, country, IANA time zone, first and last date, optional website, airfield point and elevation in m MSL (optional at creation, needed for analysis), standing notes, flight levels, lifecycle (live, or archived as a tombstone with the directory fields), block (staff member, time, internal note). Deleting removes the competition entirely and frees the slug |
+| RuleOverrides | owner → exactly one of Competition, Class or ClassDay, then earth model, finish measured to the cylinder edge, delivery period, default zones per role (competition only), Dm and D1 (class day only, overriding the class), start procedure (opening and closing time, maximum start altitude and ground speed, PEV settings), tow altitude, maximum altitude, scoring end time. Every field is optional and overrides the layer above |
+| AirspaceFile | competition → Competition, OpenAir text as uploaded, lock time (first flight upload of the competition) |
+| Airspace | airspace file → AirspaceFile, name, category (`AC` and `AY`), opened flag (closed unless opened) |
+| TurnpointFile | competition → Competition, CUP text as uploaded |
+| Turnpoint | turnpoint file → TurnpointFile, name, position, elevation |
+| Class | competition → Competition, handicap list → HandicapList? (prefills new competitors), name, optional colour (sRGB hex), Dm, D1, handicapped flag, scale |
+| ClassDay | class → Class, task → TaskCandidate? (the candidate published as the class day's task), date (fixed), practice flag, daily password (generated at creation), QNH in hPa, results note (working value, copied into each results publish), cancelled flag |
+| TaskCandidate | class day → ClassDay, letter (A, B, C, reorderable), task type (racing or AAT), minimum task time (AAT only), day notes |
+| TaskPoint | task candidate → TaskCandidate, turnpoint → Turnpoint (linked by name), position in the sequence, position and elevation (copied from the turnpoint), zone (line length, or R1, A1, R2, A2 and orientation), minimum finish height in m MSL (finish only) |
+| AirspaceException | class day → ClassDay, airspace → Airspace, direction (open or close) |
+| NotamAirspace | class day → ClassDay, OpenAir text |
+| Competitor | competition → Competition, class → Class, competition ID (unique per class, up to 5 characters), glider type, optional registration, optional display name (otherwise the crew joined with "&"), handicap (0 means not set in handicapped classes), pure glider flag, hors concours flag |
+| CrewMember | competitor → Competitor, position, first name, last name, club, country (ISO code), optional IGC Ranking List ID (scorer interface only) |
+| Logger | competition → Competition, manufacturer and serial (from the `A` record), ENL threshold (500), MOP threshold (500), CUR threshold (20 A), minimum duration (30 s) |
+| LoggerLink | logger → Logger, competitor → Competitor, from date (empty means from the start), role (primary or secondary, at most one primary per competitor and date) |
 
 ## Flights, results and publishing
 
@@ -117,35 +117,20 @@ ClassDay
 
 | Entity | Fields |
 |---|---|
-| IgcFile | SHA-256 (exact duplicates ignored), delivery time (server receive time), recorded date (`HFDTE`, never rewritten), local take-off date (derived, picks the logger link and class day), date correction (automatic 1024-week rollover), date override (set by a scorer), suggested class and competition ID (the pilot's choice), G-record validation (valid, invalid or no validator, run once), private flag (keeps its hash out of published results), reviewed flag (implied by the review status rules) |
-| Analysis | engine version, Mapterhorn version, state (pending or done), output (start, credited points, finish or landing, distance, time), previous output (for changed since review) |
-| AnalysisLogEntry | level (debug, info, warning or error), kind (maps to a rule clause per edition), evidence (a moment, an interval or the whole file), suggestion (a flight end or another candidate start) |
-| StaleReason | reason (task, start procedure, airspace, logger settings, logger link role, rule overrides, engine version) |
-| Result | result status (unknown, did not fly, scored file or manual result), review status (OK, check, reviewed or changed since review), optional handicap override (applies to scored files and manual results alike). Switching between scored file and manual result discards the other branch |
-| ScoredFile | no fields of its own |
-| ManualResult | optional start time, finished flag, finish time (when finished), distance (when not finished, and always on an AAT), optional landing position (racing distance helper), optional public remark |
-| Override | optional start (a candidate crossing or a free time), optional flight end time, turnpoint credits, AAT pinned fixes, optional finish credit or time, optional public remark. Distance and speed have no override |
-| Penalty | points (0 is an official warning), public remark, internal remark |
-| PublishedTask | publish time, letter, task with AAT distances, start procedure, open, closed and NOTAM airspaces as of the publish |
-| PublishedResults | status (preliminary, unofficial, final or cancelled), publish time, complaint deadline (unofficial only), task line (letter, task type, distance, turnpoints), day parameters (N, n1, n2, Dm, D1, Do, Vo, To, Pm), results note, rule set edition, engine version, rules hash |
-| ResultsRow | copied scoring fields (handicap, hors concours, pure glider flag, class), start, finish or landing, distance, speed, points, rank, placeholder flag ("No result yet"), penalty points with public remark, public remarks of the override or manual result |
+| IgcFile | competition → Competition, logger → Logger, SHA-256 (exact duplicates ignored), delivery time (server receive time), recorded date (`HFDTE`, never rewritten), local take-off date (derived), date correction (automatic 1024-week rollover), date override (set by a scorer), suggested class and competition ID (the pilot's choice), G-record validation (valid, invalid or no validator, run once), private flag (keeps its hash out of published results), reviewed flag. Its result is derived from the logger link valid on its date and never stored |
+| Analysis | IGC file → IgcFile, engine version, Mapterhorn version, state (pending or done), output (start, credited points, finish or landing, distance, time), previous output (for changed since review) |
+| AnalysisLogEntry | analysis → Analysis, level (debug, info, warning or error), kind (maps to a rule clause per edition), evidence (a moment, an interval or the whole file), suggestion (a flight end or another candidate start) |
+| StaleReason | analysis → Analysis, reason (task, start procedure, airspace, logger settings, logger link role, rule overrides, engine version) |
+| Result | class day → ClassDay, competitor → Competitor, result status (unknown, did not fly, scored file or manual result), review status (OK, check, reviewed or changed since review), optional handicap override. Switching between scored file and manual result discards the other branch |
+| ScoredFile | result → Result, IGC file → IgcFile (chosen by a scorer) |
+| ManualResult | result → Result, optional start time, finished flag, finish time (when finished), distance (when not finished, and always on an AAT), optional landing position (racing distance helper), optional public remark |
+| Override | scored file → ScoredFile, optional start (a candidate crossing or a free time), optional flight end time, turnpoint credits, AAT pinned fixes, optional finish credit or time, optional public remark. Distance and speed have no override |
+| Penalty | result → Result, points (0 makes it an official warning), public remark, internal remark |
+| PublishedTask | class day → ClassDay, publish time, letter, task with AAT distances, start procedure, open, closed and NOTAM airspaces as of the publish |
+| PublishedResults | class day → ClassDay, status (preliminary, unofficial, final or cancelled), publish time, complaint deadline (unofficial only), task line (letter, task type, distance, turnpoints), day parameters (N, n1, n2, Dm, D1, Do, Vo, To, Pm), results note, rule set edition, engine version, rules hash |
+| ResultsRow | published results → PublishedResults, competitor → Competitor (display fields stay live), IGC file → IgcFile? (by hash, public download), copied scoring fields (handicap, hors concours, pure glider flag, class), start, finish or landing, distance, speed, points, rank, placeholder flag ("No result yet"), penalty points with public remark, public remarks of the override or manual result |
 
 Derived and never stored: the day number, placeholder results, working day scores, overall results, the AAT nominal, minimum and maximum distances and the public CUP download. The public JSON files (directory, `competition.json`, `task.json`, `results.json` and `overall.json`) are renderings of the entities above.
-
-## Lifetimes
-
-This table hasn't been reviewed yet.
-
-| Lifetime | Entities and fields |
-|---|---|
-| Current state, live on public pages after every save | Competition master data, class, competitor display fields and current handicap, crew, logger IDs, the class day schedule |
-| Current state, private working inputs | Rule overrides, task candidates, airspace exceptions, NOTAM airspaces, daily password, QNH, results note, result, manual result, override, penalty, analysis |
-| Dated history | Logger link, which is the only entity with dates of validity |
-| Versioned and immutable, shipped by deploy | Rule set edition, class template, handicap list, `ENGINE_VERSION` |
-| Snapshotted at publish | Published task, published results and its rows. A results row copies only scoring fields and references the competitor by ID for everything else |
-| Fixed after an event | Practice flag after the first publish, slug after creation, airspace file after the first flight upload, task point coordinates after copying, the user's inviter |
-| Locked on final class days | The class day's own inputs and the shared inputs it used: class scoring fields and rule overrides, the competitor's class (except on practice days), handicap, hors concours and pure glider flag, the airspace and turnpoints used, the airfield, the rule set edition and the time zone. Reopening unlocks them |
-| Write-only history | The audit log, which every decision names as the only place changes are kept but none defines |
 
 ## Decisions from review
 
