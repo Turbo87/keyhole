@@ -350,5 +350,5 @@ Whether a scorer still has to look at a flight result:
 _Avoid_: Flight status, check status, manually OK
 
 **Confirmation**:
-A scorer's recorded decision to depart from the rule set, such as publishing unofficial results while flights are still in check, with the scorer, time and rule concerned.
+A scorer's explicit go-ahead in a dialog before an action that departs from the rule set or skips a check, such as publishing unofficial results while flights are still in check. It is not kept after the action.
 _Avoid_: Override, waiver, exception
