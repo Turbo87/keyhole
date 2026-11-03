@@ -136,6 +136,18 @@ _Avoid_: Route, course
 A task prepared for a class day under a letter such as A, B or C, with its own task sheet, which the scorer can publish as the class day's task. Candidates that are never published stay private.
 _Avoid_: Alternative task, task variant
 
+**Task sheet**:
+The printed sheet for one task candidate that pilots get at briefing, with the task, launch and start settings, limits, airspace, QNH, notes, map, task QR code and daily password.
+_Avoid_: Task briefing sheet, Aufgabenblatt (in prose)
+
+**Standing notes**:
+A competition's free text printed on every task sheet, such as frequencies, emergency phone and relight area.
+_Avoid_: Competition notes, template
+
+**Day notes**:
+A task candidate's free text printed on its task sheet, such as grid time, expected first launch and runway.
+_Avoid_: Task notes, briefing notes
+
 **Racing task**:
 A task whose turnpoints must be reached in order, scored by speed over the task distance.
 _Avoid_: Speed task, polygon
@@ -219,6 +231,10 @@ _Avoid_: Ceiling, max height, sporting limit
 **Scoring end time**:
 The time on a class day after which a flight earns no further distance or speed, as if it had landed then.
 _Avoid_: Scoring end, finish closing time
+
+**QNH**:
+The day's air pressure at sea level in hPa, printed on the task sheet with the competition's flight levels converted to m MSL. Scoring does not use it.
+_Avoid_: Altimeter setting, pressure
 
 ### Airspace
 
@@ -314,6 +330,10 @@ _Avoid_: Release
 **Results note**:
 A scorer's public remark published with a class day's results, such as which complaints led to changes or which flights are still missing.
 _Avoid_: Announcement, changelog, publication comment
+
+**Results sheet**:
+The printed daily or overall results of a class, rendered from the last publish, which a competition official signs for the notice board.
+_Avoid_: Score sheet, results printout
 
 **Review status**:
 Whether a scorer still has to look at a flight result:
