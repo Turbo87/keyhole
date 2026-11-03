@@ -14,6 +14,10 @@ _Avoid_: Operator, admin, owner, host
 A person with a Keyhole login who works on one or more competitions.
 _Avoid_: Account, member
 
+**Blocked user**:
+A user whom the Keyhole team has barred from logging in.
+_Avoid_: Banned, suspended user
+
 ### Competitions
 
 **Competition**:
@@ -27,6 +31,10 @@ _Avoid_: Confirmed, activated, verified competition
 **Archived competition**:
 A finished competition whose scoring work has been removed from Keyhole, leaving only its published results, which can no longer change.
 _Avoid_: Closed, deleted, completed competition
+
+**Blocked competition**:
+An approved competition that the Keyhole team has taken down, so that it looks like it does not exist to everyone outside the team.
+_Avoid_: Suspended, frozen, hidden competition
 
 **Admin**:
 A user who manages a competition, including who works on it.
