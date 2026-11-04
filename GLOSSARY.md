@@ -224,6 +224,10 @@ _Avoid_: Gate opening, start gate
 The time after which starts are no longer valid on a class day.
 _Avoid_: Gate closing
 
+**Start ground speed**:
+The glider's speed over the ground around a start line crossing, measured as the rule set defines it and checked against the maximum start ground speed of the start procedure.
+_Avoid_: Start speed, crossing speed, Abfluggeschwindigkeit
+
 **PEV**:
 A pilot event marker that the pilot sets by pressing a button on the logger, recorded in the IGC file. Some rule sets use it to time a start.
 _Avoid_: Marker, event button
