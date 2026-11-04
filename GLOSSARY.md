@@ -382,12 +382,18 @@ _Avoid_: Score sheet, results printout
 **Review status**:
 Whether a scorer still has to look at a result:
 
-- **OK**: The analysis reported no warnings or errors, or the competitor has no scored file and no file a scorer hasn't reviewed.
-- **Check**: The analysis reported warnings or errors, or a file belongs to a result without a scored file, and no scorer has reviewed it.
-- **Reviewed**: A scorer reviewed the analysis output or the files of the result that are currently shown.
-- **Changed since review**: Analysis ran again after a scorer's review and produced a different output.
+- **OK**: The result has no check reasons.
+- **Check**: The result has check reasons.
 
-_Avoid_: Flight status, check status, manually OK
+_Avoid_: Flight status, check status, manually OK, reviewed, changed since review
+
+**Check reason**:
+Something that happened to a result since a scorer last looked at it, such as a file arriving or leaving or the scored file's analysis output changing. Reviewing the result clears the reasons the scorer saw.
+_Avoid_: Review item, flag
+
+**Internal remark**:
+A scorer's private text on a result or an IGC file, seen only by the competition's scorers and staff and never published.
+_Avoid_: Internal note, comment
 
 **Confirmation**:
 A scorer's explicit go-ahead in a dialog before an action that departs from the rule set or skips a check, such as publishing unofficial results while flights are still in check. It is not kept after the action.
