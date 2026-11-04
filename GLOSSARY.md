@@ -108,6 +108,10 @@ _Avoid_: Team (unless it is the display name), pilots
 A competitor who is scored and shown but does not rank and does not affect other competitors' points.
 _Avoid_: Guest, HC (in prose), non-competing
 
+**Deleted competitor**:
+A competitor a scorer has removed from the entries, who gets no results or uploads any more but stays in published results until each affected class day is published again.
+_Avoid_: Withdrawn competitor, removed competitor
+
 **Logger**:
 A flight recorder identified by its manufacturer and serial that produces IGC files, linked to at most one competitor on any date.
 _Avoid_: Flight recorder, FR, recorder
