@@ -61,7 +61,7 @@ A class day that is flown and scored but doesn't count toward overall results.
 _Avoid_: Training day
 
 **Day status**:
-How far a class day has progressed toward final results: unplanned, task published, preliminary, unofficial, final or cancelled.
+The stage a scorer has set for a class day on its way to final results: unplanned, task published, preliminary, unofficial, final or cancelled. The public sees the day status of the last publish.
 _Avoid_: Result status, day state
 
 **Cancelled day**:
@@ -368,7 +368,7 @@ The one IGC file a result is analysed and scored from, chosen by a scorer.
 _Avoid_: Main file, active flight
 
 **Publish**:
-Make a class day's task or results visible to the public as a fixed copy that stays unchanged until the scorer publishes it again.
+Make a class day's day status, task and results visible to the public as a fixed copy that stays unchanged until the scorer publishes the class day again.
 _Avoid_: Release
 
 **Results note**:
