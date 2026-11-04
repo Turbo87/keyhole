@@ -229,7 +229,7 @@ The highest altitude in m MSL that a class day allows for releasing from a launc
 _Avoid_: Release height, tow height
 
 **Maximum altitude**:
-The highest altitude in m MSL that a flight may reach at any point on a class day, usually set once for the whole competition.
+The highest altitude, in m MSL or as a flight level, that a flight may reach at any point on a class day, usually set once for the whole competition.
 _Avoid_: Ceiling, max height, sporting limit
 
 **Scoring end time**:
@@ -237,8 +237,12 @@ The time on a class day after which a flight earns no further distance or speed,
 _Avoid_: Scoring end, finish closing time
 
 **QNH**:
-The day's air pressure at sea level in hPa, printed on the task sheet with the competition's flight levels converted to m MSL. Scoring does not use it.
+The day's air pressure at sea level in hPa. Analysis uses it to convert flight levels to m MSL and to derive altitudes for flights without a usable take-off, and the task sheet prints the competition's flight levels converted with it.
 _Avoid_: Altimeter setting, pressure
+
+**Take-off reference**:
+How a flight's altitudes in m MSL are derived: the change in recorded pressure altitude since take-off, added to the airfield elevation.
+_Avoid_: QFE, altitude calibration
 
 ### Airspace
 
@@ -312,8 +316,16 @@ The best result of a class day so far, which preliminary scoring assumes for a c
 _Avoid_: Hidden finisher, pending competitor, assumed result
 
 **Penalty**:
-Points a scorer deducts from a competitor's day score for a rule breach, shown with a public remark. A day score never goes below zero, so a large penalty disqualifies the competitor for the day.
+Points a scorer deducts from a competitor's day score for a rule breach, shown with a public remark. A day score never goes below zero, so a large penalty is a day disqualification.
 _Avoid_: Deduction, Strafpunkte
+
+**Day disqualification**:
+A penalty large enough to zero a competitor's day score. The flight still counts toward the day's parameters.
+_Avoid_: Tagesdisqualifikation (in prose)
+
+**Competition disqualification**:
+The annulment of all of a competitor's day scores in a competition for a rule breach, shown with a public remark. Their flights still count toward each day's parameters.
+_Avoid_: Disqualification (alone), exclusion, DQ
 
 **Official warning**:
 A public remark about a rule breach that deducts no points.
