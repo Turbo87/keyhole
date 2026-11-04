@@ -44,6 +44,10 @@ _Avoid_: Owner, competition director
 A user who sets up, scores and publishes a competition.
 _Avoid_: Scorekeeper, operator
 
+**Organiser terms**:
+The conditions under which a competition's organiser uses Keyhole, including how the organiser and Keyhole share responsibility for pilot data, accepted on the organiser's behalf when the competition is created.
+_Avoid_: Terms of service, ToS, AGB
+
 **Class day**:
 One class's part of a competition day, with its own task, status and published results.
 _Avoid_: Day (when the class matters), task day
