@@ -340,7 +340,7 @@ A result whose achievements are entered by the scorer instead of analysed from a
 _Avoid_: Manual entry, virtual result
 
 **Override**:
-A scorer's correction of one part of an analysed result, such as the start or the flight end, that stays in place when the flight is analysed again.
+A scorer's correction of one part of an IGC file's analysis, such as the start or the flight end, that stays with the file when it is analysed again or moves to another result on the same class day.
 _Avoid_: Correction, adjustment
 
 **Result status**:
