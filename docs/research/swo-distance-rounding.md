@@ -11,6 +11,7 @@ Research for ticket #112, collected 2026-11-04. It reads SWO 13.1.4, which sets 
 | SWO 2022 | Same title, copy hosted by a club, https://s54f3b86144277229.jimcontent.com/download/version/1647202197/module/14048026429/name/SWO2022.pdf | Ausgabe 2022 |
 | SWO 2015 | Same title, copy hosted by a club, http://www.fsv-rudolstadt.de/wp-content/uploads/2016/11/SWO2015_final.pdf | Ausgabe 2015 |
 | Annex A | FAI Sporting Code Section 3 Annex A, "Rules for World and Continental Gliding Championships", https://www.fai.org/sites/default/files/document/file/SC3A_2025a.pdf | 2025a Edition |
+| DAeC script | Naviter SeeYou scoring script `DAEC_SWO_V9_09`, not public, copy supplied by the project owner | Version 9.09, 12.05.2026 |
 | Data set | SoaringSpot daily, total and task pages of the 18 DAeC competitions of the rounding research, downloaded with `fetch_pages.py` from that research | Downloaded 2026-11-04 |
 | Rounding research | `docs/research/rounding-and-ties.md` and `research/rounding-and-ties/` on the `research/rounding-and-ties` branch | ticket #65 |
 | Handicap research | `docs/research/handicapped-club-days.md` on the `research/handicapped-club-days` branch | ticket #69 |
@@ -23,7 +24,7 @@ The data set covers `dm-2022-zwickau`, `dm-zwickau-2024`, `dm-zwickau-2026`, `dm
 Verified means read in the cited document or counted in the data set with `research/swo-distance-rounding/variants.py`. Not verified:
 
 - **What the rule authors meant.** The SWO doesn't define "ermittelt" or "genau", and no commentary, FAQ or scorer guidance on 13.1.4 was found. The readings below come from the wording and its context only.
-- **The DAeC script.** DAeC days run `DAeC-SWO20xx Script V9.xx`, which is not public. Whether it or SeeYou rounds anything was only inferred from results.
+- **SeeYou's own distance and speed computation.** The DAeC script receives each competitor's distance and speed from SeeYou and doesn't show how SeeYou computes them. That they arrive unrounded is inferred from the published values.
 - **Manually entered flights.** 36 finisher rows have a distance on an exact 10 m multiple and a speed on an exact 0.01 km/h that is not distance divided by marking time. They look like values a scorer typed in, but SoaringSpot doesn't mark them, so that is a guess.
 - **SWO 2019 and older editions than 2015.** The 2019 copy found returned an HTML page, not a PDF. Editions from 2016 to 2021 and 2023 to 2024 were not read.
 - **FAI days.** Annex A has no distance precision rule, so FAI days were not tested.
@@ -78,6 +79,16 @@ On the 169 DAeC days that recompute without rounding (see [Recomputation](#recom
 
 The 10 days of `dmj-edpa-2023/club`, where SoaringSpot hides the Handicap column, print a Do that the unhandicapped distances don't reproduce, as the handicap research explains.
 
+## The DAeC script
+
+DAeC days are scored by the SeeYou scoring script `DAEC_SWO_V9_09` (version 9.09 of 12.05.2026). It doesn't implement 13.1.4:
+
+- **Distances and speeds enter unrounded.** The script reads `Pilots[i].dis` and `Pilots[i].speed` as SeeYou supplies them and uses them directly for D0 (`Pilots[i].dis*Href/Pilots[i].Hcap`), n1, Vo, n2, Pv and outlander Pd (`Pdm * (Pilots[i].dis*Href/Pilots[i].Hcap/D0)`).
+- **Only the score is rounded.** The single `Round()` in the scoring path is `Pilots[i].Points := Round( F*Fcr*(Pd+Pv) - Pilots[i].Penalty )`. Pm, Pvm and Dm are rounded only for the Info line.
+- **The result sheet shows the same unrounded values.** `Pilots[i].sdis:=Pilots[i].dis` and `Pilots[i].sspeed:=Pilots[i].speed` pass them on, and the Info line prints `FormatFloat('0.00',D0/1000.0)`.
+
+The script's version history back to 9.01 (10.03.2022) mentions no distance rounding.
+
 ## Recomputation
 
 `variants.py` recomputes every competitor's score with the formulas and data of `recompute.py` from the rounding research, then repeats it with distances rounded to 0.1 km at different steps:
@@ -113,6 +124,7 @@ The rounding research found the same for the displayed precision: distance and s
 ## Findings
 
 - SWO 13.1.4 reads as a precision rule for the scoring distances that feed the formulas, not as a display rule. It doesn't name a rounding method and says nothing about speeds. The wording has been the same since at least 2015.
+- The DAeC script V9.09 scores with SeeYou's unrounded distances and speeds and rounds only the final points.
 - SeeYou's published SWO results are consistent only with unrounded distances. The published distances, speeds and Do are unrounded, and every tested way of rounding to 0.1 km produces rows that don't match, with no row improving.
 - Following 13.1.4 literally (D+V) would make 261 rows wrong on 96 of 169 oracle days with half up rounding, and 405 rows on 102 days with truncation. Even the smallest variant, rounding only Do half up, breaks 53 rows on 34 days. Every difference is one point.
 - The rule would touch the credited distance D of every competitor, which includes the RT task distance of finishers, and through it Dh, Do, Pm, Pdm, Pvm, Pd, V, Vh, Vo and Pv. It could also change n1 and n2, though it doesn't in this data. Dm and DM are whole kilometres and unaffected.
