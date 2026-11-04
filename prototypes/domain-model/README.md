@@ -18,6 +18,8 @@ User
 │   └── competition ··> Competition
 └── Membership*
     └── competition ··> Competition   role admin or scorer, at least one admin per competition
+
+OrganiserTermsVersion                 built-in, immutable
 ```
 
 | Entity | Fields |
@@ -28,6 +30,7 @@ User
 | Membership | user → User, competition → Competition, role (admin or scorer, at least one admin per competition) |
 | Session | user → User, token (stored hashed), expiry (30 days after last use, extended at most once a day) |
 | LoginToken | user → User, magic link token and 6-digit code (both single use), expiry (60 minutes), wrong code attempts (the code locks after 5) |
+| OrganiserTermsVersion | ID (`organiser-terms-2026-11`), text. A new version applies only to competitions created after it |
 
 ## Competition setup
 
@@ -73,7 +76,7 @@ Competition
 | ClassTemplate | rule set edition → RuleSetEdition, name (Club, Standard, 18 m), Dm, D1, handicapped flag, handicap list → HandicapList? |
 | HandicapList | ID (`daec-2026`), scale (1.000 or 100) |
 | HandicapListEntry | handicap list → HandicapList, glider type, handicap |
-| Competition | name, slug (fixed at creation, unique including tombstones), organising club or person, location, country, IANA time zone, first and last date, optional website, airfield point and elevation in m MSL (optional at creation, needed for analysis), standing notes, flight levels, lifecycle (live, or archived as a tombstone with the directory fields), block (staff member, time, internal note). Deleting removes the competition entirely and frees the slug |
+| Competition | name, slug (fixed at creation, unique including tombstones), organising club or person, organiser terms acceptance (accepting user → User, version → OrganiserTermsVersion, time, organising club or person as accepted, recorded once by the creator and never replaced), location, country, IANA time zone, first and last date, optional website, airfield point and elevation in m MSL (optional at creation, needed for analysis), standing notes, flight levels, lifecycle (live, or archived as a tombstone with the directory fields), block (staff member, time, internal note). Deleting removes the competition entirely and frees the slug |
 | RuleOverrides | owner → exactly one of Competition, Class or ClassDay, then earth model, finish measured to the cylinder edge, delivery period, default zones per role (competition only), Dm and D1 (class day only, overriding the class), start procedure (opening and closing time, maximum start altitude and ground speed, PEV settings), tow altitude, maximum altitude, scoring end time. Every field is optional and overrides the layer above |
 | AirspaceFile | owner → Competition (the competition's airspace) or ClassDay (NOTAM airspaces), original file (kept for download exactly as uploaded, in any supported format). The competition's file is locked once the competition has its first IGC file |
 | Airspace | airspace file → AirspaceFile, name, category, lower and upper limit (each in m MSL, m AGL or a flight level), geometry, opened flag (competition file only, closed unless opened) |
