@@ -112,6 +112,18 @@ _Avoid_: Main logger, first logger
 A stretch of a flight where a logger's ENL, MOP or current channel stays at or above its threshold for at least the minimum duration, both set per logger. An engine run after the start ends the flight at its first fix above the threshold.
 _Avoid_: Motor run, engine use, MoP run
 
+**Self-launch**:
+An engine run already in progress at take-off, from which the glider climbs to its release.
+_Avoid_: Self-start, engine launch
+
+**Engine test**:
+An engine run that starts within the rule set's test window after an aerotow release, to show that the logger records engine use.
+_Avoid_: MoP test, engine check, Motorlaufnachweis
+
+**In-flight restart**:
+An engine run before the start that is neither a self-launch nor an engine test, such as a relaunch over the airfield instead of landing.
+_Avoid_: Relaunch, restart, Wiederstart
+
 ### Scoring rules
 
 **Rule set**:
