@@ -15,8 +15,12 @@ A person with a Keyhole login, who joined through an invitation from staff or an
 _Avoid_: Account, member
 
 **Invitation**:
-An email offer to join Keyhole, optionally as an admin or scorer of a competition, which records the inviting user.
+An email offer to a person without a login to join Keyhole, optionally as an admin or scorer of a competition. It records the inviting user and counts toward their invitation limit.
 _Avoid_: Referral, signup link
+
+**Competition invitation**:
+An email offer to an existing user to join a competition as an admin or scorer, which the user can accept or ignore. It never counts toward the inviting user's invitation limit.
+_Avoid_: Membership request, team invite
 
 **Blocked user**:
 A user whom staff have barred from logging in.
@@ -113,7 +117,7 @@ The logger a competitor declares as their main logger from a given date. The rul
 _Avoid_: Main logger, first logger
 
 **Engine run**:
-A stretch of a flight where a logger's ENL, MOP or current channel stays at or above its threshold for at least the minimum duration, both set per logger. An engine run after the start ends the flight at its first fix above the threshold.
+A stretch of a flight where a logger's ENL, MOP or current channel stays at or above its threshold for at least the minimum duration, both set per logger. An engine run after the start suggests a flight end at its first fix above the threshold, which a scorer accepts as an override.
 _Avoid_: Motor run, engine use, MoP run
 
 **Self-launch**:
@@ -140,7 +144,11 @@ _Avoid_: Rule set version, rules year
 
 **Local procedures**:
 Competition-specific adjustments to the rule set's parameters, such as a minimum scoring distance of 50 km instead of 100 km.
-_Avoid_: Overrides, custom rules
+_Avoid_: Custom rules
+
+**Rule overrides**:
+A competition's, class's or class day's changes to the parameters of its rule set edition, such as the earth model or a minimum scoring distance of 50 km instead of 100 km. They are how Keyhole records a competition's local procedures.
+_Avoid_: Custom rules, parameter overrides
 
 **Earth model**:
 The shape of the Earth that distances and observation zones are calculated on, either the WGS84 ellipsoid or the FAI Sphere with a radius of 6371 km.
@@ -157,8 +165,12 @@ A task prepared for a class day under a letter such as A, B or C, with its own t
 _Avoid_: Alternative task, task variant
 
 **Task sheet**:
-The printed sheet for one task candidate that pilots get at briefing, with the task, launch and start settings, limits, airspace, QNH, notes, map, task QR code and daily password.
+The printed sheet for one task candidate that pilots get at briefing, with the task, launch and start settings, limits, airspace, QNH, notes, map, task QR code and upload password.
 _Avoid_: Task briefing sheet, Aufgabenblatt (in prose)
+
+**Upload password**:
+The password pilots enter to upload their flights for one class day, generated when the class day is created and printed on its task sheet.
+_Avoid_: Daily password, upload code
 
 **Standing notes**:
 A competition's free text printed on every task sheet, such as frequencies, emergency phone and relight area.
