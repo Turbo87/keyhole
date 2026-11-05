@@ -173,7 +173,7 @@ The printed sheet for one task candidate that pilots get at briefing, with the t
 _Avoid_: Task briefing sheet, Aufgabenblatt (in prose)
 
 **Upload password**:
-The password pilots enter to upload their flights for one class day, generated when the class day is created and printed on its task sheet.
+The password pilots enter to upload their flights to a competition. It is generated when the competition is created, a scorer can change it at any time, and every task sheet prints it.
 _Avoid_: Daily password, upload code
 
 **Standing notes**:
