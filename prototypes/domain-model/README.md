@@ -62,7 +62,6 @@ Competition
         ├── RuleOverrides             class day layer
         ├── TaskCandidate*
         │   └── TaskPoint+            ordered, replaced whole
-        │       └── turnpoint ··> Turnpoint   linked by name, coordinates copied
         ├── task ··> TaskCandidate?   the candidate published as the class day's task
         ├── AirspaceException*
         │   └── airspace ··> Airspace
@@ -85,7 +84,7 @@ Competition
 | Class | competition → Competition, rule set edition → RuleSetEdition (cannot change while any of its class days is final), handicap list → HandicapList? (prefills new competitors), name, optional colour (sRGB hex), Dm, D1, handicap scale? (1.000 or 100, empty means the class isn't handicapped) |
 | ClassDay | class → Class, task → TaskCandidate? (the candidate published as the class day's task), date (fixed), practice flag, QNH in hPa, results note (working value, copied into each results publish), cancelled flag |
 | TaskCandidate | class day → ClassDay, letter (A, B, C, reorderable), task type (racing or AAT), minimum task time (AAT only), minimum finish height in m MSL, day notes |
-| TaskPoint | task candidate → TaskCandidate, turnpoint → Turnpoint (linked by name), position in the sequence, position and elevation (copied from the turnpoint), zone (line length, or R1, A1, R2, A2 and orientation) |
+| TaskPoint | task candidate → TaskCandidate, turnpoint name, position in the sequence, position and elevation (copied from the turnpoint file entry of that name), zone (line length, or R1, A1, R2, A2 and orientation) |
 | AirspaceException | class day → ClassDay, airspace → Airspace, direction (open or close) |
 | Competitor | competition → Competition, class → Class, competition ID (unique per class, up to 5 characters), glider type, optional registration, optional display name (otherwise the crew joined with "&"), handicap (0 means not set in handicapped classes), pure glider flag, hors concours flag |
 | CrewMember | competitor → Competitor, position, first name, last name, club, country (ISO code), optional IGC Ranking List ID (scorer interface only) |
