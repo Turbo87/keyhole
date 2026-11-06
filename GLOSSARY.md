@@ -147,7 +147,7 @@ A published body of competition rules that defines how flights are scored, such 
 _Avoid_: Scoring script, ruleset formula
 
 **Rule set edition**:
-One dated version of a rule set, such as the DAeC SWO 2026 or the IGC Sporting Code Annex A 2025a, that a competition is scored under.
+One dated version of a rule set, such as the DAeC SWO 2026 or the IGC Sporting Code Annex A 2025a, that a class is scored under.
 _Avoid_: Rule set version, rules year
 
 **Local procedures**:
@@ -155,7 +155,7 @@ Competition-specific adjustments to the rule set's parameters, such as a minimum
 _Avoid_: Custom rules
 
 **Rule overrides**:
-A competition's, class's or class day's changes to the parameters of its rule set edition, such as the earth model or a minimum scoring distance of 50 km instead of 100 km. They are how Keyhole records a competition's local procedures.
+A class's or class day's changes to the parameters of its rule set edition, such as the earth model or a minimum scoring distance of 50 km instead of 100 km. They are how Keyhole records a competition's local procedures.
 _Avoid_: Custom rules, parameter overrides
 
 **Earth model**:
@@ -368,7 +368,7 @@ A scorer's correction of one part of an IGC file's analysis, such as the start o
 _Avoid_: Correction, adjustment
 
 **Result status**:
-Where a result stands: unknown, did not fly, scored file or manual result. Every competitor except those who did not fly counts toward the day's number of competitors.
+Where a result stands: unknown, did not fly, scored file or manual result. Every competitor except those who did not fly and hors concours competitors counts toward the day's number of competitors.
 _Avoid_: Launch status, start status, DNS, DNF
 
 **Placeholder result**:
