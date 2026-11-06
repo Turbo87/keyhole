@@ -248,6 +248,22 @@ _Avoid_: Start speed, crossing speed, Abfluggeschwindigkeit
 A pilot event marker that the pilot sets by pressing a button on the logger, recorded in the IGC file. Some rule sets use it to time a start.
 _Avoid_: Marker, event button
 
+**PEV start**:
+A start procedure option in which a start is valid only inside a PEV start window that one of the pilot's PEVs opened.
+_Avoid_: PEV gate, event start
+
+**PEV wait time**:
+The time from a PEV until the PEV start window it opens.
+_Avoid_: PEV delay
+
+**PEV start window**:
+The period after a PEV's wait time during which a PEV start is valid.
+_Avoid_: PEV window, PEV interval
+
+**PEV limit**:
+The number of PEVs that can open a PEV start window, counted per day or per launch as the rule set defines, with PEVs close together counting as one.
+_Avoid_: Maximum PEVs
+
 **Credited start point**:
 Where a flight's start is credited and where its task distance is measured from, either the reference point of the start's observation zone or the glider's position at the start time.
 _Avoid_: Start position, start fix
