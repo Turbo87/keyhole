@@ -329,8 +329,12 @@ A file's flight analysis whose inputs, or the version of Keyhole that analysed i
 _Avoid_: Outdated analysis, invalid analysis
 
 **Recorded date**:
-The date an IGC file states for its flight in its `HFDTE` header. It can differ from the class day the file belongs to, mostly because some older loggers with faulty GPS modules record dates exactly 1024 weeks early after a GPS week number rollover.
-_Avoid_: File date, flight date
+The UTC date an IGC file states for its flight in its `HFDTE` header. It differs from the file's flight date when take-off and UTC midnight fall on different sides, and it can be plainly wrong, for example after a GPS week number rollover or in a logger that lost its clock.
+_Avoid_: File date
+
+**Flight date**:
+The local date in the competition's time zone that an IGC file counts for, which picks its logger link and class day. It is the date of take-off, or of the first fix without one, corrected for a GPS week number rollover, unless a scorer overrides it.
+_Avoid_: File date, take-off date
 
 **Analysis log**:
 The list of entries produced while analysing one uploaded IGC file, available even if parsing fails. Debug entries are hidden by default.
