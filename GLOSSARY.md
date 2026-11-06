@@ -371,6 +371,10 @@ _Avoid_: Warning (alone), caution, Verwarnung (in prose)
 The one IGC file a result is analysed and scored from, chosen by a scorer.
 _Avoid_: Main file, active flight
 
+**Deleted IGC file**:
+An IGC file a scorer has removed from a class day's scoring work, which no longer counts for any result and is restored as if newly uploaded when the same file is uploaded again.
+_Avoid_: Removed file, discarded file
+
 **Publish**:
 Make a class day's day status, task and results visible to the public as a fixed copy that stays unchanged until the scorer publishes the class day again.
 _Avoid_: Release
