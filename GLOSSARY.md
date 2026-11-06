@@ -32,6 +32,10 @@ _Avoid_: Banned, suspended user
 A gliding contest run on Keyhole with its own classes, days and results.
 _Avoid_: Contest, event
 
+**Competition date**:
+A calendar date on which a competition runs. A competition's dates are usually one continuous range but can leave dates out, such as the weekdays of a competition flown only at weekends.
+_Avoid_: Competition day (for the date itself), event date
+
 **Archived competition**:
 A finished competition whose scoring work has been removed from Keyhole, leaving only its published results, which can no longer change.
 _Avoid_: Closed, deleted, completed competition
@@ -165,7 +169,7 @@ The course a class flies on a class day: an ordered list of turnpoints from star
 _Avoid_: Route, course
 
 **Task candidate**:
-A task prepared for a class day under a letter such as A, B or C, with its own task sheet, which the scorer can publish as the class day's task. Candidates that are never published stay private.
+A task prepared for a class day, with its own task sheet, which the scorer can letter for the briefing, such as A, B or C, and publish as the class day's task. Candidates that are never published stay private.
 _Avoid_: Alternative task, task variant
 
 **Task sheet**:
