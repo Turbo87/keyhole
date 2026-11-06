@@ -299,15 +299,15 @@ _Avoid_: QFE, altitude calibration
 ### Airspace
 
 **Airspace file**:
-The competition's OpenAir airspace file, as uploaded by the organiser and fixed once the first flight is uploaded.
+The competition's airspace file, as uploaded by the organiser.
 _Avoid_: Airspace data, airspace database
 
 **Closed airspace**:
-An airspace that competitors must not enter on a class day. Every airspace in the airspace file is closed unless the competition opens it or a class day's airspace exception opens it, and a class day's NOTAM airspaces are always closed.
+An airspace that competitors must not enter on a class day. Every airspace in the airspace file is closed unless the competition or a class day's airspace exception opens it by name, and a class day's NOTAM airspaces are always closed.
 _Avoid_: Forbidden airspace, prohibited airspace (prohibited is an ICAO type), active airspace
 
 **Airspace exception**:
-A class day's change to whether one airspace of the airspace file is closed, for the whole day and in either direction.
+A class day's change to whether the airspaces of one name in the airspace file are closed, for the whole day and in either direction.
 _Avoid_: Airspace override, activation
 
 **NOTAM airspace**:
