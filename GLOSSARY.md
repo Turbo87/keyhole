@@ -348,7 +348,7 @@ Where a result stands: unknown, did not fly, scored file or manual result. Every
 _Avoid_: Launch status, start status, DNS, DNF
 
 **Placeholder result**:
-The best result of a class day so far, which preliminary scoring assumes for a competitor with unknown result status until their result is known. It counts toward the day's parameters but gets no points or rank.
+The best result of a class day so far, which scoring assumes for a competitor with unknown result status until their result is known. It counts toward the day's parameters but gets no points or rank.
 _Avoid_: Hidden finisher, pending competitor, assumed result
 
 **Penalty**:
