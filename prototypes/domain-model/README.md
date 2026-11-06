@@ -17,17 +17,17 @@ User
 │   ├── invitee ··> User
 │   └── competition ··> Competition
 └── Membership*
-    └── competition ··> Competition   role admin or scorer, at least one admin per competition
+    └── competition ··> Competition   role admin or scorer, at least one admin per competition unless staff deleted the last one
 
 OrganiserTermsVersion                 built-in, immutable
 ```
 
 | Entity | Fields |
 |---|---|
-| User | email and name (both removed on soft deletion), staff flag, inviter → User? (never changes, empty only for the first staff user), invitation limit (10 by default, set by staff, no limit for staff), block (staff member, time, internal note), deleted flag |
+| User | email and name (both removed on soft deletion), staff flag (cleared on soft deletion), inviter → User? (never changes, empty only for the first staff user), invitation limit (10 by default, set by staff, no limit for staff), block (staff member, time, internal note), deleted flag (soft deletion also removes the user's memberships and every pending invitation they sent or received) |
 | Invitation | inviter → User, email, competition → Competition? with role, expiry (7 days). Accepting it creates the user and removes it, and revoking removes it. The limit counts the users someone invited plus their unexpired invitations |
 | CompetitionInvitation | sender → User, invitee → User, competition → Competition, role, expiry (7 days). Accepting it creates the membership and removes it, and revoking removes it. Never counts toward the limit |
-| Membership | user → User, competition → Competition, role (admin or scorer, at least one admin per competition) |
+| Membership | user → User, competition → Competition, role (admin or scorer). The last admin can neither leave nor downgrade, and only staff deleting that user leaves a competition without an admin until staff invite or promote one |
 | Session | user → User, token (stored hashed), expiry (30 days after last use, extended at most once a day) |
 | LoginToken | user → User, magic link token and 6-digit code (both single use), expiry (60 minutes), wrong code attempts (the code locks after 5) |
 | OrganiserTermsVersion | ID (`organiser-terms-2026-11`), text. A new version applies only to competitions created after it |
