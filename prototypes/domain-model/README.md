@@ -43,7 +43,6 @@ HandicapList                          built-in, immutable
 └── HandicapListEntry+
 
 Competition
-├── RuleOverrides                     competition layer
 ├── AirspaceFile?                     the competition's airspace
 │   └── Airspace+
 ├── TurnpointFile?
@@ -55,7 +54,7 @@ Competition
 │   ├── class ··> Class               a class change is an edit of this reference
 │   └── CrewMember+                   ordered
 └── Class*
-    ├── rule set edition ··> RuleSetEdition
+    ├── rule set edition ··> RuleSetEdition   chosen per class
     ├── handicap list ··> HandicapList?   prefills new competitors
     ├── RuleOverrides                 class layer
     └── ClassDay*                     created lazily, one per competition date
@@ -74,18 +73,18 @@ Competition
 | ClassTemplate | rule set edition → RuleSetEdition, name (Club, Standard, 18 m), Dm, D1, handicapped flag, handicap list → HandicapList? |
 | HandicapList | ID (`daec-2026`), scale (1.000 or 100) |
 | HandicapListEntry | handicap list → HandicapList, glider type, handicap |
-| Competition | name, slug (fixed at creation, unique including tombstones), organising club or person, organiser terms acceptance (accepting user → User, version → OrganiserTermsVersion, time, organising club or person as accepted, recorded once by the creator and never replaced), location, country, IANA time zone, competition dates (a set, usually one continuous range, with the first and last date derived from it), optional website, airfield point and elevation in m MSL (optional at creation, needed for analysis), standing notes, flight levels, upload password (generated at creation, changeable by a scorer at any time), opened airspace names (every airspace of the airspace file is closed unless its name is listed), lifecycle (live, or archived as a tombstone with the directory fields), block (staff member, time, internal note). Deleting removes the competition entirely and frees the slug |
-| RuleOverrides | owner → exactly one of Competition, Class or ClassDay, then earth model, finish measured to the cylinder edge, delivery period, default zones per role (competition only), Dm and D1 (class day only, overriding the class), start procedure (opening and closing time, maximum start altitude and ground speed, PEV settings), tow altitude, maximum altitude, scoring end time. Every field is optional and overrides the layer above |
+| Competition | name, slug (fixed at creation, unique including tombstones), organising club or person, organiser terms acceptance (accepting user → User, version → OrganiserTermsVersion, time, organising club or person as accepted, recorded once by the creator and never replaced), location, country, IANA time zone (fixed once the competition has a class day or IGC file), competition dates (a set, usually one continuous range, with the first and last date derived from it), optional website, airfield point and elevation in m MSL (optional at creation, needed for analysis, a change marks every file of the competition stale), standing notes, flight levels, upload password (generated at creation, changeable by a scorer at any time), opened airspace names (every airspace of the airspace file is closed unless its name is listed), lifecycle (live, or archived as a tombstone with the directory fields), block (staff member, time, internal note). Deleting removes the competition entirely and frees the slug |
+| RuleOverrides | owner → exactly one of Class or ClassDay, then earth model, finish measured to the cylinder edge, delivery period, default zones per role (likely exposed only per class day), Dm and D1 (class day only, overriding the class), start procedure (opening and closing time, maximum start altitude and ground speed, PEV settings), tow altitude, maximum altitude, scoring end time. Every field is optional and overrides the layer above, and each is validated against the class's rule set edition. There is no competition layer |
 | AirspaceFile | owner → Competition (the competition's airspace) or ClassDay (NOTAM airspaces), original file (kept for download exactly as uploaded, in any supported format). The competition's file can be replaced until archiving |
 | Airspace | airspace file → AirspaceFile, name, category, lower and upper limit (each in m MSL, m AGL or a flight level), geometry |
 | TurnpointFile | competition → Competition, original file (kept for download exactly as uploaded, in any supported format) |
 | Turnpoint | turnpoint file → TurnpointFile, name, position, elevation |
-| Class | competition → Competition, rule set edition → RuleSetEdition (cannot change while any of its class days is final), handicap list → HandicapList? (prefills new competitors), name, optional colour (sRGB hex), Dm, D1, handicap scale? (1.000 or 100, empty means the class isn't handicapped), deleted flag (hides the class with everything in it until restored) |
-| ClassDay | class → Class, task → TaskCandidate? (the candidate published as the class day's task), date (fixed), practice flag, QNH in hPa, results note (working value, copied into each results publish), cancelled flag |
+| Class | competition → Competition, rule set edition → RuleSetEdition (picked first in the class form, changeable at any time with a confirmation, which marks the class's files stale), handicap list → HandicapList? (prefills new competitors), name, optional colour (sRGB hex), Dm, D1, handicap scale? (1.000 or 100, empty means the class isn't handicapped), deleted flag (hides the class with everything in it until restored) |
+| ClassDay | class → Class, task → TaskCandidate? (the candidate published as the class day's task), date (fixed), practice flag, QNH in hPa, day status (unplanned, task published, preliminary, unofficial, final or cancelled, a working value the scorer sets), complaint deadline (working value, suggested when publishing unofficial), reasons list (one entry per kind of unpublished change, emptied by a publish), results note (working value, copied into each publish) |
 | TaskCandidate | class day → ClassDay, letter? (set by the scorer for the briefing, unique per class day, needed to publish), deleted flag (restorable, never on the class day's task), task type (racing or AAT), minimum task time (AAT only), minimum finish height in m MSL, day notes |
 | TaskPoint | task candidate → TaskCandidate, turnpoint name, position in the sequence, position and elevation (copied from the turnpoint file entry of that name), zone (line length, or R1, A1, R2, A2 and orientation) |
 | AirspaceException | class day → ClassDay, airspace name (copied, matching every airspace of that name in the current file), direction (open or close) |
-| Competitor | competition → Competition, class → Class, competition ID (unique per class, up to 5 characters), glider type, optional registration, optional display name (otherwise the crew joined with "&"), handicap (0 means not set in handicapped classes), pure glider flag, hors concours flag |
+| Competitor | competition → Competition, class → Class, competition ID (unique per class, up to 5 characters), glider type, optional registration, optional display name (otherwise the crew joined with "&"), handicap (0 means not set in handicapped classes), pure glider flag, hors concours flag, competition disqualification? (required public remark, optional internal remark), deleted flag (soft delete once none of their results is flown, frees the competition ID, lasts until archiving) |
 | CrewMember | competitor → Competitor, position, first name, last name, club, country (ISO code), optional IGC Ranking List ID (scorer interface only) |
 | Logger | competition → Competition, manufacturer and serial (from the `A` record), ENL threshold (500), MOP threshold (500), CUR threshold (20 A), minimum duration (30 s) |
 | LoggerLink | logger → Logger, competitor → Competitor, from date (empty means from the start), role (primary or secondary, at most one primary per competitor and date) |
@@ -96,6 +95,7 @@ Competition
 Logger
 └── IgcFile*                          from the A record, which every upload needs
     ├── resolves to ··> Result?       derived from the logger link valid on the flight date
+    ├── Overrides?                    only while it resolves to a result
     └── Analysis                      current analysis only, also while pending or failed
         ├── AnalysisLogEntry*
         └── StaleReason*
@@ -103,12 +103,11 @@ Logger
 ClassDay
 ├── Result*                           one per competitor of the class
 │   ├── competitor ··> Competitor
-│   ├── ScoredFile?                   only with status scored file, carries the overrides
-│   │   └── file ··> IgcFile          chosen by a scorer
+│   ├── scored file ··> IgcFile?      only with status scored file, chosen by a scorer
 │   ├── ManualResult?                 only with status manual result
 │   └── Penalty?
-├── PublishedTask?                    fixed public copy, replaced by a task republish
-└── PublishedResults?                 fixed public copy, history open
+├── PublishedTask?                    latest published copy only, replaced by each publish
+└── PublishedResults?                 latest published copy only, replaced by each publish
     └── ResultsRow*
         ├── competitor ··> Competitor   display fields stay live
         └── file ··> IgcFile?           by hash, public download
@@ -116,17 +115,17 @@ ClassDay
 
 | Entity | Fields |
 |---|---|
-| IgcFile | logger → Logger (which gives the competition), SHA-256 (exact duplicates ignored), upload time, recorded date (`HFDTE`, never rewritten), flight date (derived: the local date of take-off, or of the first fix without one, in the competition's time zone, with the 1024-week rollover corrected), date override (set by a scorer for any other wrong date, replacing the flight date), suggested class and competition ID (the pilot's choice), G-record validation (valid, invalid or no validator, run once), private flag (keeps its hash out of published results). Its result is derived from the logger link valid on its flight date and never stored |
+| IgcFile | logger → Logger (which gives the competition), SHA-256 (an upload of a deleted file restores it as newly uploaded, any other existing hash is rejected), upload time, recorded date (`HFDTE`, never rewritten), flight date (derived: the local date of take-off, or of the first fix without one, in the competition's time zone, with the 1024-week rollover corrected), date override (set by a scorer for any other wrong date, replacing the flight date), suggested class and competition ID (the pilot's choice), G-record validation (valid, invalid or no validator, run once), private flag (keeps its hash out of published results), deleted flag (soft delete, never on a scored file, undone by a re-upload), internal remark?. Its result is derived from the logger link valid on its flight date and never stored |
+| Overrides | IGC file → IgcFile, optional start (a candidate crossing or a free time), optional flight end time, turnpoint credits, AAT pinned fixes, optional finish credit or time. Distance and speed have no override. Moving the file to another class day or leaving it unresolved drops them, and a rerun after a task edit or candidate switch drops task-dependent ones whose target no longer matches, with a warning |
 | Analysis | IGC file → IgcFile, engine version, state (pending or done), output (start, credited points, finish or landing, distance, time) |
 | AnalysisLogEntry | analysis → Analysis, level (debug, info, warning or error), kind (maps to a rule clause per edition), evidence (a moment, an interval or the whole file), suggestion (a flight end or another candidate start) |
-| StaleReason | analysis → Analysis, reason (task, start procedure, airspace, logger settings, logger link role, rule overrides, engine version) |
-| Result | class day → ClassDay, competitor → Competitor, result status (unknown, did not fly, scored file or manual result), review status (OK, check, reviewed or changed since review), optional handicap override. Switching between scored file and manual result discards the other branch |
-| ScoredFile | result → Result, IGC file → IgcFile (chosen by a scorer), overrides: optional start (a candidate crossing or a free time), optional flight end time, turnpoint credits, AAT pinned fixes, optional finish credit or time, optional public remark. Distance and speed have no override |
-| ManualResult | result → Result, optional start time, finished flag, finish time (when finished), distance (when not finished, and always on an AAT), optional landing position (racing distance helper), optional public remark |
+| StaleReason | analysis → Analysis, reason (task, start procedure, airspace, logger settings, logger link role, rule overrides, rule set edition, airfield, class day, engine version) |
+| Result | class day → ClassDay, competitor → Competitor, result status (unknown, did not fly, scored file or manual result), scored file → IgcFile? (chosen by a scorer), check reasons (the review status is derived: check while any remain, otherwise OK), optional handicap override, optional public remark, internal remark?. Switching between files or to a manual result discards nothing |
+| ManualResult | result → Result, optional start time, finished flag, finish time (when finished), distance (when not finished, and always on an AAT), optional landing position (racing distance helper) |
 | Penalty | result → Result, points (0 makes it an official warning), public remark, internal remark |
 | PublishedTask | class day → ClassDay, publish time, letter, task with AAT distances, start procedure, open, closed and NOTAM airspaces as of the publish |
 | PublishedResults | class day → ClassDay, status (preliminary, unofficial, final or cancelled), publish time, complaint deadline (unofficial only), task line (letter, task type, distance, turnpoints), day parameters (N, n1, n2, Dm, D1, Do, Vo, To, Pm), results note, rule set edition, engine version, rules hash |
-| ResultsRow | published results → PublishedResults, competitor → Competitor (display fields stay live), IGC file → IgcFile? (by hash, public download), copied scoring fields (handicap, hors concours, pure glider flag, class), start, finish or landing, distance, speed, points, rank, placeholder flag ("No result yet"), penalty points with public remark, public remarks of the override or manual result |
+| ResultsRow | published results → PublishedResults, competitor → Competitor (display fields stay live), IGC file → IgcFile? (by hash, public download), copied scoring fields (handicap, hors concours, pure glider flag, class), start, finish or landing, distance, speed, points, rank (empty for hors concours, did not fly shown as "DNF" and competition disqualification shown as "DSQ"), placeholder flag ("No result yet"), penalty points with public remark, the result's public remark |
 
 Derived and never stored: the day number, placeholder results, working day scores, overall results, the AAT nominal, minimum and maximum distances and the public CUP download. The public JSON files (directory, `competition.json`, `task.json`, `results.json` and `overall.json`) are renderings of the entities above.
 
@@ -141,7 +140,7 @@ These came out of reviewing the draft and revise earlier decisions.
 - Published results don't record which files were stale at publish time. This revises [Which input changes re-analyse flights automatically, and which only mark them stale?](https://github.com/Turbo87/keyhole/issues/75) and point 8 of [Which day and flight statuses does Keyhole have, and what do they lock and publish?](https://github.com/Turbo87/keyhole/issues/13).
 - The layered rule parameters are called rule overrides, the way Keyhole records a competition's local procedures.
 - Inviting a new person and inviting an existing user into a competition are separate. Only invitations that bring a new person onto Keyhole count toward the limit and set the inviter, and an existing user accepts or ignores a competition invitation.
-- Each class has its own rule set edition, so a future Grand Prix class isn't ruled out by the layering. Competition rule overrides still apply to every class. This revises point 4 of [Which master data does a competition carry, and how are its classes' class days created and changed?](https://github.com/Turbo87/keyhole/issues/67).
+- Each class has its own rule set edition, so a future Grand Prix class isn't ruled out by the layering. Since [Which gaps does the MVP coverage pass leave, and how is each resolved?](https://github.com/Turbo87/keyhole/issues/152), the class form picks it, one competition can mix SWO and Annex A classes, and rule overrides have no competition layer. This revises point 4 of [Which master data does a competition carry, and how are its classes' class days created and changed?](https://github.com/Turbo87/keyhole/issues/67).
 - An analysis records no Mapterhorn version. This revises [How does Keyhole cache Mapterhorn elevation tiles?](https://github.com/Turbo87/keyhole/issues/37).
 - The scorer view shows no difference against the previous analysis output, so it isn't kept. This revises point 4 of [What happens when two scorers edit the same thing at once?](https://github.com/Turbo87/keyhole/issues/70).
 - The 1024-week rollover correction is recomputed on every analysis instead of being stored, and a scorer's date override covers every other wrong date.
@@ -173,6 +172,8 @@ My own pass and two independent reviews, one by Claude and one by Codex, found t
 - [Can a task candidate be re-lettered after it is published?](https://github.com/Turbo87/keyhole/issues/139)
 - [What happens to a soft-deleted user's competition memberships?](https://github.com/Turbo87/keyhole/issues/140)
 - [Is acceptance of the organiser terms recorded?](https://github.com/Turbo87/keyhole/issues/141)
+
+A later coverage pass, [Which gaps does the MVP coverage pass leave, and how is each resolved?](https://github.com/Turbo87/keyhole/issues/152), settled the remaining gaps and brought this draft up to date with the decisions above.
 
 A file resolves by its flight date, the local date of take-off in the competition's time zone, per [Does a file resolve by its recorded date or its local take-off date?](https://github.com/Turbo87/keyhole/issues/151), so the `HFDTE` date never picks a logger link directly.
 
