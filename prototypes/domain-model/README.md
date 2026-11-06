@@ -63,8 +63,7 @@ Competition
         ├── TaskCandidate*
         │   └── TaskPoint+            ordered, replaced whole
         ├── task ··> TaskCandidate?   the candidate published as the class day's task
-        ├── AirspaceException*
-        │   └── airspace ··> Airspace
+        ├── AirspaceException*        by airspace name
         └── AirspaceFile*             NOTAM airspaces, always closed
             └── Airspace+
 ```
@@ -75,17 +74,17 @@ Competition
 | ClassTemplate | rule set edition → RuleSetEdition, name (Club, Standard, 18 m), Dm, D1, handicapped flag, handicap list → HandicapList? |
 | HandicapList | ID (`daec-2026`), scale (1.000 or 100) |
 | HandicapListEntry | handicap list → HandicapList, glider type, handicap |
-| Competition | name, slug (fixed at creation, unique including tombstones), organising club or person, organiser terms acceptance (accepting user → User, version → OrganiserTermsVersion, time, organising club or person as accepted, recorded once by the creator and never replaced), location, country, IANA time zone, first and last date, optional website, airfield point and elevation in m MSL (optional at creation, needed for analysis), standing notes, flight levels, upload password (generated at creation, changeable by a scorer at any time), lifecycle (live, or archived as a tombstone with the directory fields), block (staff member, time, internal note). Deleting removes the competition entirely and frees the slug |
+| Competition | name, slug (fixed at creation, unique including tombstones), organising club or person, organiser terms acceptance (accepting user → User, version → OrganiserTermsVersion, time, organising club or person as accepted, recorded once by the creator and never replaced), location, country, IANA time zone, first and last date, optional website, airfield point and elevation in m MSL (optional at creation, needed for analysis), standing notes, flight levels, upload password (generated at creation, changeable by a scorer at any time), opened airspace names (every airspace of the airspace file is closed unless its name is listed), lifecycle (live, or archived as a tombstone with the directory fields), block (staff member, time, internal note). Deleting removes the competition entirely and frees the slug |
 | RuleOverrides | owner → exactly one of Competition, Class or ClassDay, then earth model, finish measured to the cylinder edge, delivery period, default zones per role (competition only), Dm and D1 (class day only, overriding the class), start procedure (opening and closing time, maximum start altitude and ground speed, PEV settings), tow altitude, maximum altitude, scoring end time. Every field is optional and overrides the layer above |
-| AirspaceFile | owner → Competition (the competition's airspace) or ClassDay (NOTAM airspaces), original file (kept for download exactly as uploaded, in any supported format). The competition's file is locked once the competition has its first IGC file |
-| Airspace | airspace file → AirspaceFile, name, category, lower and upper limit (each in m MSL, m AGL or a flight level), geometry, opened flag (competition file only, closed unless opened) |
+| AirspaceFile | owner → Competition (the competition's airspace) or ClassDay (NOTAM airspaces), original file (kept for download exactly as uploaded, in any supported format). The competition's file can be replaced until archiving |
+| Airspace | airspace file → AirspaceFile, name, category, lower and upper limit (each in m MSL, m AGL or a flight level), geometry |
 | TurnpointFile | competition → Competition, original file (kept for download exactly as uploaded, in any supported format) |
 | Turnpoint | turnpoint file → TurnpointFile, name, position, elevation |
 | Class | competition → Competition, rule set edition → RuleSetEdition (cannot change while any of its class days is final), handicap list → HandicapList? (prefills new competitors), name, optional colour (sRGB hex), Dm, D1, handicap scale? (1.000 or 100, empty means the class isn't handicapped) |
 | ClassDay | class → Class, task → TaskCandidate? (the candidate published as the class day's task), date (fixed), practice flag, QNH in hPa, results note (working value, copied into each results publish), cancelled flag |
 | TaskCandidate | class day → ClassDay, letter (A, B, C, reorderable), task type (racing or AAT), minimum task time (AAT only), minimum finish height in m MSL, day notes |
 | TaskPoint | task candidate → TaskCandidate, turnpoint name, position in the sequence, position and elevation (copied from the turnpoint file entry of that name), zone (line length, or R1, A1, R2, A2 and orientation) |
-| AirspaceException | class day → ClassDay, airspace → Airspace, direction (open or close) |
+| AirspaceException | class day → ClassDay, airspace name (copied, matching every airspace of that name in the current file), direction (open or close) |
 | Competitor | competition → Competition, class → Class, competition ID (unique per class, up to 5 characters), glider type, optional registration, optional display name (otherwise the crew joined with "&"), handicap (0 means not set in handicapped classes), pure glider flag, hors concours flag |
 | CrewMember | competitor → Competitor, position, first name, last name, club, country (ISO code), optional IGC Ranking List ID (scorer interface only) |
 | Logger | competition → Competition, manufacturer and serial (from the `A` record), ENL threshold (500), MOP threshold (500), CUR threshold (20 A), minimum duration (30 s) |
