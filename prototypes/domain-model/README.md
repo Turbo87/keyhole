@@ -95,7 +95,7 @@ Competition
 ```text
 Logger
 └── IgcFile*                          from the A record, which every upload needs
-    ├── resolves to ··> Result?       derived from the logger link valid on the file's date
+    ├── resolves to ··> Result?       derived from the logger link valid on the flight date
     └── Analysis                      current analysis only, also while pending or failed
         ├── AnalysisLogEntry*
         └── StaleReason*
@@ -116,7 +116,7 @@ ClassDay
 
 | Entity | Fields |
 |---|---|
-| IgcFile | logger → Logger (which gives the competition), SHA-256 (exact duplicates ignored), upload time, recorded date (`HFDTE`, never rewritten), local take-off date (computed from the fixes in the competition's time zone, with the 1024-week rollover corrected), date override (set by a scorer for any other wrong date), suggested class and competition ID (the pilot's choice), G-record validation (valid, invalid or no validator, run once), private flag (keeps its hash out of published results). Its result is derived from the logger link valid on its date and never stored |
+| IgcFile | logger → Logger (which gives the competition), SHA-256 (exact duplicates ignored), upload time, recorded date (`HFDTE`, never rewritten), flight date (derived: the local date of take-off, or of the first fix without one, in the competition's time zone, with the 1024-week rollover corrected), date override (set by a scorer for any other wrong date, replacing the flight date), suggested class and competition ID (the pilot's choice), G-record validation (valid, invalid or no validator, run once), private flag (keeps its hash out of published results). Its result is derived from the logger link valid on its flight date and never stored |
 | Analysis | IGC file → IgcFile, engine version, state (pending or done), output (start, credited points, finish or landing, distance, time) |
 | AnalysisLogEntry | analysis → Analysis, level (debug, info, warning or error), kind (maps to a rule clause per edition), evidence (a moment, an interval or the whole file), suggestion (a flight end or another candidate start) |
 | StaleReason | analysis → Analysis, reason (task, start procedure, airspace, logger settings, logger link role, rule overrides, engine version) |
@@ -174,7 +174,7 @@ My own pass and two independent reviews, one by Claude and one by Codex, found t
 - [What happens to a soft-deleted user's competition memberships?](https://github.com/Turbo87/keyhole/issues/140)
 - [Is acceptance of the organiser terms recorded?](https://github.com/Turbo87/keyhole/issues/141)
 
-A file's date is its local take-off date in the competition's time zone, as [Which analysis log entries does flight analysis report, and how are they reviewed?](https://github.com/Turbo87/keyhole/issues/26), [How does Keyhole assign an IGC file whose recorded date doesn't match the class day?](https://github.com/Turbo87/keyhole/issues/57) and [Which master data does a competition carry, and how are its classes' class days created and changed?](https://github.com/Turbo87/keyhole/issues/67) already decide, so the `HFDTE` date never picks a logger link directly.
+A file resolves by its flight date, the local date of take-off in the competition's time zone, per [Does a file resolve by its recorded date or its local take-off date?](https://github.com/Turbo87/keyhole/issues/151), so the `HFDTE` date never picks a logger link directly.
 
 ## Not modelled
 
