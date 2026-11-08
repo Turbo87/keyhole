@@ -215,29 +215,82 @@
       '<button class="wf-btn' + (f ? '' : ' primary') + '" data-act="uploadAirspace" data-comp="' + comp.id + '">' + (f ? 'Replace file…' : 'Upload airspace file…') + '</button></div></div>' +
       (f ? '<p class="muted small">Every airspace is closed unless the competition opens its name here or a class day opens it with an airspace exception.' + (hasTasks ? ' Changing this once a task exists needs a confirmation and marks no file stale.' : '') + '</p>' +
         '<div class="wf-table-wrap"><table class="wf-table"><thead><tr><th>Name</th><th>Category</th><th>Lower</th><th>Upper</th><th>Competition</th></tr></thead><tbody>' +
+        comp.openedAirspaceNames.filter((n) => !f.airspaces.some((a) => a.name === n)).map((n) => '<tr><td>' + e(n) + '</td><td colspan="3"><span class="wf-badge dashed">not in the current file</span></td><td><label class="wf-field inline"><input type="checkbox" checked data-change="toggleOpened" data-comp="' + comp.id + '" data-name="' + e(n) + '"> opened</label></td></tr>').join('') +
         f.airspaces.map((a) => {
           const open = comp.openedAirspaceNames.includes(a.name);
           return '<tr><td>' + e(a.name) + '</td><td>' + a.category + '</td><td>' + a.lower + '</td><td>' + a.upper + '</td><td><label class="wf-field inline"><input type="checkbox" ' + (open ? 'checked' : '') + ' data-change="toggleOpened" data-comp="' + comp.id + '" data-name="' + e(a.name) + '"> opened</label></td></tr>';
         }).join('') + '</tbody></table></div>' : '') + '</div>';
   };
+  function hasTasks(comp) {
+    return S.taskCandidates.some((t) => { const x = Q.classDay(t.classDayId); return x && Q.class(x.classId).competitionId === comp.id; });
+  }
+  const NO_STALE = 'Existing analyses keep the old airspace until each file is rerun. Nothing is marked stale.';
   H.uploadAirspace = (ds) => {
     const comp = Q.competition(ds.comp);
-    A.uploadAirspaceFile(comp);
-    KH.toast('Airspace file uploaded. Opened names and exceptions carry over by name.');
+    const doIt = () => KH.run(() => {
+      const before = comp.airspaceFile ? comp.airspaceFile.airspaces.map((a) => a.name) : [];
+      A.uploadAirspaceFile(comp);
+      const after = comp.airspaceFile.airspaces.map((a) => a.name);
+      const gone = before.filter((n) => !after.includes(n));
+      KH.toast('Airspace file uploaded' + (gone.length ? '. Missing names: ' + gone.join(', ') : '. Opened names and exceptions carry over by name.'));
+    });
+    if (!comp.airspaceFile || !hasTasks(comp)) return doIt();
+    // Prototype: the replacement file is fixed, so the dialog can name what it drops.
+    const gone = comp.id === 'k2' ? ['RMZ HOHENFELS', 'ED-R 132'] : [];
+    const refs = (n) => (comp.openedAirspaceNames.includes(n) ? 'opened by the competition' : '') + S.classDays.filter((cd) => cd.airspaceExceptions.some((x) => x.name === n)).map((cd) => ', exception on ' + W.dayTitle(cd)).join('');
+    KH.confirm({
+      title: 'Replace the airspace file?', intro: 'Tasks already exist. Opened names and airspace exceptions carry over by name.',
+      items: gone.map((n) => '<b>' + e(n) + '</b> is not in the new file' + (refs(n) ? ' but is ' + e(refs(n).replace(/^, /, '')) + '. It stays listed and flagged.' : '')).concat([NO_STALE]),
+      confirmLabel: 'Replace file', onConfirm: doIt,
+    });
   };
   H.toggleOpened = (v, ds) => {
-    A.toggleOpened(Q.competition(ds.comp), ds.name);
-    KH.toast(ds.name + (v ? ' opened' : ' closed') + ' for the competition');
+    const comp = Q.competition(ds.comp);
+    const doIt = () => KH.run(() => { A.toggleOpened(comp, ds.name); KH.toast(ds.name + (v ? ' opened' : ' closed') + ' for the competition'); });
+    if (!hasTasks(comp)) return doIt();
+    KH.confirm({ title: (v ? 'Open ' : 'Close ') + ds.name + ' for the competition?', intro: 'Tasks already exist and pilots were briefed on the current airspace.', items: [NO_STALE], confirmLabel: v ? 'Open' : 'Close', onConfirm: doIt });
   };
   H.fakeDownload = (ds) => KH.toast('Prototype: would download ' + ds.what);
+
+  // ---------- rule overrides ----------
+  // Class and class day share one field set. Empty fields inherit from the layer above.
+
+  const OV_KEYS = ['startOpen', 'startClose', 'maxStartAlt', 'maxStartGs', 'pevStart', 'pevWait', 'pevWindow', 'towAltitude', 'maxAltitude', 'scoringEnd', 'earthModel', 'finishToEdge', 'deliveryPeriod'];
+  const DAY_KEYS = ['dm', 'd1', 'startLine', 'tpZone', 'aatZone', 'finishZone'];
+  function ruleOverrideFields(o, inh, dayLayer) {
+    const shown = (v) => (v === '' || v == null ? 'none' : v === true ? 'yes' : String(v));
+    const txt = (k, label, cls, hint) => field(label, input(k, o[k], 'placeholder="' + e(shown(inh[k])) + '" class="' + (cls || 'mid') + '"'), { hint });
+    const sel = (k, label, opts, hint) => field(label, select(k, [['', 'Inherit (' + shown(inh[k]) + ')']].concat(opts), o[k]), { hint });
+    const zones = Object.keys(KH.ZONES);
+    return '<h4>Start procedure</h4><div class="wf-form">' +
+      txt('startOpen', 'Start opening time', 'mid', 'hh:mm') + txt('startClose', 'Start closing time', 'mid', 'hh:mm') +
+      txt('maxStartAlt', 'Maximum start altitude (m MSL)') + txt('maxStartGs', 'Maximum start ground speed (km/h)') +
+      sel('pevStart', 'PEV start', [['yes', 'Yes'], ['no', 'No']]) + txt('pevWait', 'PEV wait time (min)', 'narrow') + txt('pevWindow', 'PEV start window (min)', 'narrow') +
+      '</div><h4>Limits</h4><div class="wf-form">' +
+      txt('towAltitude', 'Tow altitude (m MSL)') + txt('maxAltitude', 'Maximum altitude', 'mid', 'm MSL or a flight level') + txt('scoringEnd', 'Scoring end time', 'mid', 'hh:mm, empty means none') +
+      '</div><h4>Scoring</h4><div class="wf-form">' +
+      sel('earthModel', 'Earth model', ['WGS84', 'FAI Sphere']) + sel('finishToEdge', 'Finish distance to cylinder edge', [['yes', 'Yes'], ['no', 'No, to the centre']]) +
+      txt('deliveryPeriod', 'Delivery period (min)', 'narrow') +
+      (dayLayer ? txt('dm', 'Dm (km)', 'narrow') + txt('d1', 'D1 (km)', 'narrow') : '') +
+      '</div>' + (dayLayer ? '<h4>Task entry defaults</h4><div class="wf-form">' +
+        txt('startLine', 'Start line length (km)', 'narrow') + sel('tpZone', 'Turnpoint zone', zones) + sel('aatZone', 'Assigned area zone', zones) + sel('finishZone', 'Finish zone', zones) +
+        '</div><p class="muted small">Defaults only prefill new task points. They never change existing tasks.</p>' : '');
+  }
+  function overridesFrom(d, dayLayer) {
+    const out = {};
+    for (const k of OV_KEYS.concat(dayLayer ? DAY_KEYS : [])) out[k] = d[k] || '';
+    return out;
+  }
+  W.ruleOverrideFields = ruleOverrideFields;
 
   // ---------- classes ----------
 
   W.classForm = (comp, cls) => {
-    const edition = cls ? cls.edition : 'DAeC SWO 2026';
+    const draft = KH.ui.classDraft || {};
+    const edition = cls ? cls.edition : draft.edition || 'DAeC SWO 2026';
     const ed = KH.EDITIONS[edition];
-    const tmpl = cls ? null : 'Club';
-    const t = cls ? cls : { ...ed.templates.Club, name: '' };
+    const tmpl = cls ? null : ed.templates[draft.template] ? draft.template : Object.keys(ed.templates)[0];
+    const t = cls ? cls : { ...ed.templates[tmpl], name: '' };
     const o = cls ? cls.overrides : {};
     const departures = [];
     if (cls) {
@@ -247,38 +300,30 @@
     }
     return '<form class="wf-stack" data-submit="' + (cls ? 'saveClass' : 'createClass') + '" data-comp="' + comp.id + '" data-cls="' + (cls ? cls.id : '') + '">' +
       '<div class="wf-form">' +
-      field('Rule set edition', select('edition', Object.keys(KH.EDITIONS), edition), { hint: cls ? 'Changing it marks this class\'s files stale' : 'Pick first' }) +
-      (cls ? '' : field('Class template', select('template', Object.keys(ed.templates), tmpl), { hint: 'Fills in rule values and the handicap list once' })) +
-      field('Name', input('name', cls ? cls.name : '', cls ? '' : 'placeholder="Club"')) +
+      field('Rule set edition', select('edition', Object.keys(KH.EDITIONS), edition, cls ? '' : 'data-change="classDraft" data-key="edition"'), { hint: cls ? 'Changing it marks this class\'s files stale' : 'Pick first' }) +
+      (cls ? '' : field('Class template', select('template', Object.keys(ed.templates), tmpl, 'data-change="classDraft" data-key="template"'), { hint: 'Fills in the values below once. The class keeps no link to it.' })) +
+      field('Name', input('name', cls ? cls.name : '', cls ? '' : 'placeholder="' + e(tmpl) + '"')) +
       field('Colour', input('colour', cls ? cls.colour : '', 'placeholder="#888888"')) +
       field('Dm (km)', input('dm', t.dm, 'class="narrow"')) +
       field('D1 (km)', input('d1', t.d1, 'class="narrow"')) +
       field('Handicap scale', select('handicapScale', [['', 'Not handicapped'], ['1.000', '1.000'], ['100', '100']], t.handicapScale)) +
       field('Handicap list', select('handicapList', [''].concat(Object.keys(KH.HANDICAP_LISTS)), t.handicapList), { hint: 'Prefills new competitors' }) +
-      '</div><h4>Rule overrides for the class</h4><div class="wf-form">' +
-      field('Earth model', select('earthModel', [['', 'Edition default (' + ed.defaults.earthModel + ')'], 'WGS84', 'FAI Sphere'], o.earthModel)) +
-      field('Finish distance to cylinder edge', select('finishToEdge', [['', 'Edition default (yes)'], ['yes', 'Yes'], ['no', 'No, to the centre']], o.finishToEdge)) +
-      field('Delivery period (min)', input('deliveryPeriod', o.deliveryPeriod, 'placeholder="' + ed.defaults.deliveryPeriod + '" class="narrow"')) +
-      field('Start opening time', input('startOpen', o.startOpen, 'type="time"')) +
-      field('Maximum start altitude (m MSL)', input('maxStartAlt', o.maxStartAlt, 'class="mid"')) +
-      field('Maximum start ground speed (km/h)', input('maxStartGs', o.maxStartGs, 'class="mid"')) +
-      field('PEV start', select('pevStart', [['', 'No'], ['yes', 'Yes']], o.pevStart ? 'yes' : '')) +
-      field('Tow altitude (m MSL)', input('towAltitude', o.towAltitude, 'class="mid"')) +
-      field('Maximum altitude', input('maxAltitude', o.maxAltitude, 'placeholder="FL 95 or 2800" class="mid"')) +
-      '</div>' + (departures.length ? '<div class="wf-note warn">Departs from the rule set: ' + departures.map(e).join('. ') + '</div>' : '') +
+      '</div><h3>Rule overrides for the class</h3>' + ruleOverrideFields(o, ed.defaults, false) +
+      (departures.length ? '<div class="wf-note warn">Departs from the rule set: ' + departures.map(e).join('. ') + '</div>' : '') +
       '<div class="wf-row"><button class="wf-btn primary">' + (cls ? 'Save class' : 'Add class') + '</button>' +
       (cls ? '<button type="button" class="wf-btn danger" data-act="deleteClass" data-cls="' + cls.id + '">Delete class</button>' : '') + '</div></form>';
   };
+  H.classDraft = (v, ds) => {
+    KH.ui.classDraft = { ...(KH.ui.classDraft || {}), [ds.key]: v };
+  };
   function classPatch(d) {
-    const overrides = {};
-    for (const k of ['earthModel', 'finishToEdge', 'deliveryPeriod', 'startOpen', 'maxStartAlt', 'maxStartGs', 'towAltitude', 'maxAltitude']) if (d[k]) overrides[k] = d[k];
-    if (d.pevStart) overrides.pevStart = true;
-    return { name: d.name, colour: d.colour, dm: Number(d.dm), d1: Number(d.d1), handicapScale: d.handicapScale, handicapList: d.handicapList, edition: d.edition, overrides };
+    return { name: d.name, colour: d.colour, dm: Number(d.dm), d1: Number(d.d1), handicapScale: d.handicapScale, handicapList: d.handicapList, edition: d.edition, overrides: overridesFrom(d, false) };
   }
   H.createClass = (d, ds) => {
     const comp = Q.competition(ds.comp);
     const cls = A.createClass(comp, { ...classPatch(d), template: d.template, name: d.name || d.template });
     cls.overrides = classPatch(d).overrides;
+    KH.ui.classDraft = null;
     KH.toast('Added class ' + cls.name);
     KH.go(L().cls(cls));
   };
@@ -291,7 +336,17 @@
   };
   H.deleteClass = (ds) => {
     const cls = Q.class(ds.cls);
-    KH.confirm({ title: 'Delete class ' + cls.name + '?', intro: 'Deleting hides the class with everything in it until it is restored.', confirmLabel: 'Delete class', onConfirm: () => KH.run(() => { A.setClassDeleted(cls, true); KH.go(L().competition(Q.competition(cls.competitionId))); }) });
+    const published = Q.classDaysOf(cls.id).filter((cd) => cd.published);
+    KH.confirm({
+      title: 'Delete class ' + cls.name + '?', intro: 'Deleting hides the class with everything in it until it is restored. Nothing is removed.',
+      items: [Q.competitorsOf(cls.competitionId, cls.id).length + ' competitors are hidden with it']
+        .concat(published.length ? ['Published class days stay public until restored or republished: ' + published.map((cd) => e(Q.dayLabel(cls.id, cd.date))).join(', ')] : []),
+      confirmLabel: 'Delete class', onConfirm: () => KH.run(() => { A.setClassDeleted(cls, true); KH.go(L().competition(Q.competition(cls.competitionId))); }),
+    });
+  };
+  H.restoreClass = (ds) => {
+    const cls = Q.class(ds.cls);
+    KH.confirm({ title: 'Restore class ' + cls.name + '?', intro: 'The class comes back with its competitors, class days and results.', confirmLabel: 'Restore', onConfirm: () => KH.run(() => A.setClassDeleted(cls, false)) });
   };
 
   // ---------- class day ----------
@@ -320,40 +375,20 @@
 
   W.dayOverrides = (cd) => {
     const cls = Q.class(cd.classId);
-    const ed = KH.EDITIONS[cls.edition];
-    const o = cd.overrides;
-    const co = cls.overrides;
-    const ph = (k, def) => 'placeholder="' + e(co[k] ?? def ?? '') + '"';
+    const inh = { ...KH.effective(null, cls), dm: cls.dm, d1: cls.d1 };
     return '<form class="wf-stack" data-submit="saveDayOverrides" data-cd="' + cd.id + '">' +
       '<div class="wf-form">' +
       field('QNH (hPa)', input('qnh', cd.qnh, 'class="narrow"')) +
-      field('Practice day', select('practice', [['no', 'No'], ['yes', 'Yes']], cd.practice ? 'yes' : 'no'), { hint: 'Excluded from overall results' }) +
-      '</div><h4>Start procedure</h4><div class="wf-form">' +
-      field('Start opening time', input('startOpen', o.startOpen, 'type="time"')) +
-      field('Start closing time', input('startClose', o.startClose, 'type="time"')) +
-      field('Maximum start altitude (m MSL)', input('maxStartAlt', o.maxStartAlt, ph('maxStartAlt') + ' class="mid"')) +
-      field('Maximum start ground speed (km/h)', input('maxStartGs', o.maxStartGs, ph('maxStartGs') + ' class="mid"')) +
-      field('PEV start', select('pevStart', [['', 'No'], ['yes', 'Yes']], o.pevStart ? 'yes' : '')) +
-      field('PEV wait time (min)', input('pevWait', o.pevWait, 'class="narrow"')) +
-      field('PEV start window (min)', input('pevWindow', o.pevWindow, 'class="narrow"')) +
-      '</div><h4>Limits and rule overrides</h4><div class="wf-form">' +
-      field('Tow altitude (m MSL)', input('towAltitude', o.towAltitude, ph('towAltitude') + ' class="mid"')) +
-      field('Maximum altitude', input('maxAltitude', o.maxAltitude, ph('maxAltitude') + ' class="mid"')) +
-      field('Scoring end time', input('scoringEnd', o.scoringEnd, 'type="time"'), { hint: 'Empty means none' }) +
-      field('Dm (km)', input('dm', o.dm, 'placeholder="' + cls.dm + '" class="narrow"')) +
-      field('D1 (km)', input('d1', o.d1, 'placeholder="' + cls.d1 + '" class="narrow"')) +
-      field('Earth model', select('earthModel', [['', 'Class (' + (co.earthModel || ed.defaults.earthModel) + ')'], 'WGS84', 'FAI Sphere'], o.earthModel)) +
-      field('Default turnpoint zone', select('tpZone', [['', 'Class (' + ed.defaults.tpZone + ')'], 'Keyhole', 'Cylinder 0.5 km', 'Cylinder 1 km', 'Sector 90°'], o.tpZone), { hint: 'Prefills task entry' }) +
-      field('Default finish zone', select('finishZone', [['', 'Class (' + ed.defaults.finishZone + ')'], 'Cylinder 3 km', 'Cylinder 5 km', 'Line 1 km'], o.finishZone)) +
-      '</div><div class="wf-row"><button class="wf-btn primary">Save class day settings</button><span class="muted small">Changes mark this class day\'s files stale.</span></div></form>';
+      field('Practice day', select('practice', [['no', 'No'], ['yes', 'Yes']], cd.practice ? 'yes' : 'no', cd.published ? 'disabled' : ''), { hint: cd.published ? 'Fixed since the first publish' : 'Excluded from overall results. Fixed after the first publish.' }) +
+      '</div>' + ruleOverrideFields(cd.overrides, inh, true) +
+      '<div class="wf-row"><button class="wf-btn primary">Save class day settings</button><span class="muted small">Changed analysis inputs mark this class day\'s files stale.</span></div></form>';
   };
   H.saveDayOverrides = (d, ds) => {
     const cd = Q.classDay(ds.cd);
-    const overrides = {};
-    for (const k of ['startOpen', 'startClose', 'maxStartAlt', 'maxStartGs', 'pevWait', 'pevWindow', 'towAltitude', 'maxAltitude', 'scoringEnd', 'dm', 'd1', 'earthModel', 'tpZone', 'finishZone']) overrides[k] = d[k] || '';
-    overrides.pevStart = d.pevStart === 'yes';
-    A.updateClassDay(cd, { qnh: Number(d.qnh), practice: d.practice === 'yes', overrides });
-    KH.toast('Saved. Affected files are marked stale.');
+    const patch = { qnh: Number(d.qnh), overrides: overridesFrom(d, true) };
+    if (d.practice) patch.practice = d.practice === 'yes';
+    A.updateClassDay(cd, patch);
+    KH.toast('Saved');
   };
 
   W.dayAirspace = (cd) => {
@@ -385,7 +420,10 @@
     const cls = Q.class(cd.classId);
     const comp = Q.competition(cls.competitionId);
     const ed = KH.EDITIONS[cls.edition];
-    const deadline = cd.complaintDeadline || KH.util.addDays(KH.TODAY, 0) + 'T' + String((18 + ed.defaults.complaintHours) % 24).padStart(2, '0') + ':00';
+    const lastDay = comp.dates[comp.dates.length - 1] === cd.date;
+    const hours = cls.edition.startsWith('FAI') && lastDay ? 2 : ed.defaults.complaintHours;
+    const nowMs = new Date(KH.NOW + ':00Z').getTime() + hours * 3600000;
+    const deadline = new Date(nowMs).toISOString().slice(0, 16);
     const c = Q.dayCounts(cd);
     const canPublish = !comp.blocked && comp.lifecycle === 'live';
     return '<div class="wf-stack">' +
@@ -395,7 +433,7 @@
       '<span>Results</span><span>' + c.ok + ' OK, ' + c.check + ' in check, ' + c.unknown + ' unknown, ' + c.stale + ' stale files</span></div>' +
       '<form class="wf-stack" data-submit="publishDay" data-cd="' + cd.id + '"><div class="wf-form">' +
       field('Status to publish', select('status', KH.DAY_STATUSES.filter((s) => s !== 'unplanned' || !Q.task(cd)), opts && opts.status ? opts.status : cd.status === 'task published' && pub && pub.status === 'task published' ? 'preliminary' : cd.status)) +
-      field('Complaint deadline (unofficial only)', input('complaintDeadline', deadline, 'type="datetime-local"'), { hint: 'Default ' + ed.defaults.complaintHours + ' h under ' + cls.edition + '. Refreshed at every unofficial publish.' }) +
+      field('Complaint deadline (unofficial only)', input('complaintDeadline', deadline, 'type="datetime-local"'), { hint: hours + ' h from now under ' + cls.edition + (hours === 2 ? ' on the last competition day' : '') + '. Every unofficial publish sets it again.' }) +
       field('Results note', '<textarea name="resultsNote" placeholder="Public remark published with the results">' + e(cd.resultsNote) + '</textarea>', { full: true }) +
       '</div><div class="wf-row"><button class="wf-btn primary" ' + (canPublish ? '' : 'disabled') + '>Publish</button><span class="muted small">Makes the status, task and results public together, replacing the latest published copy.</span></div></form>' +
       (comp.blocked ? '<p class="muted small">Blocked by staff: nothing is public.</p>' : '') + '</div>';
@@ -415,17 +453,60 @@
     KH.toast('Working status set to ' + v + '. Not public until you publish.');
   };
 
-  W.publishedCopy = (cd) => {
-    const pub = cd.published;
-    if (!pub || !pub.rows || !pub.rows.length) return '<p class="muted">No published results.</p>';
-    return '<div class="wf-stack"><div class="muted small">' + W.dayBadge(pub.status) + ' published ' + W.dt(pub.at) + ' · Task ' + e(pub.taskLetter) + ' ' + e(pub.taskLine) + ' · ' + W.km(pub.taskDistance) +
-      ' · N ' + pub.params.N + ', n1 ' + pub.params.n1 + ', Do ' + pub.params.Do + ' km, Vo ' + pub.params.Vo + ' km/h · ' + e(pub.edition) + ' · engine ' + pub.engine + '</div>' +
-      (pub.resultsNote ? '<div class="wf-note">' + e(pub.resultsNote) + '</div>' : '') +
-      '<table class="wf-table"><thead><tr><th>Rank</th><th>CID</th><th>Pilot</th><th class="num">Distance</th><th class="num">Speed</th><th class="num">Penalty</th><th class="num">Points</th></tr></thead><tbody>' +
+  function remarks(r) {
+    return [r.penaltyRemark && (r.penalty ? 'Penalty −' + r.penalty + ': ' : 'Official warning: ') + r.penaltyRemark.replace(/^Official warning: /, ''), r.publicRemark, r.dsqRemark && 'Disqualified: ' + r.dsqRemark].filter(Boolean);
+  }
+  function publishedTable(pub) {
+    return '<table class="wf-table"><thead><tr><th>Rank</th><th>CID</th><th>Pilot</th><th>Glider</th><th class="num">Hcp</th><th>Start</th><th>Finish</th><th class="num">Distance</th><th class="num">Speed</th><th class="num">Penalty</th><th class="num">Points</th></tr></thead><tbody>' +
       pub.rows.map((r) => {
         const c = Q.competitor(r.competitorId);
-        return '<tr class="' + (r.placeholder ? 'dim' : '') + '"><td>' + e(r.rankLabel) + '</td><td>' + e(c.cid) + '</td><td>' + e(Q.crewName(c)) + '</td><td class="num">' + (r.placeholder ? 'No result yet' : W.km(r.distance)) + '</td><td class="num">' + W.kmh(r.speed) + '</td><td class="num">' + (r.penalty != null ? '−' + r.penalty : '') + '</td><td class="num">' + (r.points ?? '') + '</td></tr>';
-      }).join('') + '</tbody></table></div>';
+        const rem = remarks(r);
+        return '<tr class="' + (r.placeholder ? 'dim' : '') + '"><td>' + e(r.rankLabel) + '</td><td>' + e(c.cid) + '</td><td>' + e(Q.crewName(c)) + (rem.length ? '<div class="muted small">' + rem.map(e).join('<br>') + '</div>' : '') + '</td><td class="small">' + e(c.gliderType) + '</td><td class="num">' + (r.handicap ?? '') + '</td><td class="mono">' + (r.start || '') + '</td><td class="mono">' + (r.finish || '') + '</td><td class="num">' + (r.placeholder ? 'No result yet' : r.rankLabel === 'DNF' ? 'did not fly' : W.km(r.distance)) + '</td><td class="num">' + W.kmh(r.speed) + '</td><td class="num">' + (r.penalty ? '−' + r.penalty : r.penaltyRemark ? 'warning' : '') + '</td><td class="num">' + (r.points ?? '') + '</td></tr>';
+      }).join('') + '</tbody></table>';
+  }
+  W.publishedCopy = (cd) => {
+    const pub = cd.published;
+    if (!pub || !pub.rows || !pub.rows.length) return '<p class="muted">No published results.' + (pub ? ' Published as ' + e(pub.status) + ' ' + W.dt(pub.at) + '.' : '') + '</p>';
+    return '<div class="wf-stack"><div class="muted small">' + W.dayBadge(pub.status) + ' published ' + W.dt(pub.at) + ' · Task ' + e(pub.taskLetter) + ' ' + e(pub.taskLine) + ' · ' + W.km(pub.taskDistance) +
+      ' · N ' + pub.params.N + ', n1 ' + pub.params.n1 + ', Do ' + pub.params.Do + ' km, Vo ' + pub.params.Vo + ' km/h, Pm ' + pub.params.Pm + ' · ' + e(pub.edition) + ' · engine ' + pub.engine + '</div>' +
+      (pub.resultsNote ? '<div class="wf-note">' + e(pub.resultsNote) + '</div>' : '') + publishedTable(pub) +
+      '<div class="wf-row"><button class="wf-btn small" data-act="printResults" data-cd="' + cd.id + '">Print results sheet</button><button class="wf-btn small" data-act="printOverall" data-cls="' + cd.classId + '">Print overall results sheet</button></div></div>';
+  };
+  // Results sheets render the last publish, never working data.
+  H.printResults = (ds) => {
+    const cd = Q.classDay(ds.cd);
+    const cls = Q.class(cd.classId);
+    const pub = cd.published;
+    KH.modal({
+      title: 'Results sheet (print preview)', wide: true,
+      body: '<div class="wf-sheet wf-stack"><div class="wf-row between"><div><h2 style="margin:0">' + e(Q.competition(cls.competitionId).name) + '</h2><div>' + e(cls.name) + ' · ' + e(Q.dayLabel(cls.id, cd.date)) + ' · Task ' + e(pub.taskLetter) + ' · ' + W.date(cd.date, true) + '</div></div><div style="text-align:right"><div style="font-size:22px;font-weight:700;text-transform:uppercase">' + e(pub.status) + '</div><div class="small">Published ' + W.dt(pub.at) + (pub.complaintDeadline ? '<br>Complaint deadline ' + W.dt(pub.complaintDeadline) : '') + '</div></div></div>' +
+        '<div class="small">' + e(pub.taskLine) + ' · ' + W.km(pub.taskDistance) + ' · N ' + pub.params.N + ', Do ' + pub.params.Do + ' km, Vo ' + pub.params.Vo + ' km/h, Pm ' + pub.params.Pm + '</div>' +
+        (pub.resultsNote ? '<div class="wf-note">' + e(pub.resultsNote) + '</div>' : '') + publishedTable(pub) +
+        '<div class="wf-row between small"><span>' + e(pub.edition) + ' · engine ' + pub.engine + ' · rules hash ' + pub.rulesHash + '</span><span>Signed: ______________________ Competition director</span></div></div>' +
+        '<div class="wf-row end"><button class="wf-btn primary" data-act="fakeDownload" data-what="the results sheet to the printer">Print</button></div>',
+    });
+  };
+  W.overall = (cls) => {
+    const days = Q.classDaysOf(cls.id).filter((cd) => !cd.practice && cd.published && cd.published.rows && cd.published.rows.length && cd.published.status !== 'cancelled');
+    const order = ['preliminary', 'unofficial', 'final'];
+    const lowest = days.length ? order[Math.min(...days.map((cd) => order.indexOf(cd.published.status)))] : '';
+    const rows = Q.competitorsOf(cls.competitionId, cls.id).map((c) => {
+      const per = days.map((cd) => cd.published.rows.find((r) => r.competitorId === c.id));
+      return { c, per, total: per.reduce((a, r) => a + (r && r.points ? r.points : 0), 0) };
+    }).sort((a, b) => b.total - a.total);
+    return { days, lowest, rows };
+  };
+  H.printOverall = (ds) => {
+    const cls = Q.class(ds.cls);
+    const o = W.overall(cls);
+    KH.modal({
+      title: 'Overall results sheet (print preview)', wide: true,
+      body: '<div class="wf-sheet wf-stack" style="max-width:none"><div class="wf-row between"><h2 style="margin:0">' + e(Q.competition(cls.competitionId).name) + ' · ' + e(cls.name) + ' · Overall</h2><b style="text-transform:uppercase">' + e(o.lowest) + '</b></div>' +
+        '<div class="wf-table-wrap"><table class="wf-table"><thead><tr><th>Rank</th><th>CID</th><th>Pilot</th>' + o.days.map((cd) => '<th class="num">' + e(Q.dayLabel(cls.id, cd.date).replace('Day ', 'D')) + '</th>').join('') + '<th class="num">Total</th></tr></thead><tbody>' +
+        o.rows.map((x, i) => '<tr><td>' + (x.c.hc ? 'HC' : i + 1) + '</td><td>' + e(x.c.cid) + '</td><td>' + e(Q.crewName(x.c)) + '</td>' + x.per.map((r) => '<td class="num">' + (r ? (r.rankLabel === 'DNF' ? '0' : r.points ?? '') : '') + '</td>').join('') + '<td class="num"><b>' + x.total + '</b></td></tr>').join('') +
+        '</tbody></table></div><div class="small">From the latest published copy of each day. Practice and cancelled days are left out. Signed: ______________________</div></div>' +
+        '<div class="wf-row end"><button class="wf-btn primary" data-act="fakeDownload" data-what="the overall results sheet to the printer">Print</button></div>',
+    });
   };
 
   // ---------- tasks ----------
@@ -512,9 +593,10 @@
     const c = Q.candidate(ds.cand);
     const cd = Q.classDay(c.classDayId);
     if (cd.taskCandidateId === c.id) throw new KH.Denied('The published task cannot be deleted');
-    A.deleteCandidate(c);
-    KH.toast('Candidate deleted. You can restore it from the list.');
-    KH.go(L().classDayTasks ? L().classDayTasks(cd) : L().classDay(cd));
+    KH.confirm({ title: 'Delete candidate ' + (c.letter || '(no letter)') + '?', intro: 'You can restore it from the candidate list.', confirmLabel: 'Delete', onConfirm: () => KH.run(() => {
+      A.deleteCandidate(c);
+      KH.go(L().classDayTasks ? L().classDayTasks(cd) : L().classDay(cd));
+    }) });
   };
   H.publishTask = (ds) => {
     const c = Q.candidate(ds.cand);
@@ -525,6 +607,7 @@
     const waiting = S.files.filter((f) => { const r = Q.resolve(f); return r.ok && r.classDay === cd && !f.deleted; }).length;
     if (cd.taskCandidateId && cd.taskCandidateId !== c.id) items.push('Switches the published task from ' + Q.task(cd).letter + ' to ' + c.letter);
     if (waiting) items.push(waiting + ' files of this class day go stale with the reason "task"');
+    for (const x of Q.publishChecks(cd, cd.status === 'unplanned' ? 'task published' : cd.status)) if (!x.startsWith('Task departs')) items.push('The class day is republished as ' + (cd.status === 'unplanned' ? 'task published' : cd.status) + ': ' + x);
     const doIt = () => KH.run(() => { A.publishTask(c); KH.toast('Published task ' + c.letter + ' for ' + W.dayTitle(cd)); });
     if (items.length) KH.confirm({ title: 'Publish task ' + c.letter + '?', intro: 'Publishing makes the class day\'s status, task and results public together.', items, confirmLabel: 'Publish task', onConfirm: doIt });
     else doIt();
@@ -533,7 +616,7 @@
   function zoneSummary(z, role) {
     if (z.kind === 'line') return 'Line ' + z.length + ' km';
     if (role === 'finish' && z.kind === 'cylinder') return 'Cylinder ' + z.r1 + ' km';
-    return (z.preset || 'Custom') + ' R1 ' + z.r1 + ' km A1 ' + z.a1 + '°' + (z.r2 ? ' R2 ' + z.r2 + ' km A2 ' + z.a2 + '°' : '') + ', ' + z.orientation;
+    return (z.preset || 'Custom') + ' R1 ' + z.r1 + ' km A1 ' + z.a1 + '°' + (z.r2 ? ' R2 ' + z.r2 + ' km A2 ' + z.a2 + '°' : '') + ', ' + z.orientation + (z.orientation === 'fixed' && z.bearing !== undefined ? ' ' + z.bearing + '°' : '');
   }
   W.zoneSummary = zoneSummary;
 
@@ -555,7 +638,7 @@
       return '<form class="wf-row" data-submit="saveZone" data-cand="' + c.id + '">' + hid + select('preset', ['Cylinder', 'Keyhole', 'Sector', 'Annular sector', 'Custom'], z.preset) +
         '<span class="small">R1</span>' + input('r1', z.r1, 'class="narrow"') + '<span class="small">A1</span>' + input('a1', z.a1, 'class="narrow"') +
         '<span class="small">R2</span>' + input('r2', z.r2, 'class="narrow"') + '<span class="small">A2</span>' + input('a2', z.a2, 'class="narrow"') +
-        select('orientation', ['symmetric', 'fixed', 'to previous', 'to next'], z.orientation) + '<button class="wf-btn small">Set</button></form>';
+        select('orientation', ['symmetric', 'fixed', 'to previous', 'to next'], z.orientation) + (z.orientation === 'fixed' ? '<span class="small">bearing</span>' + input('bearing', z.bearing, 'class="narrow" placeholder="°"') : '') + '<button class="wf-btn small">Set</button></form>';
     };
     return '<div class="wf-stack">' +
       '<div class="wf-row between"><div class="wf-row"><h2 style="margin:0">Task candidate ' + e(c.letter || '(no letter)') + '</h2>' + (isTask ? '<span class="wf-badge solid">published task</span>' : '<span class="wf-badge dashed">private</span>') + '</div>' +
@@ -599,7 +682,7 @@
   H.saveZone = (d, ds) => {
     const presets = { Cylinder: { r2: 0, a2: 0, a1: 180 }, Keyhole: { r1: 10, a1: 45, r2: 0.5, a2: 180 }, Sector: { a1: 45, r2: 0, a2: 0 }, 'Annular sector': { a1: 45, a2: 0 } };
     const z = {};
-    for (const k of ['length', 'r1', 'a1', 'r2', 'a2']) if (d[k] !== undefined && d[k] !== '') z[k] = Number(d[k]);
+    for (const k of ['length', 'r1', 'a1', 'r2', 'a2', 'bearing']) if (d[k] !== undefined && d[k] !== '') z[k] = Number(d[k]);
     if (d.kind) z.kind = d.kind;
     if (d.orientation) z.orientation = d.orientation;
     if (d.preset) {
@@ -614,20 +697,26 @@
     const cd = Q.classDay(c.classDayId);
     const cls = Q.class(cd.classId);
     const comp = Q.competition(cls.competitionId);
-    const o = { ...cls.overrides, ...Object.fromEntries(Object.entries(cd.overrides).filter(([, v]) => v !== '' && v != null)) };
+    const o = KH.effective(cd, cls);
+    const dist = Q.taskDistance(c);
+    const course = (a, b) => Math.round(((Math.atan2((b.lon - a.lon) * Math.cos((a.lat * Math.PI) / 180), b.lat - a.lat) * 180) / Math.PI + 360) % 360);
+    const opened = (comp.airspaceFile ? comp.airspaceFile.airspaces.map((a) => a.name) : []).filter((n) => {
+      const ex = cd.airspaceExceptions.find((x) => x.name === n);
+      return ex ? ex.direction === 'open' : comp.openedAirspaceNames.includes(n);
+    });
     const flToM = (fl) => Math.round(Number(String(fl).replace(/\D/g, '')) * 100 * 0.3048 + (cd.qnh - 1013) * 8.3);
     const sunset = '21:14';
     const scoringLine = o.scoringEnd ? (o.scoringEnd === sunset ? 'Scoring end at sunset (' + sunset + ')' : 'Scoring end ' + o.scoringEnd + ', sunset ' + sunset) : 'Sunset ' + sunset;
     const closedEx = cd.airspaceExceptions.map((x) => x.name + ' ' + (x.direction === 'open' ? 'opened' : 'closed'));
     return '<div class="wf-sheet wf-stack"><div class="wf-row between"><div><h2 style="margin:0">' + e(comp.name) + '</h2><div>' + e(cls.name) + ' · ' + e(Q.dayLabel(cls.id, cd.date)) + ' · ' + W.date(cd.date, true) + '</div></div><div style="text-align:right"><div style="font-size:28px;font-weight:700">Task ' + e(c.letter || '?') + '</div><div class="muted small">Working state, ' + W.dt(KH.NOW) + '</div></div></div>' +
-      '<div class="wf-cols"><div class="wf-kv"><span>Type</span><span>' + (c.type === 'aat' ? 'Assigned area task, minimum task time ' + e(c.minTaskTime) : 'Racing task') + '</span><span>Distance</span><span>' + W.km(Q.taskDistance(c)) + '</span>' +
-      '<span>Start</span><span>Opens ' + e(o.startOpen || '—') + (o.startClose ? ', closes ' + e(o.startClose) : '') + (o.maxStartAlt ? ', max ' + o.maxStartAlt + ' m MSL' : '') + (o.maxStartGs ? ', max ' + o.maxStartGs + ' km/h' : '') + (o.pevStart ? ', PEV start: wait ' + o.pevWait + ' min, window ' + o.pevWindow + ' min' : '') + '</span>' +
+      '<div class="wf-cols"><div class="wf-kv"><span>Type</span><span>' + (c.type === 'aat' ? 'Assigned area task, minimum task time ' + e(c.minTaskTime) : 'Racing task') + '</span><span>Distance</span><span>' + (c.type === 'aat' ? 'nominal ' + W.km(dist) + ', minimum ' + W.km(Math.round(dist * 0.74)) + ', maximum ' + W.km(Math.round(dist * 1.31)) : W.km(dist)) + '</span>' +
+      '<span>Start</span><span>Opens ' + e(o.startOpen || '—') + (o.startClose ? ', closes ' + e(o.startClose) : '') + (o.maxStartAlt ? ', max ' + o.maxStartAlt + ' m MSL' : '') + (o.maxStartGs ? ', max ' + o.maxStartGs + ' km/h' : '') + (o.pevStart === 'yes' ? ', PEV start: wait ' + o.pevWait + ' min, window ' + o.pevWindow + ' min' : '') + '</span>' +
       '<span>Limits</span><span>' + (o.maxAltitude ? 'Maximum altitude ' + e(o.maxAltitude) + '. ' : '') + (o.towAltitude ? 'Tow altitude ' + o.towAltitude + ' m MSL. ' : '') + (c.minFinishHeight ? 'Minimum finish height ' + c.minFinishHeight + ' m MSL. ' : '') + scoringLine + '</span>' +
       '<span>QNH</span><span>' + cd.qnh + ' hPa' + (comp.flightLevels.length ? ' · ' + comp.flightLevels.map((fl) => fl + ' = ' + flToM(fl) + ' m MSL').join(', ') : '') + '</span>' +
-      '<span>Airspace</span><span>' + (closedEx.length ? closedEx.map(e).join(', ') : 'Competition settings') + (cd.notamAirspaces.length ? '. NOTAM: ' + cd.notamAirspaces.map((n) => e(n.name)).join(', ') : '') + '</span>' +
-      '<span>Upload password</span><span><b class="mono">' + e(comp.uploadPassword) + '</b></span></div>' +
+      '<span>Airspace</span><span>All airspaces of ' + e(comp.airspaceFile ? comp.airspaceFile.name : 'the airspace file') + ' are closed except ' + (opened.length ? opened.map(e).join(', ') : 'none') + (closedEx.length ? '. Changed for today: ' + closedEx.map(e).join(', ') : '') + (cd.notamAirspaces.length ? '. NOTAM, closed: ' + cd.notamAirspaces.map((n) => e(n.name)).join(', ') : '') + '</span>' +
+      '<span>Upload</span><span>keyhole.example/' + e(comp.slug) + '/upload · password <b class="mono">' + e(comp.uploadPassword) + '</b></span></div>' +
       '<div class="wf-row" style="align-items:flex-start">' + W.taskMap(c.points, { h: 160 }).replace('class="wf-map"', 'class="wf-map grow"') + '<div class="wf-map" style="width:110px;height:110px;min-height:0"><span class="tag">QR</span></div></div></div>' +
-      '<table class="wf-table"><thead><tr><th>#</th><th>Turnpoint</th><th>Zone</th><th class="num">Leg</th></tr></thead><tbody>' + c.points.map((p, i) => '<tr><td>' + i + '</td><td>' + e(p.name) + '</td><td>' + zoneSummary(p.zone, i === c.points.length - 1 ? 'finish' : '') + '</td><td class="num">' + (i ? W.km(Math.round(KH.util.haversine(c.points[i - 1], p) * 10) / 10) : '') + '</td></tr>').join('') + '</tbody></table>' +
+      '<table class="wf-table"><thead><tr><th>#</th><th>Turnpoint</th><th class="num">Elevation</th><th>Zone</th><th class="num">Course</th><th class="num">Leg</th></tr></thead><tbody>' + c.points.map((p, i) => '<tr><td>' + i + '</td><td>' + e(p.name) + '</td><td class="num">' + p.elev + ' m</td><td>' + zoneSummary(p.zone, i === c.points.length - 1 ? 'finish' : '') + '</td><td class="num">' + (i ? course(c.points[i - 1], p) + '°' : '') + '</td><td class="num">' + (i ? W.km(Math.round(KH.util.haversine(c.points[i - 1], p) * 10) / 10) : '') + '</td></tr>').join('') + '</tbody></table>' +
       (c.dayNotes ? '<div><h4>Day notes</h4>' + e(c.dayNotes) + '</div>' : '') + (comp.standingNotes ? '<div><h4>Notes</h4>' + e(comp.standingNotes) + '</div>' : '') + '</div>';
   };
   H.printSheet = (ds) => KH.modal({ title: 'Task sheet (print preview)', wide: true, body: W.taskSheet(Q.candidate(ds.cand)) + '<div class="wf-row end"><button class="wf-btn primary" data-act="fakeDownload" data-what="the task sheet to the printer">Print</button></div>' });
@@ -792,7 +881,7 @@
         return '<tr class="link' + (f.deleted ? ' dim' : '') + '" data-href="' + L().file(f) + '"><td><b>' + e(f.name) + '</b>' + (f.deleted ? ' <span class="wf-badge none">deleted</span>' : '') + (f.private ? ' <span class="wf-badge none">private</span>' : '') + (f.internalRemark ? ' <span class="wf-badge none" title="' + e(f.internalRemark) + '">remark</span>' : '') + '</td><td class="nowrap">' + W.dt(f.uploadedAt) + '<div class="muted small">' + f.uploadedBy + '</div></td><td class="nowrap">' + W.date(Q.flightDate(f)) + (f.dateOverride ? ' <span class="wf-badge">override</span>' : '') + '</td><td>' + e(Q.loggerLabel(Q.logger(f.loggerId))) + '</td>' +
           (showResult ? '<td>' + (res.ok ? e(res.competitor.cid) + ' · ' + e(Q.class(res.competitor.classId).name) + ' · ' + e(Q.dayLabel(res.classDay.classId, res.classDay.date)) + ' <span class="muted small">' + res.role + '</span>' + (scored ? ' <span class="wf-badge solid">scored</span>' : '') : '<span class="wf-badge dashed">unresolved</span><div class="muted small">' + e(res.reason) + (f.suggestedCid ? '. Pilot chose ' + e(f.suggestedClass) + ' ' + e(f.suggestedCid) : '') + '</div>') + '</td>'
             : '<td>' + (res.role || '') + (scored ? ' <span class="wf-badge solid">scored</span>' : '') + '</td>') +
-          '<td>' + (f.analysis.stale.length ? W.staleBadge(f) : f.analysis.output ? 'done' : res.ok ? 'waiting for task' : 'partial') + '</td><td class="num">' + (warn || '') + '</td></tr>';
+          '<td>' + (f.analysis.stale.length ? W.staleBadge(f) : f.analysis.state === 'pending' ? 'running' : f.analysis.output ? 'done' : f.analysis.log.some((l) => l.kind === 'parse') ? 'failed to parse' : res.ok ? 'waiting for task' : 'partial') + '</td><td class="num">' + (warn || '') + '</td></tr>';
       }).join('') : '<tr><td colspan="7" class="muted">No files match</td></tr>') + '</tbody></table>';
   };
 
@@ -870,21 +959,40 @@
 
   // ---------- analysis ----------
 
+  // Reminders that depend on the current scored file and links, derived at display time.
+  function contextEntries(f, res) {
+    const out = [];
+    if (!res.ok) return out;
+    const cls = Q.class(res.classDay.classId);
+    if (res.role === 'secondary' && res.result.scoredFileId === f.id) {
+      out.push({ level: 'warning', time: '', text: 'The scored file is from a secondary logger. Consider a public remark that indicates its use.', rule: KH.ruleRef('secondary', cls.edition) });
+      if (KH.effective(res.classDay, cls).pevStart === 'yes') out.push({ level: 'warning', time: '', text: 'PEVs of this secondary logger are used for the start. The rule set accepts PEVs only from the primary logger. Use a start override if the primary has a valid PEV.', rule: KH.ruleRef('secondary-pev', cls.edition) });
+    }
+    if (f.suggestedCid && (f.suggestedCid !== res.competitor.cid || f.suggestedClass !== cls.name)) {
+      out.push({ level: 'warning', time: '', text: 'The pilot chose ' + f.suggestedClass + ' ' + f.suggestedCid + ' on upload, but the logger link resolves to ' + cls.name + ' ' + res.competitor.cid + '.', adjust: true });
+    }
+    return out;
+  }
+
   W.analysisLog = (f, opts) => {
     const showDebug = KH.ui.showDebug;
     const res = Q.resolve(f);
     const scored = res.ok && res.result.scoredFileId === f.id;
-    const entries = f.analysis.log.filter((x) => showDebug || x.level !== 'debug');
-    const hidden = f.analysis.log.filter((x) => x.level === 'debug').length;
+    if (f.analysis.state === 'pending') return '<div class="wf-stack"><h4 style="margin:0">Analysis log</h4><div class="wf-empty">Analysis is running. Uploaded ' + W.dt(f.uploadedAt) + '.</div></div>';
+    const all = contextEntries(f, res).concat(f.analysis.log);
+    const entries = all.filter((x) => showDebug || x.level !== 'debug');
+    const hidden = all.filter((x) => x.level === 'debug').length;
     return '<div class="wf-stack"><div class="wf-row between"><h4 style="margin:0">Analysis log</h4><button class="wf-btn small ghost" data-act="toggleDebug">' + (showDebug ? 'Hide' : 'Show') + ' ' + hidden + ' debug entries</button></div>' +
       (f.analysis.stale.length ? '<div class="wf-note warn">Stale since ' + W.dt(f.analysis.stale[0].at) + ': ' + e(f.analysis.stale.map((s) => s.reason).join(', ')) + '. The result below is from the previous run. <button class="wf-btn small primary" data-act="rerun" data-file="' + f.id + '">Rerun</button></div>' : '') +
-      '<table class="wf-table"><thead><tr><th>Time</th><th>Level</th><th>Entry</th><th></th></tr></thead><tbody>' +
+      '<table class="wf-table"><thead><tr><th>Time</th><th>Level</th><th>Entry</th><th>Rule</th><th></th></tr></thead><tbody>' +
       entries.map((x) => {
         let act = '';
         if (x.suggestion && res.ok) act = f.overrides.flightEnd === x.suggestion.time ? '<span class="wf-badge solid">flight end set</span>' : '<button class="wf-btn small" data-act="acceptFlightEnd" data-file="' + f.id + '" data-time="' + x.suggestion.time + '">Accept flight end ' + x.suggestion.time + '</button>';
         if (x.kind === 'near-miss' && res.ok) act = '<button class="wf-btn small" data-act="creditTp" data-file="' + f.id + '" data-idx="' + x.tpIndex + '">Credit turnpoint</button>';
+        if (x.kind === 'finish-miss' && res.ok) act = '<button class="wf-btn small" data-act="creditFinish" data-file="' + f.id + '">Credit finish</button>';
         if (x.kind === 'start' && x.candidate && !x.text.includes('(in use)') && res.ok) act = '<button class="wf-btn small" data-act="useCandidate" data-file="' + f.id + '" data-time="' + x.candidate + '">Use this start</button>';
-        return '<tr class="log-' + x.level + '"><td class="mono nowrap">' + (x.time || '') + '</td><td>' + W.level(x.level) + '</td><td>' + e(x.text) + '</td><td class="right nowrap">' + act + '</td></tr>';
+        if (x.adjust) act = '<a class="wf-btn small" href="#' + L().logger(Q.logger(f.loggerId)) + '">Adjust links</a>';
+        return '<tr class="log-' + x.level + '"><td class="mono nowrap">' + (x.time || '') + '</td><td>' + W.level(x.level) + '</td><td>' + e(x.text) + '</td><td class="small muted nowrap">' + e(x.rule || '') + '</td><td class="right nowrap">' + act + '</td></tr>';
       }).join('') + '</tbody></table>' + (opts && opts.hideNote ? '' : '<p class="muted small">Warnings need a look. Errors mean a check could not run, and reviewing them does not complete the analysis.' + (scored ? '' : ' Overrides apply to this file and stay with it.') + '</p>') + '</div>';
   };
   H.toggleDebug = () => (KH.ui.showDebug = !KH.ui.showDebug);
@@ -906,6 +1014,11 @@
     A.setOverride(Q.file(ds.file), 'flightEnd', ds.time);
     KH.toast('Flight end override at ' + ds.time + '. Analysis reran.');
   };
+  H.creditFinish = (ds) => {
+    A.creditFinish(Q.file(ds.file));
+    KH.toast('Finish credited. Analysis reran.');
+  };
+  H.pinAat = (d, ds) => A.pinAatFix(Q.file(ds.file), Number(d.idx), d.time);
   H.creditTp = (ds) => {
     A.creditTurnpoint(Q.file(ds.file), Number(ds.idx));
     KH.toast('Turnpoint credited. Analysis reran.');
@@ -916,20 +1029,25 @@
     const items = [];
     if (o.start) items.push(['start', 'Start: ' + (o.start.kind === 'free' ? 'free time ' : 'candidate ') + o.start.time]);
     if (o.flightEnd) items.push(['flightEnd', 'Flight end: ' + o.flightEnd]);
-    if (o.tpCredits && o.tpCredits.length) items.push(['tpCredits', 'Turnpoint credit: ' + o.tpCredits.map((i) => i + 1).join(', ')]);
+    if (o.tpCredits && o.tpCredits.length) items.push(['tpCredits', 'Turnpoint credit: ' + o.tpCredits.map((c) => c.idx + 1 + ' ' + c.name).join(', ')]);
+    if (o.finishCredit) items.push(['finishCredit', 'Finish credit: ' + o.finishCredit.name]);
     if (o.finishTime) items.push(['finishTime', 'Finish time: ' + o.finishTime]);
+    for (const [k, v] of Object.entries(o.aatPins || {})) items.push(['aatPin:' + k, 'Pinned fix in assigned area ' + (Number(k) + 1) + ' ' + v.name + ': ' + v.time]);
+    const res = Q.resolve(f);
+    const task = res.ok ? Q.task(res.classDay) : null;
     return '<div class="wf-stack">' + (items.length ? '<table class="wf-table"><tbody>' + items.map(([k, t]) => '<tr><td>' + e(t) + '</td><td class="right"><button class="wf-btn small" data-act="clearOverride" data-file="' + f.id + '" data-kind="' + k + '">Remove</button></td></tr>').join('') + '</tbody></table>' : '<p class="muted small">No overrides on this file.</p>') +
       '<form class="wf-row" data-submit="setFlightEnd" data-file="' + f.id + '">' + input('time', o.flightEnd, 'placeholder="hh:mm:ss" class="mid"') + '<button class="wf-btn small">Set flight end</button></form>' +
       '<form class="wf-row" data-submit="setFinishTime" data-file="' + f.id + '">' + input('time', o.finishTime, 'placeholder="hh:mm:ss" class="mid"') + '<button class="wf-btn small">Set finish time</button></form>' +
+      (task && task.type === 'aat' ? '<form class="wf-row" data-submit="pinAat" data-file="' + f.id + '">' + select('idx', task.points.slice(1, -1).map((p, i) => [i, 'Area ' + (i + 1) + ' ' + p.name])) + input('time', '', 'placeholder="hh:mm:ss" class="mid"') + '<button class="wf-btn small">Pin fix</button><span class="muted small">Empty time removes the pin</span></form>' : '') +
       '<p class="muted small">Overrides belong to the file. They stay when it is analysed again and follow it within its class day.</p></div>';
   };
-  H.clearOverride = (ds) => A.setOverride(Q.file(ds.file), ds.kind, null);
+  H.clearOverride = (ds) => (ds.kind.startsWith('aatPin:') ? A.pinAatFix(Q.file(ds.file), Number(ds.kind.slice(7)), '') : A.setOverride(Q.file(ds.file), ds.kind, null));
   H.setFlightEnd = (d, ds) => A.setOverride(Q.file(ds.file), 'flightEnd', d.time || null);
   H.setFinishTime = (d, ds) => A.setOverride(Q.file(ds.file), 'finishTime', d.time || null);
 
   W.outputSummary = (f) => {
     const o = f.analysis.output;
-    if (!o) return '<p class="muted">' + (Q.resolve(f).ok ? 'No task analysis yet: waiting for a published task.' : 'Only the analysis that needs no class day ran.') + '</p>';
+    if (!o) return '<p class="muted">' + (f.analysis.state === 'pending' ? 'Analysis is running.' : f.analysis.log.some((l) => l.kind === 'parse') ? 'The file failed to parse. The competitor needs another file or a manual result.' : Q.resolve(f).ok ? 'No task analysis yet: waiting for a published task.' : 'Only the analysis that needs no class day ran.') + '</p>';
     return '<div class="wf-kv"><span>Start</span><span class="mono">' + o.start + '</span><span>' + (o.finished ? 'Finish' : 'Landing') + '</span><span class="mono">' + (o.finished ? o.finish : o.landing) + (o.flightEnd ? ' (flight end ' + o.flightEnd + ')' : '') + '</span><span>Distance</span><span>' + W.km(o.distance) + '</span><span>Time</span><span class="mono">' + (o.time || '—') + '</span><span>Speed</span><span>' + (o.speed ? W.kmh(o.speed) : '—') + '</span></div>';
   };
 
@@ -983,8 +1101,9 @@
   H.setResultStatus = (ds) => {
     const r = Q.result(ds.result);
     if (ds.status === 'scored file') {
-      const f = Q.filesOfResult(r)[0];
-      if (!f) throw new KH.Denied('No file resolves to this result');
+      const files = Q.filesOfResult(r);
+      const f = files.find((x) => x.id === r.lastScoredFileId) || (files.length === 1 ? files[0] : null);
+      if (!f) throw new KH.Denied(files.length ? 'Pick the scored file in the file list' : 'No file resolves to this result');
       A.setScoredFile(r, f);
     } else A.setResultStatus(r, ds.status);
   };
@@ -1097,7 +1216,7 @@
       return '<li><div class="wf-row"><b>' + e(u.deleted ? '(deleted user)' : u.name) + '</b><span class="muted small">' + e(u.email) + '</span>' + (u.staff ? '<span class="wf-badge solid">staff</span>' : '') + (u.blocked ? '<span class="wf-badge">blocked</span>' : '') +
         (!u.staff && !u.deleted ? '<span class="muted small">' + Q.invitationsUsed(u.id) + '/' + u.invitationLimit + ' invitations</span>' : '') +
         '<span class="muted small">' + S.memberships.filter((m) => m.userId === u.id).map((m) => Q.competition(m.competitionId).slug + ' ' + m.role).join(', ') + '</span>' +
-        (!u.deleted && !u.staff ? (u.blocked ? '<button class="wf-btn small" data-act="unblockUser" data-user="' + u.id + '">Unblock</button>' : '<button class="wf-btn small" data-act="blockUserDialog" data-user="' + u.id + '">Block</button>') +
+        (!u.deleted && u.id !== Q.me().id ? (u.blocked ? '<button class="wf-btn small" data-act="unblockUser" data-user="' + u.id + '">Unblock</button>' : '<button class="wf-btn small" data-act="blockUserDialog" data-user="' + u.id + '">Block</button>') +
           '<form class="wf-row" data-submit="setLimit" data-user="' + u.id + '">' + input('limit', u.invitationLimit, 'class="narrow"') + '<button class="wf-btn small">Set limit</button></form><button class="wf-btn small danger" data-act="softDelete" data-user="' + u.id + '">Delete</button>' : '') + '</div>' +
         (u.blocked ? '<div class="muted small">Blocked ' + W.dt(u.blocked.at) + ' by ' + e(Q.user(u.blocked.by).name) + ': ' + e(u.blocked.note) + '</div>' : '') +
         (pending.length ? '<div class="muted small">Pending: ' + pending.map((i) => e(i.email) + (i.expires < KH.NOW ? ' (expired)' : '')).join(', ') + '</div>' : '') +

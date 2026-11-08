@@ -216,26 +216,28 @@
   // ---------- running competition: classes ----------
 
   const CLASS_DEFS = [
-    { id: 'cl1', slug: 'club', name: 'Club', edition: 'DAeC SWO 2026', template: 'Club', colour: '#888888' },
-    { id: 'cl2', slug: 'standard', name: 'Standard', edition: 'DAeC SWO 2026', template: 'Standard', colour: '#555555' },
-    { id: 'cl3', slug: '18m', name: '18 m', edition: 'FAI Annex A 2025a', template: '18 m', colour: '#222222' },
+    { id: 'cl1', slug: 'club', name: 'Club', edition: 'DAeC SWO 2026', template: 'Club', colour: '#888888', speed: 88 },
+    { id: 'cl2', slug: 'standard', name: 'Standard', edition: 'DAeC SWO 2026', template: 'Standard', colour: '#555555', speed: 97 },
+    { id: 'cl3', slug: '18m', name: '18 m', edition: 'FAI Annex A 2025a', template: '18 m', colour: '#222222', speed: 108 },
   ];
   for (const def of CLASS_DEFS) {
     const t = KH.EDITIONS[def.edition].templates[def.template];
     S.classes.push({
       id: def.id, competitionId: 'k2', slug: def.slug, name: def.name, colour: def.colour, edition: def.edition,
       handicapList: t.handicapList, handicapScale: t.handicapScale, dm: t.dm, d1: t.d1,
-      overrides: def.slug === 'standard' ? { maxAltitude: 'FL 95' } : def.slug === 'club' ? { maxAltitude: 'FL 95', towAltitude: 1200 } : { maxAltitude: 'FL 100', earthModel: 'WGS84' },
-      deleted: false,
+      overrides: def.slug === 'standard' ? { maxAltitude: 'FL 95', startOpen: '12:30', maxStartAlt: 1500, pevStart: 'yes', pevWait: 5, pevWindow: 5 }
+        : def.slug === 'club' ? { maxAltitude: 'FL 95', towAltitude: 1200, startOpen: '12:30', maxStartAlt: 1500 }
+        : { maxAltitude: 'FL 100', earthModel: 'WGS84', startOpen: '12:30', maxStartGs: 150 },
+      deleted: false, baseSpeed: def.speed,
     });
   }
 
   const GLIDERS = {
     club: ['LS4', 'Std Cirrus', 'ASW 19', 'DG-100', 'Pegase', 'ASW 20', 'Discus', 'LS1-f', 'DG-300', 'Astir CS'],
     standard: ['LS8-a', 'Discus 2a', 'ASW 28', 'LAK-19', 'Discus 2c FES', 'LS8-st'],
-    '18m': ['ASG 29E', 'Ventus 3T', 'JS3-18', 'LS10-st', 'Antares 18T', 'ASW 27-18E'],
+    '18m': ['ASG 29E', 'Ventus 3T', 'JS3-18', 'LS10-st', 'Antares 18T', 'ASG 29Es'],
   };
-  const MOTOR = /E$|T$|-st|FES|Antares/;
+  const MOTOR = /E$|T$|Es$|-st|FES|Antares/;
 
   const r0 = rng(2026);
   const usedIds = new Set();
@@ -253,6 +255,19 @@
     const alphabet = 'ABCDEFGHJKLMNPRSTUVWXYZ0123456789';
     return [0, 1, 2].map(() => pick(r, alphabet.split(''))).join('');
   }
+  const usedNames = new Set();
+  function person(r) {
+    for (;;) {
+      const p = { first: pick(r, FIRST), last: pick(r, LAST) };
+      if (usedNames.has(p.first + p.last)) continue;
+      usedNames.add(p.first + p.last);
+      return { ...p, club: pick(r, CLUBS), country: pick(r, COUNTRIES), igcId: r() < 0.7 ? String(Math.floor(between(r, 1000, 9999))) : '' };
+    }
+  }
+  function registration(r, motor) {
+    const L = 'ABCDEFGHIJKLMNOPRSTUVWXYZ';
+    return motor ? 'D-K' + [0, 1, 2].map(() => pick(r, L.split(''))).join('') : 'D-' + Math.floor(between(r, 1000, 9999));
+  }
 
   let cn = 0;
   for (const cls of S.classes) {
@@ -260,17 +275,15 @@
       const glider = pick(r0, GLIDERS[cls.slug]);
       const crewSize = cls.slug === 'club' && i === 7 ? 2 : 1;
       const crew = [];
-      for (let k = 0; k < crewSize; k++) {
-        crew.push({ first: pick(r0, FIRST), last: pick(r0, LAST), club: pick(r0, CLUBS), country: pick(r0, COUNTRIES), igcId: r0() < 0.7 ? String(Math.floor(between(r0, 1000, 9999))) : '' });
-      }
+      for (let k = 0; k < crewSize; k++) crew.push(person(r0));
       const id = 'p' + ++cn;
+      const handicap = cls.handicapList ? KH.HANDICAP_LISTS[cls.handicapList][glider] || 100 : null;
       S.competitors.push({
-        id, competitionId: 'k2', classId: cls.id, cid: compId(r0), gliderType: glider,
-        registration: 'D-' + (MOTOR.test(glider) ? 'K' : '') + String(Math.floor(between(r0, 1000, 9999))),
-        displayName: crewSize > 1 ? 'Team ' + crew[0].club.split(' ').pop() : '',
-        handicap: cls.handicapList ? KH.HANDICAP_LISTS[cls.handicapList][glider] || 100 : null,
+        id, competitionId: 'k2', classId: cls.id, cid: compId(r0), gliderType: glider, registration: registration(r0, MOTOR.test(glider)),
+        displayName: crewSize > 1 ? 'Team ' + crew[0].club.split(' ').pop() : '', handicap,
         pureGlider: !MOTOR.test(glider), hc: cls.slug === 'standard' && i === 24, dsq: null, deleted: false, crew,
-        skill: between(r0, 0.86, 1.0),
+        // Raw speed follows the glider's performance, so handicapped classes even out after scoring.
+        skill: between(r0, 0.9, 1.0) * (handicap ? (cls.handicapScale === '100' ? handicap / 100 : handicap) : 1),
       });
       const primary = { id: 'l' + cn + 'a', competitionId: 'k2', manufacturer: pick(r0, ['LXV', 'LXV', 'LXV', 'NKL']), serial: serial(r0), enl: 500, mop: 500, cur: 20, minDuration: 30, links: [{ competitorId: id, from: '', role: 'primary' }] };
       S.loggers.push(primary);
@@ -295,13 +308,30 @@
 
   const TPS = RUN.turnpointFile.turnpoints;
   const tpByName = (n) => TPS.find((t) => t.name === n);
-  function zoneFor(role, edition, type) {
-    const d = KH.EDITIONS[edition].defaults;
-    if (role === 'start') return { kind: 'line', length: d.startLine };
-    if (role === 'finish') return d.finishZone.includes('5') ? { kind: 'cylinder', preset: 'Cylinder', r1: 5, a1: 180, r2: 0, a2: 0, orientation: 'symmetric' } : { kind: 'cylinder', preset: 'Cylinder', r1: 3, a1: 180, r2: 0, a2: 0, orientation: 'symmetric' };
-    if (type === 'aat') return { kind: 'sector', preset: 'Cylinder', r1: 20, a1: 180, r2: 0, a2: 0, orientation: 'symmetric' };
-    if (d.tpZone === 'Keyhole') return { kind: 'sector', preset: 'Keyhole', r1: 10, a1: 45, r2: 0.5, a2: 180, orientation: 'symmetric' };
-    return { kind: 'sector', preset: 'Cylinder', r1: 0.5, a1: 180, r2: 0, a2: 0, orientation: 'symmetric' };
+  KH.ZONES = {
+    Keyhole: { kind: 'sector', preset: 'Keyhole', r1: 10, a1: 45, r2: 0.5, a2: 180, orientation: 'symmetric' },
+    'Cylinder 0.5 km': { kind: 'sector', preset: 'Cylinder', r1: 0.5, a1: 180, r2: 0, a2: 0, orientation: 'symmetric' },
+    'Cylinder 1 km': { kind: 'sector', preset: 'Cylinder', r1: 1, a1: 180, r2: 0, a2: 0, orientation: 'symmetric' },
+    'Sector 90°': { kind: 'sector', preset: 'Sector', r1: 20, a1: 45, r2: 0, a2: 0, orientation: 'symmetric' },
+    'Cylinder 10 km': { kind: 'sector', preset: 'Cylinder', r1: 10, a1: 180, r2: 0, a2: 0, orientation: 'symmetric' },
+    'Cylinder 20 km': { kind: 'sector', preset: 'Cylinder', r1: 20, a1: 180, r2: 0, a2: 0, orientation: 'symmetric' },
+    'Cylinder 3 km': { kind: 'cylinder', preset: 'Cylinder', r1: 3, a1: 180, r2: 0, a2: 0, orientation: 'symmetric' },
+    'Cylinder 5 km': { kind: 'cylinder', preset: 'Cylinder', r1: 5, a1: 180, r2: 0, a2: 0, orientation: 'symmetric' },
+    'Line 1 km': { kind: 'line', length: 1 },
+  };
+  // Effective rule values of a class day: edition defaults, then class overrides, then class day overrides.
+  function effective(cd, cls) {
+    cls = cls || S.classes.find((c) => c.id === cd.classId);
+    const out = { ...KH.EDITIONS[cls.edition].defaults };
+    for (const layer of [cls.overrides, cd ? cd.overrides : {}]) for (const [k, v] of Object.entries(layer || {})) if (v !== '' && v != null) out[k] = v;
+    return out;
+  }
+  KH.effective = effective;
+  function zoneFor(role, edition, type, eff) {
+    const d = eff || KH.EDITIONS[edition].defaults;
+    if (role === 'start') return { kind: 'line', length: Number(d.startLine) };
+    if (role === 'finish') return { ...KH.ZONES[d.finishZone] };
+    return { ...KH.ZONES[type === 'aat' ? d.aatZone : d.tpZone] };
   }
   function taskPoint(name, role, edition, type) {
     const t = tpByName(name);
@@ -357,22 +387,21 @@
   for (const date of RUN.dates) {
     const plan = PLAN[date];
     if (!plan) continue;
-    const route = ROUTES[routeIdx++ % ROUTES.length];
+    const ri = routeIdx++;
     for (const cls of S.classes) {
       let status = plan.status;
       if (cls.slug === 'standard' && plan.std) status = plan.std;
       const cd = newClassDay(cls, date, { practice: !!plan.practice, status, qnh: Math.round(between(r1, 1009, 1022)) });
       if (plan.noTask) continue;
-      const type = cls.slug === '18m' && !plan.practice && routeIdx % 2 === 0 ? 'aat' : 'racing';
+      const route = ROUTES[(ri + (cls.slug === '18m' ? 3 : 0)) % ROUTES.length];
+      const type = cls.slug === '18m' && !plan.practice && ri % 2 === 0 ? 'aat' : 'racing';
       const names = cls.slug === 'club' && route.length > 4 ? route.slice(0, -2).concat(route.slice(-1)) : route;
       const a = makeCandidate(cd, cls, 'A', type, names);
       if (r1() < 0.5) makeCandidate(cd, cls, 'B', type, [route[0], route[1], route[route.length - 2], route[route.length - 1]]);
       cd.taskCandidateId = a.id;
-      cd.overrides = { startOpen: '12:30', startClose: '', maxStartAlt: cls.edition.startsWith('DAeC') ? 1500 : '', maxStartGs: cls.edition.startsWith('DAeC') ? '' : 150 };
-      if (cls.edition.startsWith('DAeC') && cls.slug === 'standard') Object.assign(cd.overrides, { pevStart: true, pevWait: 5, pevWindow: 5 });
     }
   }
-  // Tomorrow: Club has two candidates prepared, still unplanned.
+  // Tomorrow: Club has candidates prepared, still unplanned.
   {
     const club = S.classes[0];
     const cd = newClassDay(club, '2026-07-29', { qnh: 1018 });
@@ -380,8 +409,7 @@
     makeCandidate(cd, club, 'B', 'racing', ['Hohenfels', 'Hornberg', 'Titisee', 'Hohenfels']);
     makeCandidate(cd, club, '', 'aat', ['Hohenfels', 'Wolfach', 'Neustadt', 'Hohenfels'], { minTaskTime: '02:30' });
   }
-  // Day 8 of 18 m: the start opening time moved after launch, which marks its files stale.
-  // Day 3: cancelled for weather before a task was published.
+  // Day 3 was cancelled for weather before any task was published.
 
   // ---------- queries ----------
 
@@ -478,149 +506,206 @@
 
   // ---------- fake flight analysis ----------
 
-  function competitorOfFile(f) {
-    const res = Q.resolve(f);
-    return res.ok ? res.competitor : null;
-  }
+  const RULES = {
+    'near-miss': { 'DAeC SWO 2026': 'SWO 7.5', 'FAI Annex A 2025a': 'Annex A 7.6.5' },
+    'finish-height': { 'FAI Annex A 2025a': 'Annex A 7.8.2a' },
+    'start-altitude': { 'FAI Annex A 2025a': 'Annex A 7.4.3.5' },
+    secondary: { 'FAI Annex A 2025a': 'Annex A 5.3g' },
+    'secondary-pev': { 'DAeC SWO 2026': 'SWO 5.9.4, 7.3.5', 'FAI Annex A 2025a': 'Annex A 5.3g' },
+  };
+  KH.ruleRef = (kind, edition) => (RULES[kind] && RULES[kind][edition]) || '';
 
   // Deterministic analysis from the file's seed, its class day inputs and its overrides.
+  // Task-dependent overrides whose target no longer matches are dropped with a warning.
   function analyse(f) {
     const res = Q.resolve(f);
     const log = [];
     const entry = (level, time, text, extra) => log.push({ level, time, text, ...extra });
-    const r = rng(f.seed);
-    const takeoff = f.perf.takeoff;
-    entry('info', '', 'File parsed: ' + f.perf.fixes + ' fixes, 1 s interval');
-    if (f.gRecord === 'valid') entry('info', '', 'G record valid (validator vali-' + Q.logger(f.loggerId).manufacturer.toLowerCase() + ')');
-    if (f.gRecord === 'invalid') entry('warning', '', 'G record not valid', { kind: 'g-record' });
-    if (f.gRecord === 'none') entry('warning', '', 'G record not checked: no supported validator for ' + Q.logger(f.loggerId).manufacturer, { kind: 'g-record' });
+    const p = f.perf;
+    const logger = Q.logger(f.loggerId);
+    const base = { output: null, log, candidates: [], suggestions: [], landing: null };
+    if (p.broken) {
+      entry('error', '', 'File failed to parse: no usable fixes after line 212 (B records truncated)', { kind: 'parse' });
+      return base;
+    }
+    entry('info', '', 'File parsed: ' + p.fixes + ' fixes, 1 s interval');
+    if (f.gRecord === 'valid') entry('info', '', 'G record valid (validator vali-' + logger.manufacturer.toLowerCase() + ')');
+    if (f.gRecord === 'invalid') entry('warning', '', 'G record not valid (validator vali-' + logger.manufacturer.toLowerCase() + ' rejected the file)', { kind: 'g-record' });
+    if (f.gRecord === 'none') entry('warning', '', 'G record not checked: no supported validator for ' + logger.manufacturer, { kind: 'g-record' });
     if (f.recordedDate !== f.flightDate) entry('warning', '', 'Recorded date ' + f.recordedDate + ' corrected to ' + f.flightDate + ' (GPS week number rollover)', { kind: 'date' });
-    entry('info', takeoff, 'Take-off');
-    if (f.perf.selfLaunch) entry('info', takeoff, 'Self-launch: engine run ' + takeoff + '–' + hms(secs(takeoff) + 420) + ', 310 m to 820 m MSL');
-    else entry('info', hms(secs(takeoff) + 380), 'Release (aerotow) at 640 m MSL');
-    if (f.perf.engineTest) entry('info', hms(secs(takeoff) + 900), 'Engine test: 45 s, 1040 m to 1010 m MSL, 3.1 km from take-off');
-
-    const base = { ok: res.ok, resolved: res.ok, output: null, log, candidates: [] };
+    const takeoff = secs(p.takeoff);
+    entry('info', hms(takeoff), 'Take-off');
+    if (p.selfLaunch) entry('info', hms(takeoff), 'Self-launch: engine run ' + hms(takeoff) + '–' + hms(takeoff + 400) + ', 215 m to ' + (700 + p.release % 200) + ' m MSL');
+    else entry('info', hms(takeoff + 360), 'Release (aerotow) at ' + p.release + ' m MSL');
+    if (p.engineTest) entry('info', hms(takeoff + 900), 'Engine test: 40 s, ' + (p.release + 380) + ' m to ' + (p.release + 350) + ' m MSL, 3.1 km from take-off');
     if (!res.ok) {
       entry('warning', '', 'No task analysis: file is unresolved. ' + res.reason, { kind: 'unresolved' });
+      base.landing = takeoff + 5 * 3600;
       return base;
     }
     const cd = res.classDay;
+    const cls = Q.class(cd.classId);
     const task = Q.task(cd);
-    if (!task || cd.status === 'unplanned') {
+    base.landing = takeoff + 5 * 3600;
+    if (!task) {
       entry('info', '', 'Waiting for a published task on ' + Q.dayLabel(cd.classId, cd.date));
       return base;
     }
-    if (res.role === 'secondary' && f.scoredHint) entry('warning', '', 'Scored file is from a secondary logger. Annex A 5.3g wants its use indicated in the daily results. Consider a public remark.', { kind: 'secondary' });
-
+    const eff = effective(cd, cls);
     const rr = rng(f.seed ^ hash(task.id + ':' + cd.inputVersion));
     const ov = f.overrides;
-    const startOpen = secs((cd.overrides.startOpen || '12:30') + ':00');
-    const maxAlt = Number(cd.overrides.maxStartAlt) || null;
-    const maxGs = Number(cd.overrides.maxStartGs) || null;
 
+    // Task-dependent overrides stay only where their target still matches.
+    const dropped = [];
+    if (ov.tpCredits) ov.tpCredits = ov.tpCredits.filter((c) => {
+      const pt = task.points[c.idx + 1];
+      const keep = pt && c.idx + 1 < task.points.length - 1 && pt.name === c.name;
+      if (!keep) dropped.push('turnpoint credit ' + (c.idx + 1) + ' ' + c.name);
+      return keep;
+    });
+    if (ov.aatPins) for (const k of Object.keys(ov.aatPins)) {
+      const pt = task.points[Number(k) + 1];
+      if (!pt || task.type !== 'aat' || pt.name !== ov.aatPins[k].name) {
+        dropped.push('pinned fix ' + ov.aatPins[k].time + ' in ' + ov.aatPins[k].name);
+        delete ov.aatPins[k];
+      }
+    }
+    if (ov.finishCredit && task.points[task.points.length - 1].name !== ov.finishCredit.name) {
+      dropped.push('finish credit at ' + ov.finishCredit.name);
+      delete ov.finishCredit;
+    }
+
+    const startOpen = secs((eff.startOpen || '12:30') + ':00');
+    const maxAlt = Number(eff.maxStartAlt) || null;
+    const maxGs = Number(eff.maxStartGs) || null;
     entry('debug', hms(startOpen - 600 - rr() * 900), 'Start line crossing before the start opens');
     entry('debug', hms(startOpen - 200 - rr() * 300), 'Start line crossing before the start opens');
 
-    const nCand = 1 + Math.floor(rr() * 3.5);
+    const nCand = 1 + Math.floor(rr() * 3);
     const cands = [];
-    let t = startOpen + 300 + rr() * 1800;
+    let t = Math.max(startOpen + 240, takeoff + 2400) + rr() * 1500;
     for (let i = 0; i < nCand; i++) {
-      const alt = Math.round(1350 + rr() * 300);
-      const gs = Math.round(130 + rr() * 45);
-      const pev = cd.overrides.pevStart ? (rr() < 0.85 ? 'in window' : 'outside window') : '';
+      const alt = maxAlt && rr() < 0.03 ? Math.round(maxAlt + 20 + rr() * 90) : Math.round((maxAlt || 1600) - 260 + rr() * 240);
+      const gs = maxGs && rr() < 0.03 ? Math.round(maxGs + 4 + rr() * 15) : Math.round(112 + rr() * 30);
+      const pev = eff.pevStart === 'yes' ? (rr() < 0.04 ? 'outside window' : 'in window') : '';
       const breaches = [];
       if (maxAlt && alt > maxAlt) breaches.push('above maximum start altitude (' + alt + ' m > ' + maxAlt + ' m)');
       if (maxGs && gs > maxGs) breaches.push('above maximum start ground speed (' + gs + ' km/h > ' + maxGs + ' km/h)');
       if (pev === 'outside window') breaches.push('outside the PEV start window');
-      if (f.perf.restart && i === 0) breaches.push('within 20 min after an in-flight restart');
+      if (p.restart && i === 0) breaches.push('within 20 min after an in-flight restart');
       cands.push({ time: hms(t), alt, gs, pev, breaches, valid: breaches.length === 0, score: rr() });
-      t += 400 + rr() * 1500;
+      t += 400 + rr() * 1300;
     }
     const valid = cands.filter((c) => c.valid);
-    const autoPool = valid.length ? valid : cands;
-    const auto = autoPool.reduce((a, b) => (b.score > a.score ? b : a));
+    const auto = (valid.length ? valid : cands).reduce((a, b) => (b.score > a.score ? b : a));
     auto.auto = true;
     let inUse = auto;
     let freeStart = null;
-    if (ov.start && ov.start.kind === 'candidate') inUse = cands.find((c) => c.time === ov.start.time) || auto;
+    if (ov.start && ov.start.kind === 'candidate') {
+      const c = cands.find((x) => x.time === ov.start.time);
+      if (c) inUse = c;
+      else {
+        dropped.push('start at ' + ov.start.time + ' (no crossing at that time any more)');
+        delete ov.start;
+      }
+    }
     if (ov.start && ov.start.kind === 'free') freeStart = ov.start.time;
     inUse.inUse = !freeStart;
+    for (const d of dropped) entry('warning', '', 'Override dropped after the task changed: ' + d + '. Enter it again if it still applies.', { kind: 'dropped' });
     for (const c of cands) {
-      entry(c.valid ? 'info' : 'warning', c.time, 'Start candidate' + (c.auto ? ' (automatic choice)' : '') + (c.inUse ? ' (in use)' : '') + ': ' + c.alt + ' m MSL, ' + c.gs + ' km/h' + (c.pev ? ', PEV ' + c.pev : '') + (c.breaches.length ? ', ' + c.breaches.join(', ') : ''), { kind: 'start', candidate: c.time });
+      entry(c.valid ? 'info' : 'warning', c.time, 'Start candidate' + (c.auto ? ' (automatic choice)' : '') + (c.inUse ? ' (in use)' : '') + ': ' + c.alt + ' m MSL, ' + c.gs + ' km/h' + (c.pev ? ', PEV ' + c.pev : '') + (c.breaches.length ? ', ' + c.breaches.join(', ') : ''), { kind: 'start', candidate: c.time, rule: c.breaches.some((b) => b.includes('altitude')) ? KH.ruleRef('start-altitude', cls.edition) : '' });
     }
-    if (valid.length && inUse !== auto && !freeStart) entry('info', inUse.time, 'Another candidate avoids a start finding: ' + auto.time);
+    if (!freeStart && !inUse.valid && valid.length) entry('warning', inUse.time, 'Another candidate avoids a start finding: ' + valid[0].time, { kind: 'start' });
+    const betterProblem = cands.find((c) => !c.valid && c.score > inUse.score);
+    if (!freeStart && inUse.valid && betterProblem) entry('info', betterProblem.time, 'A problematic candidate scores higher: ' + betterProblem.time + ' (' + betterProblem.breaches.join(', ') + '). Its penalty may still leave the pilot better off.');
     if (!valid.length) entry('warning', '', 'No valid start. The automatic choice has a breach.', { kind: 'start' });
     if (inUse.breaches.length && !freeStart) entry('warning', inUse.time, 'The start in use has a breach: ' + inUse.breaches.join(', '), { kind: 'start' });
     if (freeStart) entry('info', freeStart, 'Start time set by override');
 
     const startT = secs(freeStart || inUse.time);
     const taskDist = Q.taskDistance(task);
-    const comp = competitorOfFile(f);
-    const skill = comp ? comp.skill : 0.9;
-    const speed = (task.type === 'aat' ? 92 : 98) * skill * (0.93 + rr() * 0.12);
-    const flyDist = task.type === 'aat' ? taskDist * (0.9 + rr() * 0.35) : taskDist;
-    let finished = f.perf.finishRoll < 0.86 * skill + 0.05;
-    const tpCount = task.points.length - 2;
-    const reached = task.points.slice(1, -1).map(() => true);
-    let missIdx = -1;
-    if (!finished && f.perf.nearMiss) {
-      missIdx = Math.floor(rr() * tpCount);
-      reached[missIdx] = false;
+    const comp = res.competitor;
+    const speed = (cls.baseSpeed || 95) * comp.skill * (0.94 + rr() * 0.1);
+    let duration;
+    let flyDist;
+    if (task.type === 'aat') {
+      duration = secs(task.minTaskTime + ':00') + rr() * 1500;
+      flyDist = Math.round(((speed * duration) / 3600) * 10) / 10;
+      if (ov.aatPins) for (const k of Object.keys(ov.aatPins)) flyDist = Math.round(flyDist * (1 + ((hash(ov.aatPins[k].time) % 40) - 20) / 1000) * 10) / 10;
+    } else {
+      flyDist = taskDist;
+      duration = (taskDist / speed) * 3600;
     }
-    const credited = (ov.tpCredits || []);
-    for (const i of credited) if (i < reached.length) reached[i] = true;
-    if (missIdx >= 0 && reached[missIdx]) finished = true;
-
-    let flightEnd = ov.flightEnd || null;
+    let finished = p.finishRoll < 0.86;
+    const legs = [];
+    for (let i = 1; i < task.points.length; i++) legs.push(haversine(task.points[i - 1], task.points[i]));
+    const total = legs.reduce((a, b) => a + b, 0) || 1;
+    const cum = legs.map((_, i) => legs.slice(0, i + 1).reduce((a, b) => a + b, 0) / total);
+    const tps = task.points.slice(1, -1);
+    const credited = (ov.tpCredits || []).map((c) => c.idx);
+    let frac = finished ? 1 : p.outlandingFrac;
+    let missIdx = -1;
+    if (!finished && p.nearMiss && task.type !== 'aat') {
+      missIdx = tps.findIndex((_, i) => cum[i] > frac);
+      if (missIdx < 0) missIdx = tps.length - 1;
+      if (credited.includes(missIdx)) {
+        finished = true;
+        frac = 1;
+      }
+    }
+    tps.forEach((pt, i) => {
+      const tt = hms(startT + cum[i] * duration);
+      if (frac >= cum[i] || credited.includes(i)) entry('info', tt, (task.type === 'aat' ? 'Assigned area ' : 'Turnpoint ') + (i + 1) + ' ' + pt.name + ' reached' + (credited.includes(i) ? ' (credited by override)' : ''));
+      else if (i === missIdx) entry('warning', hms(startT + Math.min(cum[i], frac) * duration - 300), 'Turnpoint ' + (i + 1) + ' ' + pt.name + ' missed by 0.' + (2 + Math.floor(rr() * 3)) + ' km, closest fix ' + hms(startT + Math.min(cum[i], frac) * duration - 300) + ' at ' + (pt.lat + 0.004).toFixed(4) + ' N ' + (pt.lon - 0.003).toFixed(4) + ' E', { kind: 'near-miss', tpIndex: i, rule: KH.ruleRef('near-miss', cls.edition) });
+      if (task.type === 'aat' && ov.aatPins && ov.aatPins[i]) entry('info', ov.aatPins[i].time, 'Assigned area ' + (i + 1) + ' ' + pt.name + ': pinned fix ' + ov.aatPins[i].time + ' (override)');
+    });
+    if (finished && p.finishMiss && !ov.finishCredit) {
+      finished = false;
+      frac = cum[cum.length - 2] + (1 - cum[cum.length - 2]) * 0.97;
+      entry('warning', hms(startT + duration), 'Finish ' + task.points[task.points.length - 1].name + ' missed by 0.4 km, closest fix ' + hms(startT + duration), { kind: 'finish-miss' });
+    }
+    if (ov.finishCredit) entry('info', hms(startT + duration), 'Finish credited by override');
+    if (p.engineAfterStart) {
+      const et = hms(startT + duration * 0.62);
+      base.suggestions.push({ kind: 'flight end', time: et, text: 'Engine run after the start' });
+      entry('warning', et, 'Engine run after the start: ' + et + '–' + hms(secs(et) + 480) + ', 820 m to 1150 m MSL, 41 km from take-off', { kind: 'engine', suggestion: { kind: 'flight end', time: et } });
+    }
+    if (p.airspace) {
+      const at = hms(startT + duration * Math.min(p.airspace, frac * 0.9));
+      entry('warning', at, 'Entry into closed airspace ED-R 207: ' + at + '–' + hms(secs(at) + 95) + ', deepest 180 m', { kind: 'airspace', suggestion: { kind: 'flight end', time: at } });
+      base.suggestions.push({ kind: 'flight end', time: at, text: 'Airspace entry ED-R 207' });
+    }
+    if (p.checkFail) entry('error', '', 'Check failed: airspace check for ED-R 132 could not run, terrain elevation missing for 14 fixes. The result is scored from the checks that worked.', { kind: 'check' });
     let distance;
     let finishT = null;
-    task.points.slice(1, -1).forEach((p, i) => {
-      const tt = hms(startT + ((i + 1) / (tpCount + 1)) * (flyDist / speed) * 3600);
-      if (reached[i]) entry('info', tt, 'Turnpoint ' + (i + 1) + ' ' + p.name + ' reached' + (credited.includes(i) ? ' (credited by override)' : ''));
-      else entry('warning', tt, 'Turnpoint ' + (i + 1) + ' ' + p.name + ' missed by 0.' + (2 + Math.floor(rr() * 3)) + ' km (closest fix ' + tt + ')', { kind: 'near-miss', tpIndex: i });
-    });
-    let durationS = (flyDist / speed) * 3600;
-    if (task.type === 'aat') durationS = Math.max(durationS, secs(task.minTaskTime + ':00') + rr() * 900);
-    const suggestions = [];
-    if (f.perf.engineAfterStart) {
-      const et = hms(startT + durationS * 0.62);
-      suggestions.push({ kind: 'flight end', time: et, text: 'Engine run after the start' });
-      entry('warning', et, 'Engine run after the start: ' + et + '–' + hms(secs(et) + 510) + ', 820 m to 1150 m MSL, 41 km from take-off', { kind: 'engine', suggestion: { kind: 'flight end', time: et } });
-    }
-    if (f.perf.airspace) {
-      const at = hms(startT + durationS * f.perf.airspace);
-      entry('warning', at, 'Entry into closed airspace ED-R 207: ' + at + '–' + hms(secs(at) + 95) + ', deepest 180 m', { kind: 'airspace', suggestion: { kind: 'flight end', time: at } });
-      suggestions.push({ kind: 'flight end', time: at, text: 'Airspace entry ED-R 207' });
-    }
+    let finishHeight = null;
+    const flightEnd = ov.flightEnd || null;
     if (flightEnd) {
       finished = false;
-      const frac = Math.min(0.97, Math.max(0.2, (secs(flightEnd) - startT) / durationS));
-      distance = Math.round(flyDist * frac * 0.95 * 10) / 10;
-      entry('info', flightEnd, 'Flight end set by override. Scored up to the best performance fix.');
+      const fr = Math.min(0.97, Math.max(0.15, (secs(flightEnd) - startT) / duration));
+      distance = Math.round(flyDist * fr * 0.97 * 10) / 10;
+      entry('info', flightEnd, 'Flight end set by override. Scored up to ' + (cls.edition.startsWith('DAeC') ? 'the best performance fix.' : 'the entry or engine start position.'));
     } else if (finished) {
-      distance = Math.round(flyDist * 10) / 10;
-      finishT = hms(startT + durationS);
-      const fh = Math.round(260 + rr() * 300);
-      if (ov.finishTime) finishT = ov.finishTime;
-      entry('info', finishT, 'Finish at ' + fh + ' m MSL' + (ov.finishTime ? ' (time set by override)' : ''));
-      if (task.minFinishHeight && fh < Number(task.minFinishHeight)) entry('warning', finishT, 'Finish below minimum height: ' + fh + ' m MSL < ' + task.minFinishHeight + ' m MSL', { kind: 'finish-height' });
+      distance = flyDist;
+      finishT = ov.finishTime || hms(startT + duration);
+      const min = Number(task.minFinishHeight) || 0;
+      finishHeight = Math.round(min && rr() < 0.02 ? min - 15 - rr() * 40 : min ? min + 30 + rr() * 160 : 300 + rr() * 220);
+      entry('info', finishT, 'Finish at ' + finishHeight + ' m MSL' + (ov.finishTime ? ' (time set by override)' : ''));
+      if (min && finishHeight < min) entry('warning', finishT, 'Finish below minimum height: ' + finishHeight + ' m MSL < ' + min + ' m MSL', { kind: 'finish-height', rule: KH.ruleRef('finish-height', cls.edition) });
     } else {
-      distance = Math.round(flyDist * f.perf.outlandingFrac * 10) / 10;
+      distance = Math.round(flyDist * frac * 10) / 10;
     }
-    const landing = hms(startT + durationS + 600 + rr() * 900);
-    entry('info', landing, finished ? 'Landing at Hohenfels' : 'Landing (outlanding) ' + Math.round(distance) + ' km into the task');
-    if (f.perf.gap) entry('warning', hms(startT + durationS * 0.4), 'Fix interval above the rule set limit: 47 s gap', { kind: 'gap' });
-
-    log.sort((a, b) => (a.time || '') < (b.time || '') ? -1 : (a.time || '') > (b.time || '') ? 1 : 0);
+    const landing = finished ? secs(finishT) + 240 + rr() * 500 : Math.max(startT + duration * Math.min(frac, 1) + 600, flightEnd ? secs(flightEnd) + 600 : 0);
+    base.landing = landing;
+    entry('info', hms(landing), finished ? 'Landing at Hohenfels' : 'Landing (outlanding) ' + Math.round(distance) + ' km into the task');
+    if (p.gap) entry('warning', hms(startT + duration * 0.4), 'Fix interval above the rule set limit: 47 s gap', { kind: 'gap' });
+    log.sort((a, b) => ((a.time || '') < (b.time || '') ? -1 : (a.time || '') > (b.time || '') ? 1 : 0));
     const time = finishT ? secs(finishT) - startT : null;
     const timeForSpeed = task.type === 'aat' && time ? Math.max(time, secs(task.minTaskTime + ':00')) : time;
     base.candidates = cands;
-    base.suggestions = suggestions;
     base.output = {
-      start: freeStart || inUse.time, finished, finish: finishT, landing, distance,
-      time: time ? hms(time) : null, speed: finished ? Math.round((distance / timeForSpeed) * 3600 * 10) / 10 : null,
-      flightEnd,
+      start: freeStart || inUse.time, finished, finish: finishT, landing: hms(landing), distance, finishHeight,
+      time: time ? hms(time) : null, speed: finished ? Math.round((distance / timeForSpeed) * 3600 * 10) / 10 : null, flightEnd,
     };
     return base;
   }
@@ -649,7 +734,7 @@
   function makeFile(logger, date, perf, extra) {
     const seed = hash(logger.id + date + (extra && extra.suffix ? extra.suffix : ''));
     const f = {
-      id: newId('f'), loggerId: logger.id, sha: seed.toString(16).padStart(8, '0') + 'a3c1e9f0', uploadedAt: date + 'T' + (perf.uploadAt || '18:20'),
+      id: newId('f'), loggerId: logger.id, sha: seed.toString(16).padStart(8, '0') + 'a3c1e9f0', uploadedAt: '',
       uploadedBy: 'pilot', recordedDate: date, flightDate: date, dateOverride: '', suggestedClass: '', suggestedCid: '', gRecord: logger.manufacturer === 'XCS' ? 'none' : 'valid',
       private: false, deleted: false, internalRemark: '', overrides: {}, seed, perf, analysis: null, name: '',
       ...extra,
@@ -658,48 +743,59 @@
     S.files.push(f);
     return f;
   }
-  function perfFor(r, comp, date) {
+  function perfFor(r, comp) {
     const motor = !comp.pureGlider;
     return {
-      takeoff: hms(secs('11:25:00') + r() * 3600), fixes: Math.floor(between(r, 17000, 26000)), finishRoll: r(), outlandingFrac: between(r, 0.35, 0.92),
-      nearMiss: r() < 0.25, selfLaunch: motor && r() < 0.5, engineTest: motor && r() < 0.3, engineAfterStart: motor && r() < 0.06,
-      restart: r() < 0.02, airspace: r() < 0.035 ? between(r, 0.2, 0.8) : 0, gap: r() < 0.03, uploadAt: hms(secs('16:40:00') + r() * 9000).slice(0, 5),
+      takeoff: hms(secs('11:30:00') + r() * 3000), fixes: Math.floor(between(r, 17000, 26000)), release: Math.round(between(r, 560, 760)),
+      finishRoll: r(), outlandingFrac: between(r, 0.35, 0.92), nearMiss: r() < 0.08, finishMiss: r() < 0.02,
+      selfLaunch: motor && r() < 0.5, engineTest: motor && r() < 0.3, engineAfterStart: motor && r() < 0.04,
+      restart: r() < 0.01, airspace: r() < 0.025 ? between(r, 0.2, 0.8) : 0, gap: r() < 0.02, uploadDelay: Math.round(between(r, 12, 110)),
     };
+  }
+  // Uploads follow landing. Analysis runs at upload.
+  function analyseAtUpload(f, offsetMin) {
+    runAnalysis(f, { silent: true });
+    if (!f.uploadedAt) f.uploadedAt = f.flightDate + 'T' + hms(f.analysis.landing + (f.perf.uploadDelay + (offsetMin || 0)) * 60).slice(0, 5);
+    f.analysis.ranAt = f.uploadedAt;
+  }
+  function dropFile(f) {
+    S.files.splice(S.files.indexOf(f), 1);
   }
 
   const r2 = rng(4242);
+  const MISSING = {};
   for (const cd of S.classDays.filter((d) => d.status !== 'unplanned' && d.status !== 'cancelled')) {
     const cls = Q.class(cd.classId);
     const isToday = cd.date === KH.TODAY;
     const isYesterday = cd.date === '2026-07-27';
-    for (const comp of Q.competitorsOf('k2', cls.id)) {
+    const comps = Q.competitorsOf('k2', cls.id);
+    comps.forEach((comp, idx) => {
       const result = Q.resultFor(cd.id, comp.id);
-      if (r2() < 0.04) {
+      if (r2() < 0.03) {
         result.status = 'did not fly';
-        continue;
+        return;
+      }
+      // Two Standard pilots have not delivered Day 7 yet.
+      if (isYesterday && cls.slug === 'standard' && (idx === 5 || idx === 11)) {
+        (MISSING[cd.id] = MISSING[cd.id] || []).push(comp.cid);
+        return;
       }
       const loggers = S.loggers.filter((l) => l.links.some((k) => k.competitorId === comp.id));
       const primary = loggers.find((l) => Q.linkOn(l, cd.date) && Q.linkOn(l, cd.date).role === 'primary');
-      const perf = perfFor(r2, comp, cd.date);
-      if (isToday && secs(perf.uploadAt + ':00') > secs('17:42:00') && r2() < 0.75) continue;
-      if (isToday && r2() < 0.25) continue;
+      const perf = perfFor(r2, comp);
       const files = [];
       if (primary) files.push(makeFile(primary, cd.date, perf));
-      for (const l of loggers) if (l !== primary && r2() < 0.55) files.push(makeFile(l, cd.date, { ...perf, uploadAt: hms(secs(perf.uploadAt + ':00') + 300).slice(0, 5) }));
-      for (const f of files) runAnalysis(f, { at: cd.date + 'T' + f.perf.uploadAt, silent: true });
-      if (!files.length) continue;
-      // Manual result for one competitor whose logger failed on Day 2.
-      if (cd.date === '2026-07-22' && comp === Q.competitorsOf('k2', cls.id)[3]) {
-        result.status = 'manual result';
-        result.manual = { startTime: '13:12:40', finished: false, finishTime: '', distance: 187.4, landing: 'Field near Villingen' };
-        result.publicRemark = 'Logger failure, distance from landing certificate.';
-        continue;
+      for (const l of loggers) if (l !== primary && r2() < 0.55) files.push(makeFile(l, cd.date, perf));
+      files.forEach((f, i) => analyseAtUpload(f, i * 4));
+      for (const f of files.slice()) if (f.uploadedAt > KH.NOW) {
+        dropFile(f);
+        files.splice(files.indexOf(f), 1);
       }
+      if (!files.length) return;
       const scored = files[0];
       if (isToday) {
-        result.checkReasons.push({ text: 'File arrived', file: scored.id, at: scored.uploadedAt });
-        if (files[1]) result.checkReasons.push({ text: 'File arrived', file: files[1].id, at: files[1].uploadedAt });
-        if (r2() < 0.45) {
+        for (const f of files) result.checkReasons.push({ text: 'File arrived', file: f.id, at: f.uploadedAt });
+        if (r2() < 0.5) {
           result.status = 'scored file';
           result.scoredFileId = scored.id;
           result.checkReasons.push({ text: 'Scored file output changed (first analysis)', file: scored.id, at: scored.uploadedAt });
@@ -708,83 +804,123 @@
       } else {
         result.status = 'scored file';
         result.scoredFileId = scored.id;
-        if (isYesterday && r2() < 0.12) result.checkReasons.push({ text: 'File arrived', file: (files[1] || scored).id, at: '2026-07-28T09:12' });
+        if (isYesterday && r2() < 0.1) result.checkReasons.push({ text: 'File arrived', file: (files[1] || scored).id, at: '2026-07-28T09:12' });
       }
-    }
+    });
   }
 
-  // Overrides, penalties and remarks on earlier days.
+  const filesOn = (cd) => S.files.filter((f) => { const r = Q.resolve(f); return r.ok && r.classDay === cd; });
+  const scoredOn = (cd) => Q.resultsOf(cd).filter((r) => r.status === 'scored file');
+
+  // Seeded cases on earlier days: overrides, penalties, a warning, a manual result, a secondary scored file.
   {
-    const results = S.results.filter((r) => r.status === 'scored file');
     const r3 = rng(99);
-    for (let i = 0; i < 6; i++) {
-      const res = pick(r3, results);
+    const results = S.results.filter((r) => r.status === 'scored file' && S.classDays.find((d) => d.id === r.classDayId).date < KH.TODAY);
+    let n = 0;
+    for (const res of results) {
       const f = Q.file(res.scoredFileId);
-      if (!f.analysis.candidates.length) continue;
-      const alt = f.analysis.candidates.find((c) => !c.auto);
-      if (alt) {
+      const alt = f.analysis.candidates.find((c) => !c.auto && c.valid);
+      if (alt && r3() < 0.03 && n++ < 8) {
         f.overrides.start = { kind: 'candidate', time: alt.time };
-        runAnalysis(f, { silent: true });
+        runAnalysis(f, { silent: true, at: f.uploadedAt });
       }
     }
-    const pen = results.filter((r) => Q.file(r.scoredFileId).analysis.log.some((e) => e.kind === 'airspace'));
-    for (const r of pen.slice(0, 3)) {
+    for (const r of results.filter((x) => Q.file(x.scoredFileId).analysis.log.some((e) => e.kind === 'airspace'))) {
       const f = Q.file(r.scoredFileId);
-      const sug = f.analysis.suggestions[0];
-      if (sug && r3() < 0.6) {
-        f.overrides.flightEnd = sug.time;
-        runAnalysis(f, { silent: true });
-      } else r.penalty = { points: 50, publicRemark: 'Airspace infringement ED-R 207, SWO penalty table 2.3', internalRemark: 'Pilot accepted at debriefing.' };
+      if (r3() < 0.5) {
+        f.overrides.flightEnd = f.analysis.suggestions.find((s) => s.text.startsWith('Airspace')).time;
+        runAnalysis(f, { silent: true, at: f.uploadedAt });
+      } else r.penalty = { points: 50, publicRemark: 'Airspace infringement ED-R 207', internalRemark: 'Pilot accepted at debriefing.' };
     }
-    const warnRes = pick(r3, results.filter((r) => S.classDays.find((d) => d.id === r.classDayId).date === '2026-07-24'));
-    warnRes.penalty = { points: 0, publicRemark: 'Official warning: unsafe thermalling reported by two pilots', internalRemark: '' };
-    warnRes.internalRemark = 'Talked to the pilot at 19:30.';
+    const d4 = Q.classDayOn('cl1', '2026-07-24');
+    const warn = scoredOn(d4)[6];
+    warn.penalty = { points: 0, publicRemark: 'Official warning: unsafe thermalling reported by two pilots', internalRemark: '' };
+    warn.internalRemark = 'Talked to the pilot at 19:30.';
+    const d2 = Q.classDayOn('cl1', '2026-07-22');
+    const man = scoredOn(d2)[3];
+    man.status = 'manual result';
+    man.scoredFileId = null;
+    man.manual = { startTime: '13:12:40', finished: false, finishTime: '', distance: Math.round(Q.taskDistance(Q.task(d2)) * 0.62 * 10) / 10, landing: 'Field near Villingen' };
+    man.publicRemark = 'Logger failure. Distance from the landing certificate.';
+    const d6 = Q.classDayOn('cl2', '2026-07-26');
+    const sec = Q.resultsOf(d6).find((r) => Q.filesOfResult(r).some((f) => Q.resolve(f).role === 'secondary'));
+    if (sec) {
+      sec.scoredFileId = Q.filesOfResult(sec).find((f) => Q.resolve(f).role === 'secondary').id;
+      sec.publicRemark = 'Scored from the secondary logger after a gap in the primary.';
+    }
+    const d7 = Q.classDayOn('cl1', '2026-07-27');
+    const cf = Q.file(scoredOn(d7)[9].scoredFileId);
+    cf.perf.checkFail = true;
+    runAnalysis(cf, { silent: true, at: cf.uploadedAt });
+    scoredOn(d7)[9].checkReasons.push({ text: 'Scored file output changed (rerun)', file: cf.id, at: '2026-07-28T08:55' });
+    const d4f = filesOn(Q.classDayOn('cl2', '2026-07-24'))[3];
+    d4f.private = true;
+    d4f.internalRemark = 'Pilot asked to keep the file private.';
   }
 
-  // Unresolved and odd files.
+  // Unresolved, waiting, broken, pending and odd files.
   {
-    const kx = S.competitors.find((c) => c.classId === 'cl1');
-    makeFile(Q.logger('lx1'), '2026-07-28', perfFor(rng(5), kx, '2026-07-28'), { suggestedClass: 'Club', suggestedCid: kx.cid, uploadedAt: '2026-07-28T17:31' });
-    const std = S.competitors.find((c) => c.classId === 'cl2' && c.cid.length === 2);
-    makeFile(Q.logger('lx2'), '2026-07-12', perfFor(rng(6), std, '2026-07-12'), { suggestedClass: 'Standard', suggestedCid: std.cid, uploadedAt: '2026-07-12T20:05' });
-    const someLogger = S.loggers.find((l) => l.links.length && Q.competitor(l.links[0].competitorId).classId === 'cl3');
-    makeFile(someLogger, '2026-07-01', perfFor(rng(7), Q.competitor(someLogger.links[0].competitorId), '2026-07-01'), { suggestedClass: '18 m', suggestedCid: Q.competitor(someLogger.links[0].competitorId).cid, uploadedAt: '2026-07-28T17:05', recordedDate: '2026-07-01', suffix: 'clock', internalRemark: 'Logger lost its clock, pilot says it was flown today.' });
-    const rollLogger = S.loggers.find((l) => l.links.length && Q.competitor(l.links[0].competitorId).classId === 'cl1' && l.id.endsWith('a') && l !== S.loggers[0]);
-    const rollFile = makeFile(rollLogger, '2026-07-28', perfFor(rng(8), Q.competitor(rollLogger.links[0].competitorId), '2026-07-28'), { recordedDate: '2006-12-12', suffix: 'roll', uploadedAt: '2026-07-28T17:12' });
-    const rollRes = Q.resolve(rollFile).result;
-    rollRes.checkReasons.push({ text: 'File arrived', file: rollFile.id, at: rollFile.uploadedAt });
-    for (const f of S.files.filter((x) => !x.analysis)) runAnalysis(f, { silent: true });
+    const kx = Q.competitorsOf('k2', 'cl1')[0];
+    const u1 = makeFile(Q.logger('lx1'), '2026-07-28', perfFor(rng(5), kx), { suggestedClass: 'Club', suggestedCid: kx.cid });
+    analyseAtUpload(u1);
+    u1.uploadedAt = '2026-07-28T17:31';
+    const std = Q.competitorsOf('k2', 'cl2').find((c) => c.cid.length === 2);
+    const u2 = makeFile(Q.logger('lx2'), '2026-07-12', perfFor(rng(6), std), { suggestedClass: 'Standard', suggestedCid: std.cid, uploadedAt: '2026-07-12T20:05' });
+    analyseAtUpload(u2);
+    const l18 = S.loggers.find((l) => l.links.length && Q.competitor(l.links[0].competitorId).classId === 'cl3');
+    const c18 = Q.competitor(l18.links[0].competitorId);
+    const u3 = makeFile(l18, '2026-07-01', perfFor(rng(7), c18), { suggestedClass: '18 m', suggestedCid: c18.cid, uploadedAt: '2026-07-28T17:05', suffix: 'clock', internalRemark: 'Logger lost its clock. The pilot says it was flown today.' });
+    analyseAtUpload(u3);
+    const clubLoggers = S.loggers.filter((l) => l.links.length && Q.competitor(l.links[0].competitorId).classId === 'cl1' && l.id.endsWith('a'));
+    const rl = clubLoggers[4];
+    const roll = makeFile(rl, '2026-07-28', perfFor(rng(8), Q.competitor(rl.links[0].competitorId)), { recordedDate: '2006-12-12', suffix: 'roll' });
+    analyseAtUpload(roll);
+    if (roll.uploadedAt > KH.NOW) roll.uploadedAt = '2026-07-28T17:12';
+    Q.resolve(roll).result.checkReasons.push({ text: 'File arrived', file: roll.id, at: roll.uploadedAt });
+    // A training flight on the cancelled Day 3 waits for a task that never comes.
+    const wl = clubLoggers[2];
+    const wait = makeFile(wl, '2026-07-23', perfFor(rng(9), Q.competitor(wl.links[0].competitorId)), { uploadedAt: '2026-07-23T18:40' });
+    analyseAtUpload(wait);
+    // A truncated upload that fails to parse.
+    const bl = clubLoggers[6];
+    const broken = makeFile(bl, '2026-07-28', { ...perfFor(rng(10), Q.competitor(bl.links[0].competitorId)), broken: true }, { suffix: 'broken', uploadedAt: '2026-07-28T17:26' });
+    analyseAtUpload(broken);
+    Q.resolve(broken).result.checkReasons.push({ text: 'File arrived', file: broken.id, at: broken.uploadedAt });
+    // An upload from a moment ago whose analysis is still running.
+    const pl = clubLoggers[8];
+    const pending = makeFile(pl, '2026-07-28', perfFor(rng(11), Q.competitor(pl.links[0].competitorId)), { suffix: 'pending', uploadedAt: '2026-07-28T17:41' });
+    if (!filesOn(Q.classDayOn('cl1', KH.TODAY)).some((f) => f !== pending && f.loggerId === pl.id)) {
+      pending.analysis = { engine: KH.ENGINE, state: 'pending', ranAt: '', stale: [], output: null, log: [], candidates: [], suggestions: [] };
+      Q.resolve(pending).result.checkReasons.push({ text: 'File arrived', file: pending.id, at: pending.uploadedAt });
+    } else dropFile(pending);
+    // A file whose G record does not validate.
+    const gf = filesOn(Q.classDayOn('cl2', KH.TODAY)).find((f) => Q.logger(f.loggerId).manufacturer === 'LXV');
+    gf.gRecord = 'invalid';
+    runAnalysis(gf, { silent: true, at: gf.uploadedAt });
     // A deleted duplicate on Day 6.
-    const d6 = S.files.find((f) => f.flightDate === '2026-07-26' && Q.logger(f.loggerId).manufacturer === 'FLA');
-    if (d6) {
-      const res = Q.resolve(d6);
-      if (!res.ok || res.result.scoredFileId !== d6.id) d6.deleted = true;
-    }
+    const d6 = S.files.find((f) => f.flightDate === '2026-07-26' && Q.logger(f.loggerId).manufacturer === 'FLA' && Q.resolve(f).ok && Q.resolve(f).result.scoredFileId !== f.id);
+    if (d6) d6.deleted = true;
   }
 
-  // Stale analyses: a moved start opening time on 18 m Day 8, a changed ENL threshold, a changed link role.
+  // Stale analyses: a corrected start ground speed on 18 m Day 8, a changed ENL threshold, a changed link role.
   {
-    const cd18 = Q.classDayOn('cl3', '2026-07-28');
+    const cd18 = Q.classDayOn('cl3', KH.TODAY);
     cd18.inputVersion = 2;
-    cd18.overrides.startOpen = '12:45';
-    for (const f of S.files) {
-      const res = Q.resolve(f);
-      if (res.ok && res.classDay === cd18) f.analysis.stale.push({ reason: 'start procedure', at: '2026-07-28T12:21' });
-    }
-    const clubToday = Q.classDayOn('cl1', '2026-07-28');
-    const clubFiles = S.files.filter((f) => { const r = Q.resolve(f); return r.ok && r.classDay === clubToday; });
-    const lg = Q.logger(clubFiles[2].loggerId);
-    lg.enl = 450;
-    for (const f of S.files.filter((x) => x.loggerId === lg.id)) f.analysis.stale.push({ reason: 'logger settings', at: '2026-07-28T16:58' });
+    cd18.overrides.maxStartGs = 160;
+    for (const f of filesOn(cd18)) if (f.uploadedAt < '2026-07-28T17:35') f.analysis.stale.push({ reason: 'start procedure', at: '2026-07-28T17:35' });
+    const motorLogger = S.loggers.find((l) => l.links.length && l.id.endsWith('a') && Q.competitor(l.links[0].competitorId).classId === 'cl2' && !Q.competitor(l.links[0].competitorId).pureGlider && S.files.some((f) => f.loggerId === l.id && f.flightDate === KH.TODAY));
+    motorLogger.enl = 350;
+    for (const f of S.files.filter((x) => x.loggerId === motorLogger.id && x.uploadedAt < '2026-07-28T17:20')) f.analysis.stale.push({ reason: 'logger settings', at: '2026-07-28T17:20' });
     const std7 = Q.classDayOn('cl2', '2026-07-27');
-    const stdFiles = S.files.filter((f) => { const r = Q.resolve(f); return r.ok && r.classDay === std7; });
-    stdFiles.slice(4, 6).forEach((f) => f.analysis.stale.push({ reason: 'logger link role', at: '2026-07-28T08:40' }));
+    filesOn(std7).slice(4, 6).forEach((f) => f.analysis.stale.push({ reason: 'logger link role', at: '2026-07-28T08:40' }));
   }
 
-  // Published copies for every day that has been published.
+  // ---------- scoring ----------
+
   function scoreClassDay(cd) {
     const cls = Q.class(cd.classId);
     const task = Q.task(cd);
+    const eff = effective(cd, cls);
     const rows = [];
     for (const comp of Q.competitorsOf(cls.competitionId, cls.id)) {
       const r = Q.resultFor(cd.id, comp.id);
@@ -797,8 +933,9 @@
       } else if (r.status === 'manual result' && r.manual) {
         const m = r.manual;
         const t = m.finished && m.finishTime && m.startTime ? secs(m.finishTime) - secs(m.startTime) : null;
-        const dist = m.finished ? Q.taskDistance(task) : Number(m.distance) || 0;
-        Object.assign(row, { distance: dist, start: m.startTime, finish: m.finishTime, finished: !!m.finished, speed: t ? Math.round((dist / t) * 36000) / 10 : null });
+        const dist = m.finished && task && task.type !== 'aat' ? Q.taskDistance(task) : Number(m.distance) || 0;
+        const tSpeed = t && task && task.type === 'aat' ? Math.max(t, secs(task.minTaskTime + ':00')) : t;
+        Object.assign(row, { distance: dist, start: m.startTime, finish: m.finishTime, finished: !!m.finished, speed: tSpeed ? Math.round((dist / tSpeed) * 36000) / 10 : null });
       } else if (r.status === 'unknown') row.placeholder = true;
       if (handicap && cls.handicapScale) {
         const h = cls.handicapScale === '100' ? handicap / 100 : handicap;
@@ -814,9 +951,12 @@
     const vo = Math.max(1, ...counted.filter((x) => x.finished).map(sp));
     const dmax = Math.max(1, ...counted.map(dist));
     const vmin = Math.min(vo, ...counted.filter((x) => x.finished).map(sp));
+    const d1 = Number(eff.d1 || cls.d1) || 250;
+    // Fake day devaluation: short days score fewer maximum points.
+    const pm = dmax >= d1 ? 1000 : Math.round((1000 * dmax) / d1);
     for (const x of scored) {
-      let p = x.finished ? 650 + 350 * ((sp(x) - vmin) / Math.max(1, vo - vmin)) : 600 * (dist(x) / dmax);
-      p = Math.round(p);
+      let p = x.finished ? 0.65 + 0.35 * ((sp(x) - vmin) / Math.max(1, vo - vmin)) : 0.6 * (dist(x) / dmax);
+      p = Math.round(p * pm);
       if (x.result.penalty) p = Math.max(0, p - Number(x.result.penalty.points || 0));
       if (x.competitor.dsq) p = 0;
       x.points = p;
@@ -837,7 +977,7 @@
       n1: counted.filter((x) => x.finished).length,
       Do: Math.round(dmax * 10) / 10,
       Vo: Math.round(vo * 10) / 10,
-      Pm: 1000,
+      Pm: pm,
     };
     return { rows, params };
   }
@@ -848,23 +988,32 @@
     const task = Q.task(cd);
     return {
       status, at, complaintDeadline: status === 'unofficial' ? cd.complaintDeadline : '', resultsNote: cd.resultsNote,
-      taskLetter: task ? task.letter : '', taskLine: task ? Q.taskLine(task) : '', taskDistance: task ? Q.taskDistance(task) : 0,
-      params, edition: Q.class(cd.classId).edition, engine: KH.ENGINE,
-      rows: rows.map((x) => ({ competitorId: x.competitor.id, rankLabel: x.rankLabel, points: x.points, distance: x.distance, speed: x.speed, placeholder: x.placeholder, penalty: x.result.penalty ? x.result.penalty.points : null, key: [x.status, x.points, x.distance, x.speed].join(';') })),
+      taskLetter: task ? task.letter : '', taskLine: task ? Q.taskLine(task) : '', taskDistance: task ? Q.taskDistance(task) : 0, taskType: task ? task.type : '',
+      params, edition: Q.class(cd.classId).edition, engine: KH.ENGINE, rulesHash: hash(Q.class(cd.classId).edition + JSON.stringify(effective(cd))).toString(16).slice(0, 8),
+      rows: rows.map((x) => ({
+        competitorId: x.competitor.id, rankLabel: x.rankLabel, points: x.points, distance: x.distance, speed: x.speed, start: x.start, finish: x.finish, placeholder: x.placeholder,
+        handicap: x.result.handicapOverride || x.competitor.handicap, hc: x.competitor.hc,
+        penalty: x.result.penalty ? x.result.penalty.points : null, penaltyRemark: x.result.penalty ? x.result.penalty.publicRemark : '', publicRemark: x.result.publicRemark || '',
+        dsqRemark: x.competitor.dsq ? x.competitor.dsq.publicRemark : '', key: [x.status, x.points, x.distance, x.speed].join(';'),
+      })),
     };
   }
+  KH.snapshot = snapshot;
+  // Publish times follow the statuses: preliminary the same evening, unofficial the next morning, final after the deadline.
   for (const cd of S.classDays) {
     if (cd.status === 'unplanned') continue;
-    const publishedAt = cd.date === KH.TODAY ? KH.TODAY + 'T10:05' : addDays(cd.date, 1) + 'T07:30';
-    if (cd.status === 'unofficial') cd.complaintDeadline = cd.date === '2026-07-25' ? '2026-07-26T21:30' : '2026-07-27T21:30';
-    if (cd.status === 'preliminary') cd.resultsNote = 'Flights of D7 and KX still missing.';
+    const at = {
+      'task published': cd.date + 'T10:05', cancelled: cd.date + 'T10:30', preliminary: cd.date + 'T20:30',
+      unofficial: addDays(cd.date, 1) + 'T08:00', final: addDays(cd.date, 2) + 'T09:00',
+    }[cd.status];
+    if (cd.status === 'unofficial') cd.complaintDeadline = addDays(cd.date, 1) + 'T22:00';
+    if (MISSING[cd.id]) cd.resultsNote = 'Flights of ' + MISSING[cd.id].join(' and ') + ' still missing.';
     const t = Q.task(cd);
     cd.publishedTask = t ? { at: cd.date + 'T10:05', letter: t.letter, line: Q.taskLine(t), distance: Q.taskDistance(t), type: t.type } : null;
-    cd.published = cd.status === 'task published' ? { status: 'task published', at: publishedAt, rows: [] } : snapshot(cd, cd.status, publishedAt);
+    cd.published = ['task published', 'cancelled'].includes(cd.status) ? { status: cd.status, at, rows: [] } : snapshot(cd, cd.status, at);
   }
   Q.classDayOn('cl2', '2026-07-27').reasons = ['Results'];
-  Q.classDayOn('cl3', '2026-07-28').reasons = ['Start procedure'];
-  // The 18 m start opening time moved after the task was published at 10:05.
+  Q.classDayOn('cl3', KH.TODAY).reasons = ['Start procedure'];
 
   // ---------- archived competition ----------
   // Its scoring work is gone. Only the directory fields and the published results remain.
@@ -924,6 +1073,11 @@
   function filesOfClass(cls) {
     return S.files.filter((f) => { const r = Q.resolve(f); return r.ok && r.classDay.classId === cls.id; });
   }
+  // Keys whose value differs, treating empty and missing alike.
+  function sameValues(next, prev) {
+    const keys = new Set(Object.keys(next || {}).concat(Object.keys(prev || {})));
+    return [...keys].filter((k) => String((next || {})[k] ?? '') !== String((prev || {})[k] ?? ''));
+  }
   class Denied extends Error {}
   KH.Denied = Denied;
   function requireAdmin(comp, fields) {
@@ -940,7 +1094,7 @@
       terms: { userId: me.id, version: 'organiser-terms-2026-11', at: KH.NOW, organiser: data.organiser }, turnpointFile: null, airspaceFile: null,
     };
     S.competitions.push(comp);
-    if (!me.staff) S.memberships.push({ userId: me.id, competitionId: comp.id, role: 'admin' });
+    S.memberships.push({ userId: me.id, competitionId: comp.id, role: 'admin' });
     touch();
     return comp;
   };
@@ -964,7 +1118,11 @@
     return hadTasks;
   };
   A.uploadAirspaceFile = (comp) => {
-    comp.airspaceFile = comp.id === 'k2' ? airspaceFile('oberrhein-2026-openair-v2.txt', KH.NOW) : KH.DEMO_FILES.airspace();
+    if (comp.id === 'k2') {
+      const next = airspaceFile('oberrhein-2026-openair-v2.txt', KH.NOW);
+      next.airspaces = next.airspaces.filter((a) => a.name !== 'RMZ HOHENFELS' && a.name !== 'ED-R 132');
+      comp.airspaceFile = next;
+    } else comp.airspaceFile = KH.DEMO_FILES.airspace();
     touch();
   };
   A.toggleOpened = (comp, name) => {
@@ -1013,7 +1171,7 @@
   };
   A.updateClass = (cls, patch) => {
     if (patch.edition && patch.edition !== cls.edition) markStale(filesOfClass(cls), 'rule set edition');
-    if (patch.overrides) markStale(filesOfClass(cls), 'rule overrides');
+    if (patch.overrides && sameValues(patch.overrides, cls.overrides).length) markStale(filesOfClass(cls), 'rule overrides');
     Object.assign(cls, patch);
     touch();
   };
@@ -1030,6 +1188,7 @@
     return cd;
   };
   A.setPractice = (cd, practice) => {
+    if (cd.published && practice !== cd.practice) throw new Denied('The day kind can change only until the first publish');
     cd.practice = practice;
     touch();
   };
@@ -1042,7 +1201,7 @@
   A.updateClassDay = (cd, patch) => {
     if (patch.overrides) {
       const startKeys = ['startOpen', 'startClose', 'maxStartAlt', 'maxStartGs', 'pevStart', 'pevWait', 'pevWindow'];
-      const changed = Object.keys(patch.overrides).filter((k) => String(patch.overrides[k] ?? '') !== String(cd.overrides[k] ?? ''));
+      const changed = sameValues(patch.overrides, cd.overrides);
       if (changed.length) {
         cd.inputVersion++;
         markStale(filesOfClassDay(cd), changed.some((k) => startKeys.includes(k)) ? 'start procedure' : 'rule overrides');
@@ -1052,7 +1211,9 @@
     }
     if ('qnh' in patch && Number(patch.qnh) !== cd.qnh) {
       markStale(filesOfClassDay(cd), 'rule overrides');
+      markUnpublished(cd, 'QNH');
     }
+    if ('practice' in patch && patch.practice !== cd.practice && cd.published) throw new Denied('The day kind can change only until the first publish');
     Object.assign(cd, patch);
     touch();
   };
@@ -1115,6 +1276,17 @@
     const start = t.points[0];
     if (start && start.zone.kind === 'line' && Number(start.zone.length) > d.startLine) out.push('start line ' + start.zone.length + ' km is longer than ' + d.startLine + ' km');
     if (t.type === 'aat' && !t.minTaskTime) out.push('assigned area task without a minimum task time');
+    const def = (role) => zoneFor(role, cls.edition, t.type);
+    const differs = (z, ref) => z.kind !== ref.kind || ['r1', 'a1', 'r2', 'a2', 'length'].some((k) => ref[k] !== undefined && Number(z[k]) !== Number(ref[k]));
+    t.points.slice(1, -1).forEach((p, i) => {
+      if (differs(p.zone, def('tp'))) out.push((t.type === 'aat' ? 'assigned area ' : 'turnpoint ') + (i + 1) + ' ' + p.name + ' uses ' + (p.zone.preset || 'a custom zone') + ' ' + p.zone.r1 + ' km instead of ' + (t.type === 'aat' ? d.aatZone : d.tpZone));
+    });
+    const fin = t.points[t.points.length - 1];
+    if (t.points.length > 1 && differs(fin.zone, def('finish'))) out.push('finish ' + (fin.zone.kind === 'line' ? 'line ' + fin.zone.length : 'cylinder ' + fin.zone.r1) + ' km instead of ' + d.finishZone);
+    const eff = effective(cd, cls);
+    for (const [k, label] of [['earthModel', 'earth model'], ['finishToEdge', 'finish distance to the cylinder edge'], ['deliveryPeriod', 'delivery period']]) {
+      if (eff[k] !== undefined && d[k] !== undefined && String(eff[k]) !== String(d[k]) && !(k === 'finishToEdge' && String(eff[k]) === 'yes' && d[k] === true)) out.push(label + ' ' + eff[k] + ' instead of ' + d[k]);
+    }
     return out;
   };
   Q.taskProblems = (t, cd) => {
@@ -1141,7 +1313,9 @@
       dayNotes: from ? from.dayNotes : '',
       points: names.map((n, i) => {
         const t = tps.find((x) => x.name === n) || { name: n, lat: 0, lon: 0, elev: 0 };
-        return { name: t.name, lat: t.lat, lon: t.lon, elev: t.elev, zone: zoneFor(i === 0 ? 'start' : i === names.length - 1 ? 'finish' : 'tp', cls.edition, from ? from.type : 'racing') };
+        const role = i === 0 ? 'start' : i === names.length - 1 ? 'finish' : 'tp';
+        const p = from && from.points[i];
+        return { name: t.name, lat: t.lat, lon: t.lon, elev: t.elev, zone: p ? { ...p.zone } : zoneFor(role, cls.edition, from ? from.type : 'racing', effective(cd, cls)) };
       }),
     };
     S.taskCandidates.push(c);
@@ -1221,7 +1395,6 @@
   };
   A.withdrawTask = (cd) => {
     cd.taskCandidateId = null;
-    cd.status = 'unplanned';
     markStale(filesOfClassDay(cd), 'task');
     markUnpublished(cd, 'Task');
     touch();
@@ -1289,6 +1462,8 @@
         addCheckReason(rb, 'File arrived', f);
         markStale([f], 'class day');
       }
+      // Overrides follow a file within its class day and are dropped on a move to another one.
+      if ((a && a.ok ? a.classDay : null) !== (b.ok ? b.classDay : null)) f.overrides = {};
     }
   }
   Q.previewLinkMove = (logger, link) => {
@@ -1302,15 +1477,23 @@
       return { file: f, from: a.ok ? a.competitor.cid + ' ' + Q.dayLabel(a.classDay.classId, a.classDay.date) : 'unresolved', to: b.ok ? b.competitor.cid + ' ' + Q.dayLabel(b.classDay.classId, b.classDay.date) : 'unresolved', moves: (a.ok ? a.result : null) !== (b.ok ? b.result : null) };
     }).filter((x) => x.moves);
   };
+  function demoteOtherPrimaries(logger, link) {
+    for (const l of S.loggers) {
+      if (l === logger || l.competitionId !== logger.competitionId) continue;
+      for (const k of l.links) if (k.competitorId === link.competitorId && k.role === 'primary' && (k.from || '') >= (link.from || '')) {
+        k.role = 'secondary';
+        markStale(S.files.filter((f) => f.loggerId === l.id), 'logger link role');
+      }
+      const cur = Q.linkOn(l, link.from || '0000');
+      if (cur && cur.competitorId === link.competitorId && cur.role === 'primary') {
+        l.links.push({ competitorId: link.competitorId, from: link.from, role: 'secondary' });
+        markStale(S.files.filter((f) => f.loggerId === l.id), 'logger link role');
+      }
+    }
+  }
   A.addLink = (logger, link) => {
     moveAware(() => {
-      if (link.role === 'primary') {
-        for (const l of S.loggers) {
-          if (l === logger) continue;
-          const cur = Q.linkOn(l, link.from || '0000');
-          if (cur && cur.competitorId === link.competitorId && cur.role === 'primary') l.links.push({ competitorId: link.competitorId, from: link.from, role: 'secondary' });
-        }
-      }
+      if (link.role === 'primary') demoteOtherPrimaries(logger, link);
       logger.links.push(link);
     });
     touch();
@@ -1320,7 +1503,10 @@
     touch();
   };
   A.setLinkRole = (logger, idx, role) => {
-    logger.links[idx].role = role;
+    const link = logger.links[idx];
+    // A competitor has at most one primary on any date: the other primary turns secondary from the same date.
+    if (role === 'primary') demoteOtherPrimaries(logger, link);
+    link.role = role;
     markStale(S.files.filter((f) => f.loggerId === logger.id), 'logger link role');
     touch();
   };
@@ -1371,7 +1557,22 @@
     touch();
   };
   A.creditTurnpoint = (f, idx) => {
-    f.overrides.tpCredits = (f.overrides.tpCredits || []).concat([idx]);
+    const task = Q.task(Q.resolve(f).classDay);
+    f.overrides.tpCredits = (f.overrides.tpCredits || []).concat([{ idx, name: task.points[idx + 1].name }]);
+    runAnalysis(f);
+    touch();
+  };
+  A.creditFinish = (f) => {
+    const task = Q.task(Q.resolve(f).classDay);
+    f.overrides.finishCredit = { name: task.points[task.points.length - 1].name };
+    runAnalysis(f);
+    touch();
+  };
+  A.pinAatFix = (f, idx, time) => {
+    const task = Q.task(Q.resolve(f).classDay);
+    f.overrides.aatPins = { ...(f.overrides.aatPins || {}) };
+    if (time) f.overrides.aatPins[idx] = { time, name: task.points[idx + 1].name };
+    else delete f.overrides.aatPins[idx];
     runAnalysis(f);
     touch();
   };
@@ -1385,11 +1586,12 @@
   A.setScoredFile = (result, f) => {
     result.scoredFileId = f.id;
     result.status = 'scored file';
-    if (f.analysis.stale.length === 0) addCheckReason(result, 'Scored file output changed (scored file chosen)', f);
+    addCheckReason(result, 'Scored file output changed (scored file chosen)', f);
     markUnpublished(Q.classDay(result.classDayId), 'Results');
     touch();
   };
   A.setResultStatus = (result, status) => {
+    if (result.scoredFileId) result.lastScoredFileId = result.scoredFileId;
     result.status = status;
     if (status !== 'scored file') result.scoredFileId = null;
     if (status === 'manual result' && !result.manual) result.manual = { startTime: '', finished: false, finishTime: '', distance: '', landing: '' };
@@ -1464,6 +1666,7 @@
   A.blockUser = (u, note) => {
     u.blocked = { by: Q.me().id, at: KH.NOW, note };
     S.invitations = S.invitations.filter((i) => i.inviterId !== u.id);
+    S.competitionInvitations = S.competitionInvitations.filter((i) => i.senderId !== u.id);
     touch();
   };
   A.unblockUser = (u) => {
@@ -1481,7 +1684,7 @@
     u.staff = false;
     S.memberships = S.memberships.filter((m) => m.userId !== u.id);
     S.invitations = S.invitations.filter((i) => i.inviterId !== u.id);
-    S.competitionInvitations = S.competitionInvitations.filter((i) => i.inviterId !== u.id && i.inviteeId !== u.id);
+    S.competitionInvitations = S.competitionInvitations.filter((i) => i.senderId !== u.id && i.inviteeId !== u.id);
     touch();
   };
 })();
