@@ -38,13 +38,17 @@
       idea: 'A class day has Overview, Task and Results tabs. The start procedure, limits and airspace sit at the top of the Task tab because every candidate shares them, and a status track under the title runs from task published to final and ends in the Publish button.',
       tradeoff: 'The status reads as a progression on every class day page and publishing is always one click away, but the track takes a row of its own and publishing is a page without a tab.',
     },
-    { id: '2b', file: '2b-status-tab.html', name: 'Status tab', round: 2, idea: 'Not built yet.', tradeoff: '' },
+    {
+      id: '2b', file: '2b-status-tab.html', name: 'Status tab', round: 2,
+      idea: 'The class day has four tabs, Overview, Task, Results and Status. The day settings sit on the Overview because they apply to every task candidate, and the Status tab\'s label is the only place the day status appears, with every publishing control behind it.',
+      tradeoff: 'The page stays calm and the status is always in the same spot, but publishing is a tab away from the results being published, and the status only reads as a label rather than a progression.',
+    },
     { id: '2c', file: '2c-day-hub.html', name: 'Day hub', round: 2, idea: 'Not built yet.', tradeoff: '' },
     { id: '2d', file: '2d-flights-tab.html', name: 'Flights tab', round: 2, idea: 'Not built yet.', tradeoff: '' },
     { id: '2e', file: '2e-one-page.html', name: 'One page', round: 2, idea: 'Not built yet.', tradeoff: '' },
     { id: '2f', file: '2f-settings-tab.html', name: 'Settings tab', round: 2, idea: 'Not built yet.', tradeoff: '' },
   ];
-  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a'];
+  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a', '2b'];
   // The prototype bar and the arrow keys cycle through the built directions of the current round.
   KH.siblings = () => {
     const round = KH.DIRECTIONS.find((d) => d.id === KH.app.id).round;

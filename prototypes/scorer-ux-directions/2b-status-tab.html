@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>2B · Status tab · Keyhole scorer UX prototype</title>
+<link rel="stylesheet" href="shared/wire.css">
+<link rel="stylesheet" href="shared/round2.css">
+<style>
+  .b2-tabs a.status { margin-left: auto; }
+  .b2-tabs a.status .wf-badge { margin-left: 0; }
+  .b2-settings > h3 { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .b2-status-head { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  .b2-s { display: block; }
+  .r2-st td:has(.b2-s.chk) { background: var(--ink); }
+  .r2-st td:has(.b2-s.chk) a { color: #fff; }
+  .r2-st td:has(.b2-s.unknown) { background: var(--mute); }
+  .r2-st td:has(.b2-s.unknown) a { color: #fff; }
+  .r2-st td:has(.b2-s.stale) { background: repeating-linear-gradient(45deg, var(--fill2) 0 3px, var(--line) 3px 5px); }
+  .r2-st td:has(.b2-s.ok) { background: var(--fill); }
+  .r2-st td:has(.b2-s.manual) a { outline: 2px solid var(--ink2); outline-offset: -3px; }
+  .r2-st td:has(.b2-s.chk) a:hover, .r2-st td:has(.b2-s.unknown) a:hover { background: transparent; text-decoration: underline; }
+  .b2-sw { display: inline-block; width: 14px; height: 11px; border: 1px solid var(--line); vertical-align: -1px; margin-right: 4px; }
+  .b2-sw.chk { background: var(--ink); } .b2-sw.unknown { background: var(--mute); } .b2-sw.ok { background: var(--fill); }
+  .b2-sw.stale { background: repeating-linear-gradient(45deg, var(--fill2) 0 3px, var(--line) 3px 5px); }
+  .b2-sw.manual { outline: 2px solid var(--ink2); outline-offset: -3px; }
+  @media (max-width: 800px) { .b2-tabs a.status { margin-left: 0; } }
+</style>
+</head>
+<body>
+<script src="shared/data.js"></script>
+<script src="shared/proto.js"></script>
+<script src="shared/widgets.js"></script>
+<script src="shared/round2.js"></script>
+<script src="2b-status-tab.js"></script>
+</body>
+</html>
