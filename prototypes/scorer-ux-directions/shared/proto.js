@@ -33,12 +33,16 @@
       idea: 'An IDE-like workspace: a searchable object browser on the left, every class day, result, file or setup page opens as a tab, and an inspector on the right shows the active tab\'s context, so the analysis log, map, start candidates and overrides are all on screen at once.',
       tradeoff: 'Fast for long review sessions and for comparing objects side by side, but it is dense, the tab state is something to manage, and it gives a newcomer little guidance on what to do next.',
     },
-    { id: '2a', file: '2a-status-track.html', name: 'Status track', round: 2, idea: 'Not built yet.', tradeoff: '' },
+    {
+      id: '2a', file: '2a-status-track.html', name: 'Status track', round: 2,
+      idea: 'A class day has Overview, Task and Results tabs. The start procedure, limits and airspace sit at the top of the Task tab because every candidate shares them, and a status track under the title runs from task published to final and ends in the Publish button.',
+      tradeoff: 'The status reads as a progression on every class day page and publishing is always one click away, but the track takes a row of its own and publishing is a page without a tab.',
+    },
     { id: '2b', file: '2b-status-tab.html', name: 'Status tab', round: 2, idea: 'Not built yet.', tradeoff: '' },
     { id: '2c', file: '2c-day-hub.html', name: 'Day hub', round: 2, idea: 'Not built yet.', tradeoff: '' },
     { id: '2d', file: '2d-flights-tab.html', name: 'Flights tab', round: 2, idea: 'Not built yet.', tradeoff: '' },
   ];
-  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f'];
+  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a'];
   // The prototype bar and the arrow keys cycle through the built directions of the current round.
   KH.siblings = () => {
     const round = KH.DIRECTIONS.find((d) => d.id === KH.app.id).round;
