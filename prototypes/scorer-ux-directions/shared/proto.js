@@ -5,8 +5,8 @@
   KH.DIRECTIONS = [
     {
       id: 'a', file: 'a-tree.html', name: 'Tree',
-      idea: 'A persistent sidebar mirrors the domain hierarchy: competition, then setup sections, then each class with its class days. Every object has its own page and deep URL.',
-      tradeoff: 'Predictable and fully linkable, but daily work that spans classes or jumps between days means many clicks through a tall tree.',
+      idea: 'A persistent sidebar holds one flat menu of competition-wide pages, then every competition date with its classes nested inside. Every object has its own page and deep URL.',
+      tradeoff: 'Predictable and fully linkable, and the date-first tree matches how a competition runs, but work on one class across many days, or on one competitor, means hopping between dates.',
     },
     { id: 'b', file: 'b-day-desk.html', name: 'Day desk', idea: 'Not built yet.', tradeoff: '' },
     { id: 'c', file: 'c-review-inbox.html', name: 'Review inbox', idea: 'Not built yet.', tradeoff: '' },

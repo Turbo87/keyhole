@@ -38,6 +38,7 @@
     { path: '/c/:comp/dates', title: 'Dates and class day grid', group: 'Setup', example: EX + '/dates' },
     { path: '/c/:comp/turnpoints', title: 'Turnpoint file', group: 'Setup', example: EX + '/turnpoints' },
     { path: '/c/:comp/airspace', title: 'Airspace file', group: 'Setup', example: EX + '/airspace' },
+    { path: '/c/:comp/classes', title: 'Classes', group: 'Setup', example: EX + '/classes' },
     { path: '/c/:comp/classes/new', title: 'Add class', group: 'Setup', example: EX + '/classes/new' },
     { path: '/c/:comp/classes/:class', title: 'Class settings', group: 'Setup', example: EX + '/classes/club' },
     { path: '/c/:comp/competitors', title: 'Competitors', group: 'Setup', example: EX + '/competitors' },
@@ -86,38 +87,48 @@
     if (comp.lifecycle === 'archived') return '<nav class="a-side"><div class="a-sec">' + e(comp.name) + '</div>' + navItem(C(comp), 'Overview', ctx) + navItem(C(comp) + '/members', 'Members', ctx) + navItem(C(comp) + '/lifecycle', 'Delete', ctx) + '</nav>';
     const classes = Q.classesOf(comp.id);
     const unresolved = Q.unresolvedFiles(comp.id).length;
-    let html = '<nav class="a-side"><div class="a-sec">' + e(comp.name) + '</div>' + navItem(C(comp), 'Overview', ctx);
-    html += '<div class="a-sec">Setup</div>' + navItem(C(comp) + '/details', 'Details and password', ctx) + navItem(C(comp) + '/dates', 'Dates and class days', ctx) +
-      navItem(C(comp) + '/turnpoints', 'Turnpoints', ctx, comp.turnpointFile ? '' : '—') + navItem(C(comp) + '/airspace', 'Airspace', ctx, comp.airspaceFile ? '' : '—') +
-      navItem(C(comp) + '/competitors', 'Competitors', ctx, String(Q.competitorsOf(comp.id).length)) + navItem(C(comp) + '/loggers', 'Loggers', ctx, String(Q.loggersOf(comp.id).length));
-    html += '<div class="a-sec">Classes <a class="a-sec-add" href="#' + C(comp) + '/classes/new">+ Add</a></div>';
-    for (const cls of classes) {
-      const open = ctx.cls === cls;
-      html += navItem(CL(cls), (open ? '▾ ' : '▸ ') + e(cls.name), ctx, '', 0);
+    const base = C(comp);
+    let html = '<nav class="a-side"><div class="a-sec">' + e(comp.name) + '</div>' +
+      navItem(base, 'Overview', ctx) + navItem(base + '/details', 'Details and password', ctx) + navItem(base + '/dates', 'Dates and class days', ctx) +
+      navItem(base + '/classes', 'Classes', ctx.params.date ? { ...ctx, path: '' } : ctx, String(classes.length)) +
+      navItem(base + '/turnpoints', 'Turnpoints', ctx, comp.turnpointFile ? '' : '—') + navItem(base + '/airspace', 'Airspace', ctx, comp.airspaceFile ? '' : '—') +
+      navItem(base + '/competitors', 'Competitors', ctx, String(Q.competitorsOf(comp.id).length)) + navItem(base + '/loggers', 'Loggers', ctx, String(Q.loggersOf(comp.id).length)) +
+      navItem(base + '/files', 'IGC files', ctx, unresolved ? unresolved + ' unresolved' : '') + navItem(base + '/members', 'Members', ctx) + navItem(base + '/lifecycle', 'Archive or delete', ctx);
+    html += '<div class="a-sec">Days</div>';
+    if (!classes.length) html += '<div class="muted small" style="padding:4px 10px">Add a class to plan its days</div>';
+    const openDate = ctx.params.date || (comp.dates.includes(KH.TODAY) ? KH.TODAY : null);
+    const dot = (cd) => (cd ? '<span class="a-dot ' + cd.status.replace(' ', '-') + '" title="' + cd.status + '"></span>' : '<span class="a-dot none" title="untouched"></span>');
+    for (const date of classes.length ? comp.dates : []) {
+      const labels = [...new Set(classes.map((c) => Q.dayLabel(c.id, date)))];
+      const open = date === openDate;
+      const label = (open ? '▾ ' : '▸ ') + W.date(date) + (labels.length === 1 ? ' <span class="muted small">' + e(labels[0]) + '</span>' : '');
+      const dots = open ? '' : classes.map((c) => dot(Q.classDayOn(c.id, date))).join('');
+      html += navItem(CL(classes[0]) + '/days/' + date, label, { ...ctx, path: ctx.params.date === date ? '' : ctx.path }, dots, 0);
       if (!open) continue;
-      for (const date of comp.dates) {
+      for (const cls of classes) {
         const cd = Q.classDayOn(cls.id, date);
-        const label = Q.dayLabel(cls.id, date) + ' <span class="muted small">' + W.date(date).slice(4) + '</span>';
         const counts = cd && !['unplanned', 'cancelled'].includes(cd.status) ? Q.dayCounts(cd) : null;
-        const x = cd ? (counts && counts.check ? counts.check + ' check ' : '') + '<span class="a-dot ' + cd.status.replace(' ', '-') + '" title="' + cd.status + '"></span>' : '<span class="a-dot none" title="untouched"></span>';
-        html += navItem(CL(cls) + '/days/' + date, label, ctx, x, 1);
-        if (ctx.params.date === date && cd) {
+        const x = (counts && counts.check ? counts.check + ' check ' : '') + dot(cd);
+        html += navItem(CL(cls) + '/days/' + date, e(cls.name) + (labels.length > 1 ? ' <span class="muted small">' + e(Q.dayLabel(cls.id, date)) + '</span>' : ''), ctx, x, 1);
+        if (ctx.cls === cls && ctx.params.date === date && cd) {
           html += navItem(CD(cd) + '/tasks', 'Tasks', ctx, Q.task(cd) ? e(Q.task(cd).letter) : '', 2) + navItem(CD(cd) + '/settings', 'Start, limits, airspace', ctx, '', 2) +
             navItem(CD(cd) + '/results', 'Results', ctx, counts ? counts.check + ' check' : '', 2) + navItem(CD(cd) + '/publish', 'Publish', ctx, cd.reasons.length ? '●' : '', 2);
         }
       }
     }
-    if (!classes.length) html += '<div class="muted small" style="padding:4px 10px">No classes yet</div>';
-    html += '<div class="a-sec">Flights</div>' + navItem(C(comp) + '/files', 'IGC files', ctx, unresolved ? unresolved + ' unresolved' : '');
-    html += '<div class="a-sec">Competition</div>' + navItem(C(comp) + '/members', 'Members', ctx) + navItem(C(comp) + '/lifecycle', 'Archive or delete', ctx);
     return html + '</nav>';
   }
 
   function crumbs(ctx) {
     const out = [];
     if (ctx.comp) out.push(['#' + C(ctx.comp), ctx.comp.name]);
-    if (ctx.cls) out.push(['#' + CL(ctx.cls), ctx.cls.name]);
-    if (ctx.cls && ctx.params.date) out.push(['#' + CL(ctx.cls) + '/days/' + ctx.params.date, Q.dayLabel(ctx.cls.id, ctx.params.date) + ' · ' + W.date(ctx.params.date)]);
+    if (ctx.cls && ctx.params.date) {
+      out.push(['#' + CL(Q.classesOf(ctx.comp.id)[0]) + '/days/' + ctx.params.date, W.date(ctx.params.date, true)]);
+      out.push(['#' + CL(ctx.cls) + '/days/' + ctx.params.date, ctx.cls.name + ' · ' + Q.dayLabel(ctx.cls.id, ctx.params.date)]);
+    } else if (ctx.cls || ctx.path.endsWith('/classes/new')) {
+      out.push(['#' + C(ctx.comp) + '/classes', 'Classes']);
+      if (ctx.cls) out.push(['#' + CL(ctx.cls), ctx.cls.name]);
+    }
     if (ctx.cand) out.push(['#' + links.classDayTasks(ctx.cd), 'Tasks']);
     if (ctx.params.cid) out.push(['#' + CD(ctx.cd) + '/results', 'Results']);
     if (ctx.file) out.push(['#' + C(ctx.comp) + '/files', 'IGC files']);
@@ -196,6 +207,12 @@
   P['/c/:comp/dates'] = (ctx) => page(ctx, 'Dates and class days', '<div class="wf-stack"><div class="wf-box"><h3>Competition dates</h3>' + W.datesEditor(ctx.comp) + '</div><div><h3>Class day grid</h3><p class="muted small">A class day exists once someone touches its cell. Untouched past dates show as unplanned in public.</p>' + W.classDayGrid(ctx.comp) + '</div></div>');
   P['/c/:comp/turnpoints'] = (ctx) => page(ctx, 'Turnpoint file', W.turnpoints(ctx.comp));
   P['/c/:comp/airspace'] = (ctx) => page(ctx, 'Airspace file', W.airspace(ctx.comp));
+  P['/c/:comp/classes'] = (ctx) => {
+    const classes = Q.classesOf(ctx.comp.id, true);
+    return page(ctx, 'Classes', '<table class="wf-table"><thead><tr><th>Class</th><th>Rule set edition</th><th>Handicapped</th><th class="num">Competitors</th><th class="num">Class days</th></tr></thead><tbody>' +
+      (classes.length ? classes.map((c) => '<tr class="link' + (c.deleted ? ' dim' : '') + '" data-href="' + CL(c) + '"><td><b>' + e(c.name) + '</b>' + (c.deleted ? ' <span class="wf-badge none">deleted</span>' : '') + '</td><td>' + e(c.edition) + '</td><td>' + (c.handicapScale ? 'scale ' + c.handicapScale + ', ' + e(c.handicapList) : 'no') + '</td><td class="num">' + Q.competitorsOf(ctx.comp.id, c.id).length + '</td><td class="num">' + Q.classDaysOf(c.id).length + '</td></tr>').join('') : '<tr><td colspan="5" class="muted">No classes yet</td></tr>') +
+      '</tbody></table>', '<a class="wf-btn primary" href="#' + C(ctx.comp) + '/classes/new">Add class</a>');
+  };
   P['/c/:comp/classes/new'] = (ctx) => page(ctx, 'Add class', '<div class="wf-box">' + W.classForm(ctx.comp) + '</div>');
   P['/c/:comp/classes/:class'] = (ctx) => {
     if (!ctx.cls) return page(ctx, 'Not found', '<div class="wf-empty">No such class</div>');
