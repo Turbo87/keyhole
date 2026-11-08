@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3C · Map first · Keyhole scorer UX prototype</title>
+<link rel="stylesheet" href="shared/wire.css">
+<link rel="stylesheet" href="shared/round3.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
+<style>
+  .c3-head { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); padding: 8px 0; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .c3-flight { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+  .c3-flight > .wf-map { border: 0; border-radius: 0; }
+  .c3-caption { padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 12px; overflow-wrap: anywhere; }
+  .c3-under-map { min-width: 0; }
+  .c3-timeline { padding: 12px; min-width: 0; }
+  .c3-timeline h3, .c3-output h3 { margin: 0 0 4px; }
+  .c3-timeline p { margin: 0 0 8px; }
+  .c3-output { padding: 12px; border-top: 1px solid var(--line); background: var(--fill); }
+  .c3-output .wf-kv { grid-template-columns: repeat(5, max-content minmax(0, 1fr)); gap: 4px 12px; }
+  .c3-strip { overflow-x: auto; padding-bottom: 8px; }
+  .c3-markers { display: flex; list-style: none; margin: 0; padding: 0; width: max-content; min-width: 100%; }
+  .c3-markers li { flex: 1 0 134px; width: 134px; position: relative; }
+  .c3-markers li::before { content: ''; position: absolute; left: 0; right: 0; top: 20px; border-top: 1px solid var(--mute); }
+  .c3-markers li:first-child::before { left: 20px; }
+  .c3-markers li:last-child::before { right: calc(100% - 20px); }
+  .c3-marker { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; padding: 4px 8px 8px 4px; text-decoration: none; color: var(--ink); position: relative; border-radius: var(--radius); }
+  .c3-marker:hover, .c3-marker[aria-current] { background: var(--fill2); }
+  .c3-marker:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+  .c3-symbol { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 1px solid var(--ink2); border-radius: 50%; background: var(--bg); position: relative; }
+  .c3-in-use .c3-symbol { background: var(--ink); color: var(--bg); }
+  .c3-warning .c3-symbol, .c3-error .c3-symbol { border-style: double; border-width: 3px; }
+  .c3-marker time { font-size: 12px; font-variant-numeric: tabular-nums; }
+  .c3-label { font-size: 12px; max-width: 122px; line-height: 1.35; }
+  .c3-label small { display: block; color: var(--mute); }
+  .c3-file-checks { border-top: 1px solid var(--line2); padding-top: 8px; margin-top: 6px; }
+  .c3-file-checks ul { list-style: none; margin: 4px 0 0; padding: 0; display: flex; gap: 6px; flex-wrap: wrap; }
+  .c3-file-checks a { display: inline-flex; gap: 5px; align-items: baseline; border: 1px solid var(--line); padding: 4px 8px; font-size: 12px; text-decoration: none; }
+  .c3-file-checks a:hover, .c3-file-checks a[aria-current] { background: var(--fill2); }
+  .c3-review .r2-wide { max-width: 100%; }
+  .c3-log tr { scroll-margin-top: 105px; }
+  .c3-log td:nth-child(3) { white-space: normal; min-width: 320px; width: 100%; }
+  .c3-log .c3-selected td { background: var(--fill2); border-top: 2px solid var(--ink); border-bottom: 2px solid var(--ink); }
+  .c3-log .c3-selected td:first-child { box-shadow: inset 4px 0 var(--ink); }
+  .c3-log tr:focus { outline: 2px solid var(--ink); outline-offset: -2px; }
+  @media (max-width: 1100px) {
+    .c3-output .wf-kv { grid-template-columns: repeat(3, max-content minmax(0, 1fr)); }
+  }
+  @media (max-width: 600px) {
+    .c3-head .r3-rh h2 { font-size: 17px; }
+    .c3-flight > .wf-map { height: 300px !important; }
+    .c3-strip { overflow: visible; padding-bottom: 0; }
+    .c3-markers { display: block; width: auto; }
+    .c3-markers li { width: auto; }
+    .c3-markers li::before { left: 20px; right: auto; top: 0; bottom: 0; border-top: 0; border-left: 1px solid var(--mute); }
+    .c3-markers li:first-child::before { top: 20px; }
+    .c3-markers li:last-child::before { right: auto; bottom: calc(100% - 20px); }
+    .c3-marker { display: grid; grid-template-columns: 32px 68px minmax(0, 1fr); gap: 10px; align-items: center; padding: 4px 4px 8px; }
+    .c3-label { max-width: none; }
+    .c3-output .wf-kv { grid-template-columns: max-content minmax(0, 1fr); }
+    .c3-log tr { scroll-margin-top: 150px; }
+  }
+</style>
+</head>
+<body>
+<script src="shared/data.js"></script>
+<script src="shared/proto.js"></script>
+<script src="shared/widgets.js"></script>
+<script src="shared/round3.js"></script>
+<script src="3c-map-first.js"></script>
+</body>
+</html>
