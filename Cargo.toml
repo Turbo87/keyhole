@@ -1,5 +1,5 @@
 [workspace]
-members = ["keyhole-engine"]
+members = ["keyhole-engine", "keyhole-oracle"]
 resolver = "3"
 
 [workspace.package]
