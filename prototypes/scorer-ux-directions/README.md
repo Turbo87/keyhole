@@ -68,6 +68,10 @@ The round 1 review settled these points. Round 2 builds on them.
 10. The sidebar order is Overview, Competition, Competitors, Loggers, Turnpoints, Airspace, IGC files, Classes and then Dates.
 11. Round 5 builds one prototype, 4A revised with these decisions.
 
-## Still open
+## Round 5 decisions
 
-- The contents of the Task sheets and Dates tabs beyond what 4A shows.
+1. Prototype 5A is good enough for now. The remaining details are refined during the implementation.
+2. The class day Overview tab stays as 5A shows it: status, task, results and publish rows next to the task map.
+3. The Task sheets tab keeps only the standing notes and the flight level setting, without a sheet preview.
+4. The Dates tab has start and end date fields. The list of dates between them updates as they change, and each date can be hidden, for example a weekday without flying. Shortening the range or hiding a date with class days asks for the #138 confirmation. 5A still shows the older dates editor.
+5. The "Mark OK" label stays for now.
