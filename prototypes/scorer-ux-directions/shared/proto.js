@@ -28,9 +28,13 @@
       idea: 'Setup is a numbered checklist and every class day is a fixed five-step stepper (Plan, Task, Flights, Review, Publish), so each page says which step you are on and what to do next.',
       tradeoff: 'Guides new organisers and keeps the day\'s work in order, but anything outside the steps, such as one competitor across days, IGC files or a published day reopened by a change, sits off to the side or reads as "back at step 3".',
     },
-    { id: 'f', file: 'f-workspace.html', name: 'Workspace', idea: 'Not built yet.', tradeoff: '' },
+    {
+      id: 'f', file: 'f-workspace.html', name: 'Workspace',
+      idea: 'An IDE-like workspace: a searchable object browser on the left, every class day, result, file or setup page opens as a tab, and an inspector on the right shows the active tab\'s context, so the analysis log, map, start candidates and overrides are all on screen at once.',
+      tradeoff: 'Fast for long review sessions and for comparing objects side by side, but it is dense, the tab state is something to manage, and it gives a newcomer little guidance on what to do next.',
+    },
   ];
-  KH.BUILT = ['a', 'b', 'c', 'd', 'e'];
+  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f'];
 
   const store = {
     get(k, d) {

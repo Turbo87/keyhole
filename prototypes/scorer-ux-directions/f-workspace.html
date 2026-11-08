@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>F · Workspace · Keyhole scorer UX prototype</title>
+<link rel="stylesheet" href="shared/wire.css">
+<style>
+  body { overflow: hidden; }
+  .f-head { height: 44px; box-sizing: border-box; display: flex; align-items: center; gap: 12px; padding: 0 12px; border-bottom: 1px solid var(--line); background: var(--bg); }
+  .f-head a { text-decoration: none; }
+  .f-brand { font-weight: 700; letter-spacing: 0.02em; }
+  .f-jump { flex: 0 1 460px; display: flex; }
+  .f-jump input { flex: 1; font: inherit; font-size: 13px; padding: 5px 9px; border: 1px solid var(--ink2); border-radius: var(--radius); }
+  .f-body { display: grid; grid-template-columns: 250px minmax(0, 1fr) 420px; height: calc(100vh - 44px); }
+  .f-body.noinsp { grid-template-columns: 250px minmax(0, 1fr); }
+  .f-pane { overflow: auto; min-height: 0; }
+  .f-browser { border-right: 1px solid var(--line); background: var(--fill); font-size: 13px; padding-bottom: 90px; }
+  .f-browser .f-filter { position: sticky; top: 0; background: var(--fill); padding: 8px; border-bottom: 1px solid var(--line2); z-index: 1; }
+  .f-browser .f-filter input { width: 100%; box-sizing: border-box; font: inherit; padding: 4px 7px; border: 1px solid var(--line); border-radius: var(--radius); }
+  .f-comp { padding: 8px 10px 2px; font-weight: 700; }
+  .f-browser details { border-bottom: 1px solid var(--line2); }
+  .f-browser summary { cursor: pointer; padding: 6px 10px; color: var(--mute); text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.06em; display: flex; justify-content: space-between; list-style: none; }
+  .f-browser summary::before { content: '▸'; margin-right: 6px; }
+  .f-browser details[open] > summary::before { content: '▾'; }
+  .f-browser summary span:first-child { flex: 1; }
+  .f-browser details details summary { text-transform: none; letter-spacing: 0; font-size: 13px; color: var(--ink); padding-left: 14px; }
+  .f-browser details details { border: 0; }
+  .f-item { display: flex; justify-content: space-between; gap: 6px; padding: 2px 10px 2px 22px; text-decoration: none; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .f-item.d2 { padding-left: 36px; }
+  .f-item:hover { background: var(--fill2); }
+  .f-item.open { font-weight: 600; }
+  .f-item.cur { background: var(--bg); box-shadow: inset 3px 0 0 var(--ink); }
+  .f-item .x { color: var(--mute); font-size: 11px; font-weight: 400; display: inline-flex; gap: 4px; align-items: center; }
+  .f-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--ink2); }
+  .f-dot.none, .f-dot.unplanned { border-style: dashed; border-color: var(--mute); }
+  .f-dot.task-published { background: linear-gradient(90deg, var(--ink2) 50%, transparent 50%); }
+  .f-dot.preliminary { background: var(--line); }
+  .f-dot.unofficial { background: var(--mute); }
+  .f-dot.final { background: var(--ink); }
+  .f-dot.cancelled { border-color: var(--mute); background: repeating-linear-gradient(45deg, var(--mute) 0 1px, transparent 1px 3px); }
+  .f-center { display: flex; flex-direction: column; min-width: 0; }
+  .f-tabs { display: flex; align-items: stretch; border-bottom: 1px solid var(--line); background: var(--fill); overflow-x: auto; flex: none; }
+  .f-tab { display: flex; align-items: center; gap: 6px; padding: 6px 6px 6px 12px; border-right: 1px solid var(--line); font-size: 12.5px; white-space: nowrap; color: var(--ink2); text-decoration: none; max-width: 240px; }
+  .f-tab .t { overflow: hidden; text-overflow: ellipsis; text-decoration: none; color: inherit; }
+  .f-tab.on { background: var(--bg); color: var(--ink); font-weight: 600; box-shadow: inset 0 3px 0 var(--ink); margin-bottom: -1px; }
+  .f-tab button { border: 0; background: none; cursor: pointer; color: var(--mute); font-size: 13px; padding: 0 4px; border-radius: 3px; }
+  .f-tab button:hover { background: var(--fill2); color: var(--ink); }
+  .f-tabs .f-tabs-x { margin-left: auto; padding: 6px 10px; font-size: 12px; }
+  .f-doc { flex: 1; overflow: auto; padding: 14px 20px 90px; min-height: 0; }
+  .f-doc-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .f-doc-head h1 { margin: 0; font-size: 19px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .f-kind { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--mute); }
+  .f-insp { border-left: 1px solid var(--line); background: var(--bg); padding: 0 0 90px; }
+  .f-insp-head { position: sticky; top: 0; z-index: 1; background: var(--fill); border-bottom: 1px solid var(--line); padding: 7px 12px; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--mute); display: flex; justify-content: space-between; }
+  .f-insp-body { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+  .f-insp-body .wf-box { padding: 10px; overflow-x: auto; }
+  .f-insp-body .wf-table { font-size: 12.5px; }
+  .f-sub { display: flex; gap: 0; border-bottom: 1px solid var(--line); margin-bottom: 12px; }
+  .f-sub a { padding: 5px 12px; text-decoration: none; color: var(--ink2); border-bottom: 3px solid transparent; margin-bottom: -1px; font-size: 13px; }
+  .f-sub a.on { color: var(--ink); border-bottom-color: var(--ink); font-weight: 600; }
+  .f-sub a .wf-badge { margin-left: 4px; }
+  .f-jumplist a { display: block; padding: 4px 6px; border-bottom: 1px solid var(--line2); text-decoration: none; }
+  .f-jumplist a:hover { background: var(--fill); }
+  .f-hidden { display: none !important; }
+</style>
+</head>
+<body>
+<script src="shared/data.js"></script>
+<script src="shared/proto.js"></script>
+<script src="shared/widgets.js"></script>
+<script src="f-workspace.js"></script>
+</body>
+</html>
