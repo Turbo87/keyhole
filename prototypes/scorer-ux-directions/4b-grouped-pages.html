@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>4B · Grouped pages · Keyhole scorer UX prototype</title>
+<link rel="stylesheet" href="shared/wire.css">
+<link rel="stylesheet" href="shared/round4.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
+<style>
+  .b4-jump { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+  .b4-sec { scroll-margin-top: 12px; }
+  .b4-sec > h2 { margin: 0 0 8px; }
+  .b4-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 520px); gap: 16px; align-items: start; }
+  .b4-panel { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow: auto; }
+  .b4-panel .wf-dialog-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  tr.b4-sel td { background: var(--fill2); font-weight: 600; }
+  .b4-cls > summary { cursor: pointer; padding: 8px 0; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .b4-cls > summary b { font-size: 15px; }
+  .b4-cls { border-top: 1px solid var(--line2); }
+  .b4-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+  .b4-group { border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; text-decoration: none; color: inherit; display: block; }
+  .b4-group.done { color: var(--mute); }
+  .b4-group b { display: flex; gap: 6px; align-items: center; }
+  @media (max-width: 1000px) { .b4-split { grid-template-columns: minmax(0, 1fr); } .b4-panel { position: static; max-height: none; order: -1; } }
+</style>
+</head>
+<body>
+<script src="shared/data.js"></script>
+<script src="shared/proto.js"></script>
+<script src="shared/widgets.js"></script>
+<script src="shared/round4.js"></script>
+<script src="4b-grouped-pages.js"></script>
+</body>
+</html>

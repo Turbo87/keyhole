@@ -98,13 +98,17 @@
       idea: 'Every setup item has its own page in a Setup section of the sidebar: details and upload password, dates and class days, classes, turnpoints, airspace, competitors and loggers, and the overview\'s setup card is a checklist linking to them.',
       tradeoff: 'Each page is short and does one thing, and every item has a stable URL, but setting up a new competition means visiting seven pages, and a competitor and its loggers are entered on separate pages.',
     },
-    { id: '4b', file: '4b-grouped-pages.html', name: 'Grouped pages', round: 4, idea: 'Not built yet.', tradeoff: '' },
+    {
+      id: '4b', file: '4b-grouped-pages.html', name: 'Grouped pages', round: 4,
+      idea: 'Setup shrinks to four larger pages: Competition (details, upload password, dates, members), Classes (every class as a collapsible section), Course (turnpoints and airspace) and Entrants, where competitors and loggers share one page and one side panel.',
+      tradeoff: 'Fewer places to look and competitors and their loggers are edited side by side, but the pages are long, the Competition page mixes admin-only and scorer work, and a single class or competitor has no page of its own.',
+    },
     { id: '4c', file: '4c-inline-tables.html', name: 'Inline tables', round: 4, idea: 'Not built yet.', tradeoff: '' },
     { id: '4d', file: '4d-competitor-first.html', name: 'Competitor first', round: 4, idea: 'Not built yet.', tradeoff: '' },
     { id: '4e', file: '4e-class-first.html', name: 'Class first', round: 4, idea: 'Not built yet.', tradeoff: '' },
     { id: '4f', file: '4f-guided-card.html', name: 'Guided card', round: 4, idea: 'Not built yet.', tradeoff: '' },
   ];
-  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a', '2b', '2c', '2d', '2e', '2f', '3a', '3b', '3f', '3d', '3e', '3c', '4a'];
+  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a', '2b', '2c', '2d', '2e', '2f', '3a', '3b', '3f', '3d', '3e', '3c', '4a', '4b'];
   // The prototype bar and the arrow keys cycle through the built directions of the current round.
   KH.siblings = () => {
     const round = KH.DIRECTIONS.find((d) => d.id === KH.app.id).round;
