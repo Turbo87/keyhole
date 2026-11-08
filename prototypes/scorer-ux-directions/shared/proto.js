@@ -23,10 +23,14 @@
       idea: 'Dense matrices are the navigation: dates × classes for the competition and competitors × days for each class, and selecting a cell opens its full editor in a panel under the matrix without leaving it.',
       tradeoff: 'Shows the state of the whole competition at a glance and makes moving between neighbouring days or competitors one click, but the matrices get heavy and need a legend, and setup is pushed into one long settings page and side-panel tables.',
     },
-    { id: 'e', file: 'e-checklists.html', name: 'Checklists', idea: 'Not built yet.', tradeoff: '' },
+    {
+      id: 'e', file: 'e-checklists.html', name: 'Checklists',
+      idea: 'Setup is a numbered checklist and every class day is a fixed five-step stepper (Plan, Task, Flights, Review, Publish), so each page says which step you are on and what to do next.',
+      tradeoff: 'Guides new organisers and keeps the day\'s work in order, but anything outside the steps, such as one competitor across days, IGC files or a published day reopened by a change, sits off to the side or reads as "back at step 3".',
+    },
     { id: 'f', file: 'f-workspace.html', name: 'Workspace', idea: 'Not built yet.', tradeoff: '' },
   ];
-  KH.BUILT = ['a', 'b', 'c', 'd'];
+  KH.BUILT = ['a', 'b', 'c', 'd', 'e'];
 
   const store = {
     get(k, d) {
