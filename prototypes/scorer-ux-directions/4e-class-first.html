@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>4E · Class first · Keyhole scorer UX prototype</title>
+<link rel="stylesheet" href="shared/wire.css">
+<link rel="stylesheet" href="shared/round4.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
+<style>
+.e-setup { max-width: 1100px; }
+.e-setup .wf-box { min-width: 0; }
+.e-setup .wf-form { grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); }
+.e-setup input:not([type="checkbox"]), .e-setup select, .e-setup textarea { max-width: 100%; min-width: 0; }
+.e-setup input[type="checkbox"] { accent-color: var(--ink); }
+.e-setup .e-crew { min-width: 760px; }
+.e-day { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(130px, 1fr) minmax(240px, 2fr); gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line2); }
+.e-card-row { display: flex; flex-wrap: wrap; gap: 6px 18px; padding: 9px 0; border-top: 1px solid var(--line2); }
+.e-card-row > b { min-width: 100px; }
+.e-logger > summary { cursor: pointer; font-weight: 600; }
+.e-logger[open] > summary { margin-bottom: 12px; }
+@media (max-width: 650px) {
+  .e-day { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .e-day > .wf-row { grid-column: 1 / -1; }
+  .e-setup .wf-tabs a { padding: 7px 10px; }
+  .e-setup .wf-row > .wf-field { max-width: 100%; }
+}
+</style>
+</head>
+<body>
+<script src="shared/data.js"></script>
+<script src="shared/proto.js"></script>
+<script src="shared/widgets.js"></script>
+<script src="shared/round4.js"></script>
+<script src="4e-class-first.js"></script>
+</body>
+</html>
