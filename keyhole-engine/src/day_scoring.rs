@@ -38,6 +38,10 @@ pub struct CompetitorResult {
     /// Whether the competitor is scored against the day parameters without
     /// feeding them or being ranked.
     pub hors_concours: bool,
+    /// Whether the competitor is disqualified from the competition, which
+    /// makes every day score 0 while the achievement still feeds the day
+    /// parameters.
+    pub competition_disqualified: bool,
     /// Points deducted from the day score after the formula.
     pub penalty: u32,
 }
@@ -131,6 +135,8 @@ pub enum Standing {
     /// Shared by rows with equal day scores, skipping the ranks after them.
     Ranked(u32),
     HorsConcours,
+    /// Shown as "DSQ".
+    CompetitionDisqualified,
     /// Shown as "DNF".
     DidNotFly,
 }
@@ -232,6 +238,7 @@ pub fn score_class_day(day: &ClassDay) -> Result<DayResult, ScoringError> {
         .map(|(competitor, achievement)| {
             let achievement = achievement.as_ref();
             let points = match achievement {
+                _ if competitor.competition_disqualified => 0.,
                 Some(achievement) if validity == DayValidity::Valid => {
                     points(&parameters, achievement)
                 }
@@ -240,6 +247,7 @@ pub fn score_class_day(day: &ClassDay) -> Result<DayResult, ScoringError> {
             let score = (points - f64::from(competitor.penalty)).max(0.);
             let finish = achievement.and_then(|a| a.finish.as_ref());
             let standing = match competitor.result {
+                _ if competitor.competition_disqualified => Standing::CompetitionDisqualified,
                 _ if competitor.hors_concours => Standing::HorsConcours,
                 ResultStatus::DidNotFly => Standing::DidNotFly,
                 ResultStatus::Flown(_) => Standing::Ranked(0),

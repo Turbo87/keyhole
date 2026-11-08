@@ -31,6 +31,7 @@ fn competitor(competition_id: &str, result: ResultStatus) -> CompetitorResult {
         competition_id: competition_id.into(),
         result,
         hors_concours: false,
+        competition_disqualified: false,
         penalty: 0,
     }
 }
@@ -485,4 +486,29 @@ fn hors_concours_rows_are_scored_but_unranked_and_never_change_other_points() {
     assert_eq!(result.rows[2].standing, Standing::HorsConcours);
     assert_eq!(result.rows[2].speed, Some(100.));
     assert_eq!(result.rows[2].day_score, 1250);
+}
+
+#[test]
+fn competition_disqualified_row_scores_zero_unranked_and_still_feeds_the_day_parameters() {
+    let competitors = vec![
+        finisher("A", 300., hours(3.)),
+        finisher("B", 300., hours(3.75)),
+    ];
+    let undisqualified = score(&racing_day(300., competitors.clone()));
+    let mut disqualified_competitors = competitors;
+    disqualified_competitors[0].competition_disqualified = true;
+
+    let result = score(&racing_day(300., disqualified_competitors));
+
+    assert_eq!(result.parameters, undisqualified.parameters);
+    assert_eq!(
+        standings(&result),
+        [
+            ("B", Standing::Ranked(1)),
+            ("A", Standing::CompetitionDisqualified),
+        ]
+    );
+    assert_eq!(result.rows[0].score, undisqualified.rows[1].score);
+    assert_eq!((result.rows[1].score, result.rows[1].day_score), (0., 0));
+    assert_eq!(result.rows[1].speed, Some(100.));
 }

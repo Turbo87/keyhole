@@ -326,6 +326,7 @@ fn rank(standing: Standing) -> String {
     match standing {
         Standing::Ranked(rank) => rank.to_string(),
         Standing::HorsConcours => "HC".into(),
+        Standing::CompetitionDisqualified => "DSQ".into(),
         Standing::DidNotFly => "DNF".into(),
     }
 }

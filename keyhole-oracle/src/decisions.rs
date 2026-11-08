@@ -136,6 +136,7 @@ impl RowDecisions {
             competition_id: competition_id.into(),
             result: self.result.0.status(),
             hors_concours: self.hors_concours.0,
+            competition_disqualified: false,
             penalty: self.penalty.0,
         }
     }
