@@ -49,7 +49,7 @@
   document.getElementById('dirs').innerHTML = KH.DIRECTIONS.map(function (d) {
     var built = KH.BUILT.indexOf(d.id) >= 0;
     return '<div class="dir' + (built ? '' : ' off') + '"><div class="key">' + d.id.toUpperCase() + '</div><div><h2>' + KH.esc(d.name) + '</h2>' +
-      (built ? '<p><span class="lbl">Core idea</span><br>' + KH.esc(d.idea) + '</p><p><span class="lbl">Trade-off</span><br>' + KH.esc(d.tradeoff) + '</p>' : '<p>Not built yet. Waiting for feedback on direction A.</p>') +
+      (built ? '<p><span class="lbl">Core idea</span><br>' + KH.esc(d.idea) + '</p><p><span class="lbl">Trade-off</span><br>' + KH.esc(d.tradeoff) + '</p>' : '<p>Not built yet.</p>') +
       '</div><div>' + (built ? '<a class="wf-btn primary" href="' + d.file + '">Open</a>' : '') + '</div></div>';
   }).join('');
 </script>

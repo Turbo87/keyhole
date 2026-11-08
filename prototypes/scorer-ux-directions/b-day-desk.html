@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>B · Day desk · Keyhole scorer UX prototype</title>
+<link rel="stylesheet" href="shared/wire.css">
+<style>
+  .b-head { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 14px; padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--bg); }
+  .b-head a { text-decoration: none; }
+  .b-brand { font-weight: 700; letter-spacing: 0.02em; }
+  .b-switch { min-width: 220px; }
+  .b-mode { display: inline-flex; border: 1px solid var(--ink2); border-radius: var(--radius); overflow: hidden; }
+  .b-mode a { padding: 3px 14px; font-size: 13px; }
+  .b-mode a.on { background: var(--ink); color: #fff; }
+  .b-subnav { display: flex; flex-wrap: wrap; gap: 0; padding: 0 16px; border-bottom: 1px solid var(--line); background: var(--fill); font-size: 13px; }
+  .b-subnav a { padding: 7px 11px; text-decoration: none; color: var(--ink2); border-bottom: 3px solid transparent; }
+  .b-subnav a.on { color: var(--ink); border-bottom-color: var(--ink); font-weight: 600; }
+  .b-main { padding: 14px 24px 40px; max-width: 1400px; }
+  .b-title { margin-bottom: 12px; }
+  .b-title h1 { margin: 0; }
+  .b-desk { padding: 0 16px 40px; }
+  .b-desk-top { position: sticky; top: 45px; z-index: 10; background: var(--bg); padding-top: 10px; border-bottom: 1px solid var(--line2); margin-bottom: 12px; }
+  .b-dates { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 8px; }
+  .b-dates a { flex: 0 0 auto; display: flex; flex-direction: column; gap: 1px; min-width: 92px; padding: 5px 8px; border: 1px solid var(--line); border-radius: var(--radius); text-decoration: none; font-size: 12px; }
+  .b-dates a:hover { background: var(--fill); }
+  .b-dates a.today { border-color: var(--ink); border-width: 2px; padding: 4px 7px; }
+  .b-dates a.on { background: var(--ink); color: #fff; }
+  .b-dates a.on .b-dot { border-color: #fff; }
+  .b-d { font-weight: 600; }
+  .b-l { color: var(--mute); font-size: 11px; }
+  .b-dates a.on .b-l { color: #ccc; }
+  .b-dots { display: flex; gap: 3px; align-items: center; }
+  .b-check { font-size: 10.5px; border: 1px solid currentColor; border-radius: 8px; padding: 0 4px; }
+  .b-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--ink2); }
+  .b-dot.none, .b-dot.unplanned { border-style: dashed; border-color: var(--mute); }
+  .b-dot.task-published { background: linear-gradient(90deg, var(--ink2) 50%, transparent 50%); }
+  .b-dot.preliminary { background: var(--line); }
+  .b-dot.unofficial { background: var(--mute); }
+  .b-dot.final { background: var(--ink); }
+  .b-dates a.on .b-dot.final { background: #fff; }
+  .b-dot.cancelled { border-color: var(--mute); background: repeating-linear-gradient(45deg, var(--mute) 0 1px, transparent 1px 3px); }
+  .b-desk-info { padding: 2px 0 8px; font-size: 13px; }
+  .b-cols { display: grid; gap: 12px; align-items: start; }
+  .b-col { border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); min-width: 0; }
+  .b-col.focus { border: 2px solid var(--ink); }
+  .b-col-head { padding: 8px 10px; background: var(--fill); border-bottom: 1px solid var(--line); }
+  .b-col-head a { text-decoration: none; }
+  .b-col-body { padding: 0 10px 10px; }
+  .b-block { padding: 8px 0; border-bottom: 1px solid var(--line2); }
+  .b-block select { font-size: 12px; }
+  .b-pub { border-bottom: 0; }
+  .b-list { max-height: 52vh; overflow: auto; border-bottom: 1px solid var(--line2); }
+  .b-list .wf-table td, .b-list .wf-table th { padding: 3px 5px; font-size: 12px; }
+  .b-scrim { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.25); z-index: 30; }
+  .b-drawer { position: fixed; z-index: 31; top: 0; right: 0; bottom: 0; width: min(1040px, 74vw); background: var(--bg); border-left: 1px solid var(--ink2); box-shadow: -6px 0 24px rgba(0, 0, 0, 0.18); display: flex; flex-direction: column; }
+  .b-drawer-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--line); }
+  .b-drawer-head h2 { margin: 2px 0 0; }
+  .b-drawer-body { padding: 14px 18px 90px; overflow: auto; flex: 1; }
+  .b-two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+</style>
+</head>
+<body>
+<script src="shared/data.js"></script>
+<script src="shared/proto.js"></script>
+<script src="shared/widgets.js"></script>
+<script src="b-day-desk.js"></script>
+</body>
+</html>
