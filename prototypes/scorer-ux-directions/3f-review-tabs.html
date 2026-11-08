@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3F · Review tabs · Keyhole scorer UX prototype</title>
+<link rel="stylesheet" href="shared/wire.css">
+<link rel="stylesheet" href="shared/round3.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
+<style>
+  .f3-review { min-width: 0; }
+  .f3-sticky { position: sticky; top: 0; z-index: 5; background: var(--bg); margin-bottom: 14px; }
+  .f3-head { padding: 10px 0; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .f3-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .f3-reasons { display: flex; align-items: baseline; gap: 14px; padding: 8px 10px; background: var(--fill); border: 1px solid var(--line2); font-size: 12px; }
+  .f3-reasons > b { white-space: nowrap; }
+  .f3-reasons .r3-reasons { margin: 0; max-height: 86px; overflow-y: auto; overflow-wrap: anywhere; }
+  .f3-reasons p { margin: 0; }
+  .f3-tabs { display: flex; flex-wrap: nowrap; overflow-x: auto; border-bottom: 1px solid var(--line); margin: 0; scrollbar-width: thin; }
+  .f3-tabs a { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; padding: 10px 14px; white-space: nowrap; }
+  .f3-tabs a:first-child { padding-left: 0; }
+  .f3-tabs a:focus-visible { outline: 2px solid var(--ink); outline-offset: -3px; }
+  .f3-panel { min-width: 0; }
+  .f3-panel .wf-box { min-width: 0; }
+  .f3-output { display: grid; grid-template-columns: minmax(200px, 1fr) minmax(280px, 2fr); gap: 18px; align-items: start; }
+  .f3-file { font-size: 12px; color: var(--mute); overflow-wrap: anywhere; }
+  .f3-panel .r2-wide .wf-table td:nth-child(3) { white-space: normal; min-width: 170px; }
+  @media (max-width: 800px) {
+    .f3-output { grid-template-columns: minmax(0, 1fr); }
+    .f3-head { gap: 8px; }
+    .f3-actions { width: 100%; justify-content: space-between; gap: 8px; }
+    .f3-reasons { display: block; }
+    .f3-reasons > b { display: block; margin-bottom: 3px; }
+    .f3-reasons .r3-reasons { max-height: 72px; }
+    .f3-tabs a { padding: 10px 12px; }
+    .f3-panel .wf-form { grid-template-columns: minmax(0, 1fr); }
+    .f3-panel input, .f3-panel select { max-width: 100%; }
+  }
+</style>
+</head>
+<body>
+<script src="shared/data.js"></script>
+<script src="shared/proto.js"></script>
+<script src="shared/widgets.js"></script>
+<script src="shared/round3.js"></script>
+<script src="3f-review-tabs.js"></script>
+</body>
+</html>

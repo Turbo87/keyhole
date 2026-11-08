@@ -76,9 +76,13 @@
     { id: '3c', file: '3c-map-first.html', name: 'Map first', round: 3, idea: 'Not built yet.', tradeoff: '' },
     { id: '3d', file: '3d-log-spine.html', name: 'Log spine', round: 3, idea: 'Not built yet.', tradeoff: '' },
     { id: '3e', file: '3e-reason-cards.html', name: 'Reason cards', round: 3, idea: 'Not built yet.', tradeoff: '' },
-    { id: '3f', file: '3f-review-tabs.html', name: 'Review tabs', round: 3, idea: 'Not built yet.', tradeoff: '' },
+    {
+      id: '3f', file: '3f-review-tabs.html', name: 'Review tabs', round: 3,
+      idea: 'A compact sticky header keeps the pilot, previous and next, the check reasons and the Reviewed button in view above review sub-tabs for summary, log, start, overrides, and penalty and remarks, each with its own URL.',
+      tradeoff: 'Each part of the review stays short and focused and works well on a phone, but comparing the map with the log or the start candidates means switching sub-tabs.',
+    },
   ];
-  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a', '2b', '2c', '2d', '2e', '2f', '3a', '3b'];
+  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a', '2b', '2c', '2d', '2e', '2f', '3a', '3b', '3f'];
   // The prototype bar and the arrow keys cycle through the built directions of the current round.
   KH.siblings = () => {
     const round = KH.DIRECTIONS.find((d) => d.id === KH.app.id).round;
