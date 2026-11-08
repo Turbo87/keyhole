@@ -101,8 +101,11 @@
     return KH.DIRECTIONS.filter((d) => d.round === round && KH.BUILT.includes(d.id));
   };
 
+  // Values also live in memory, because some browsers block localStorage for pages opened from file://.
+  const memory = {};
   const store = {
     get(k, d) {
+      if (k in memory) return memory[k];
       try {
         const v = localStorage.getItem('kh-proto:' + k);
         return v === null ? d : JSON.parse(v);
@@ -111,6 +114,7 @@
       }
     },
     set(k, v) {
+      memory[k] = v;
       try {
         localStorage.setItem('kh-proto:' + k, JSON.stringify(v));
       } catch (e) {}
