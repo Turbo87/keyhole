@@ -1,9 +1,10 @@
 use std::time::Duration;
 
 use keyhole_engine::rule_sets::{
-    AnalysisParameters, DAEC_SWO_2026, DefaultZones, EarthModel, FAI_ANNEX_A_2025A,
-    MissingPevPenalty, ObservationZone, Orientation, PevRules, PevScope, RuleSetEdition,
-    StartProcedure,
+    AnalysisParameters, Class, ClassDayOverrides, DAEC_SWO_2026, DefaultZones, EarthModel,
+    EffectiveParameters, FAI_ANNEX_A_2025A, HandicapScale, MaximumAltitude, MissingPevPenalty,
+    ObservationZone, Orientation, PevRules, PevScope, RuleOverride, RuleSetEdition,
+    ScoringParameters, StartProcedure,
 };
 
 #[test]
@@ -186,4 +187,185 @@ fn annex_a_defaults() {
     );
     assert_eq!(edition.allowed.pev_wait_time, 5..=10);
     assert_eq!(edition.allowed.pev_start_window, 5..=10);
+}
+
+fn club_class(overrides: Vec<RuleOverride>) -> Class {
+    Class {
+        dm: 100.,
+        d1: 250.,
+        handicapped: true,
+        handicap_scale: HandicapScale::One,
+        overrides,
+    }
+}
+
+fn resolve(class: &Class, class_day: &ClassDayOverrides) -> EffectiveParameters {
+    FAI_ANNEX_A_2025A.resolve(class, class_day)
+}
+
+#[test]
+fn without_overrides_the_edition_defaults_apply() {
+    let parameters = resolve(&club_class(vec![]), &ClassDayOverrides::default());
+
+    assert_eq!(parameters.analysis, FAI_ANNEX_A_2025A.defaults);
+    assert_eq!(parameters.default_zones, FAI_ANNEX_A_2025A.default_zones);
+    assert_eq!(
+        parameters.scoring,
+        ScoringParameters {
+            dm: 100.,
+            d1: 250.,
+            handicap_scale: Some(HandicapScale::One),
+        }
+    );
+}
+
+#[test]
+fn unhandicapped_class_scores_without_a_handicap_scale() {
+    let class = Class {
+        handicapped: false,
+        handicap_scale: HandicapScale::Hundred,
+        ..club_class(vec![])
+    };
+
+    let parameters = resolve(&class, &ClassDayOverrides::default());
+
+    assert_eq!(parameters.scoring.handicap_scale, None);
+}
+
+/// One class value and one class day value per rule override parameter, both
+/// different from the Annex A default.
+fn override_pairs() -> Vec<(RuleOverride, RuleOverride)> {
+    let time = |h| Some(hours(h));
+    let zone = |radius| ObservationZone {
+        r1: radius,
+        a1: 90.,
+        r2: 0.,
+        a2: 0.,
+        orientation: Orientation::Next,
+    };
+    vec![
+        (
+            RuleOverride::EarthModel(EarthModel::FaiSphere),
+            RuleOverride::EarthModel(EarthModel::Wgs84),
+        ),
+        (
+            RuleOverride::FinishRingSubtracted(false),
+            RuleOverride::FinishRingSubtracted(true),
+        ),
+        (
+            RuleOverride::DeliveryPeriod(time(1)),
+            RuleOverride::DeliveryPeriod(time(2)),
+        ),
+        (
+            RuleOverride::StartLineLength(Some(10.)),
+            RuleOverride::StartLineLength(Some(5.)),
+        ),
+        (
+            RuleOverride::TurnpointZone(zone(1.)),
+            RuleOverride::TurnpointZone(zone(2.)),
+        ),
+        (
+            RuleOverride::AssignedAreaZone(zone(1.)),
+            RuleOverride::AssignedAreaZone(zone(2.)),
+        ),
+        (
+            RuleOverride::FinishZone(zone(1.)),
+            RuleOverride::FinishZone(zone(2.)),
+        ),
+        (
+            RuleOverride::StartOpeningTime(time(12)),
+            RuleOverride::StartOpeningTime(time(13)),
+        ),
+        (
+            RuleOverride::StartClosingTime(time(15)),
+            RuleOverride::StartClosingTime(time(16)),
+        ),
+        (
+            RuleOverride::MaximumStartAltitude(Some(1500.)),
+            RuleOverride::MaximumStartAltitude(Some(1200.)),
+        ),
+        (
+            RuleOverride::MaximumStartGroundSpeed(Some(150.)),
+            RuleOverride::MaximumStartGroundSpeed(Some(170.)),
+        ),
+        (RuleOverride::PevStart(true), RuleOverride::PevStart(false)),
+        (RuleOverride::PevWaitTime(5), RuleOverride::PevWaitTime(6)),
+        (
+            RuleOverride::PevStartWindow(5),
+            RuleOverride::PevStartWindow(6),
+        ),
+        (
+            RuleOverride::TowAltitude(Some(800.)),
+            RuleOverride::TowAltitude(Some(600.)),
+        ),
+        (
+            RuleOverride::MaximumAltitude(Some(MaximumAltitude::FlightLevel(95))),
+            RuleOverride::MaximumAltitude(Some(MaximumAltitude::Msl(2500.))),
+        ),
+        (
+            RuleOverride::ScoringEndTime(time(19)),
+            RuleOverride::ScoringEndTime(time(20)),
+        ),
+    ]
+}
+
+#[test]
+fn class_override_wins_over_the_edition_default() {
+    let defaults = resolve(&club_class(vec![]), &ClassDayOverrides::default());
+    for (class_value, _) in override_pairs() {
+        let class = club_class(vec![class_value.clone()]);
+
+        let parameters = resolve(&class, &ClassDayOverrides::default());
+
+        assert_ne!(parameters, defaults, "{class_value:?}");
+    }
+}
+
+#[test]
+fn class_day_override_wins_over_the_class_override() {
+    for (class_value, class_day_value) in override_pairs() {
+        let class_day = ClassDayOverrides {
+            rules: vec![class_day_value.clone()],
+            ..ClassDayOverrides::default()
+        };
+
+        let both = resolve(&club_class(vec![class_value.clone()]), &class_day);
+        let class_day_only = resolve(&club_class(vec![]), &class_day);
+        let class_only = resolve(
+            &club_class(vec![class_value]),
+            &ClassDayOverrides::default(),
+        );
+
+        assert_eq!(both, class_day_only, "{class_day_value:?}");
+        assert_ne!(both, class_only, "{class_day_value:?}");
+    }
+}
+
+#[test]
+fn class_day_overrides_dm_and_d1() {
+    let class_day = ClassDayOverrides {
+        dm: Some(50.),
+        d1: Some(200.),
+        ..ClassDayOverrides::default()
+    };
+
+    let parameters = resolve(&club_class(vec![]), &class_day);
+
+    assert_eq!(parameters.scoring.dm, 50.);
+    assert_eq!(parameters.scoring.d1, 200.);
+}
+
+#[test]
+fn scoring_only_change_leaves_the_analysis_parameters_equal() {
+    let class = club_class(vec![]);
+    let class_day = ClassDayOverrides {
+        dm: Some(50.),
+        ..ClassDayOverrides::default()
+    };
+
+    let changed = resolve(&class, &class_day);
+    let unchanged = resolve(&class, &ClassDayOverrides::default());
+
+    assert_ne!(changed.scoring, unchanged.scoring);
+    assert_eq!(changed.analysis, unchanged.analysis);
 }

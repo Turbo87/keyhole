@@ -215,6 +215,126 @@ pub struct ClassTemplate {
     pub handicap_list: Option<&'static str>,
 }
 
+/// A class's own scoring values and rule overrides.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Class {
+    /// The minimum distance `Dm` in km.
+    pub dm: f64,
+    /// The distance `D1` a winner needs for 1000 points, in km.
+    pub d1: f64,
+    pub handicapped: bool,
+    /// The scale of the class's handicaps, ignored while unhandicapped.
+    pub handicap_scale: HandicapScale,
+    pub overrides: Vec<RuleOverride>,
+}
+
+/// The scale a class's handicaps are written on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HandicapScale {
+    /// Handicaps around 1.000.
+    One,
+    /// Handicaps around 100, as on the DAeC cross-class list.
+    Hundred,
+}
+
+/// A class day's rule overrides, which win over its class's.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ClassDayOverrides {
+    pub dm: Option<f64>,
+    pub d1: Option<f64>,
+    pub rules: Vec<RuleOverride>,
+}
+
+/// One rule override parameter set to a value, where later overrides win.
+///
+/// Units follow [`AnalysisParameters`] and [`DefaultZones`], and `None`
+/// empties a parameter.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RuleOverride {
+    EarthModel(EarthModel),
+    FinishRingSubtracted(bool),
+    DeliveryPeriod(Option<Duration>),
+    StartLineLength(Option<f64>),
+    TurnpointZone(ObservationZone),
+    AssignedAreaZone(ObservationZone),
+    FinishZone(ObservationZone),
+    StartOpeningTime(Option<Duration>),
+    StartClosingTime(Option<Duration>),
+    MaximumStartAltitude(Option<f64>),
+    MaximumStartGroundSpeed(Option<f64>),
+    PevStart(bool),
+    PevWaitTime(u32),
+    PevStartWindow(u32),
+    TowAltitude(Option<f64>),
+    MaximumAltitude(Option<MaximumAltitude>),
+    ScoringEndTime(Option<Duration>),
+}
+
+/// A class day's parameters after resolving its rule overrides.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EffectiveParameters {
+    pub analysis: AnalysisParameters,
+    pub scoring: ScoringParameters,
+    pub default_zones: DefaultZones,
+}
+
+/// The parameters day scoring depends on, in km.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ScoringParameters {
+    pub dm: f64,
+    pub d1: f64,
+    /// The scale handicaps are divided on, or `None` for an unhandicapped
+    /// class.
+    pub handicap_scale: Option<HandicapScale>,
+}
+
+impl RuleSetEdition {
+    /// Resolves a class day's effective parameters, where class day overrides
+    /// win over class overrides, which win over the edition's defaults.
+    pub fn resolve(&self, class: &Class, class_day: &ClassDayOverrides) -> EffectiveParameters {
+        let mut parameters = EffectiveParameters {
+            analysis: self.defaults.clone(),
+            scoring: ScoringParameters {
+                dm: class_day.dm.unwrap_or(class.dm),
+                d1: class_day.d1.unwrap_or(class.d1),
+                handicap_scale: class.handicapped.then_some(class.handicap_scale),
+            },
+            default_zones: self.default_zones.clone(),
+        };
+        for rule_override in class.overrides.iter().chain(&class_day.rules) {
+            parameters.apply(rule_override.clone());
+        }
+        parameters
+    }
+}
+
+impl EffectiveParameters {
+    fn apply(&mut self, rule_override: RuleOverride) {
+        let analysis = &mut self.analysis;
+        let start = &mut analysis.start;
+        let zones = &mut self.default_zones;
+        match rule_override {
+            RuleOverride::EarthModel(value) => analysis.earth_model = value,
+            RuleOverride::FinishRingSubtracted(value) => analysis.finish_ring_subtracted = value,
+            RuleOverride::DeliveryPeriod(value) => analysis.delivery_period = value,
+            RuleOverride::StartLineLength(value) => zones.start_line_length = value,
+            RuleOverride::TurnpointZone(value) => zones.turnpoint = value,
+            RuleOverride::AssignedAreaZone(value) => zones.assigned_area = value,
+            RuleOverride::FinishZone(value) => zones.finish = value,
+            RuleOverride::StartOpeningTime(value) => start.opening_time = value,
+            RuleOverride::StartClosingTime(value) => start.closing_time = value,
+            RuleOverride::MaximumStartAltitude(value) => start.maximum_altitude = value,
+            RuleOverride::MaximumStartGroundSpeed(value) => start.maximum_ground_speed = value,
+            RuleOverride::PevStart(value) => start.pev_start = value,
+            RuleOverride::PevWaitTime(value) => start.pev_wait_time = value,
+            RuleOverride::PevStartWindow(value) => start.pev_start_window = value,
+            RuleOverride::TowAltitude(value) => analysis.tow_altitude = value,
+            RuleOverride::MaximumAltitude(value) => analysis.maximum_altitude = value,
+            RuleOverride::ScoringEndTime(value) => analysis.scoring_end_time = value,
+        }
+    }
+}
+
 const fn template(
     name: &'static str,
     dm: f64,
