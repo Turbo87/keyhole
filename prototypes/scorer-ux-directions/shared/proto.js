@@ -48,7 +48,11 @@
       idea: 'A class day is a hub of four section cards (day settings, task, results, status and publishing), each with its marks and a link to a full page, while the title carries the day status and a button for the next publishing step.',
       tradeoff: 'The hub makes outstanding work easy to scan and always names the next step, but moving between sections goes back through the hub.',
     },
-    { id: '2d', file: '2d-flights-tab.html', name: 'Flights tab', round: 2, idea: 'Not built yet.', tradeoff: '' },
+    {
+      id: '2d', file: '2d-flights-tab.html', name: 'Flights tab', round: 2,
+      idea: 'Class day tabs Overview, Task, Flights and Results separate file work (arrivals, stale analyses, unresolved files, competitors without a file) from scoring work (ranking, review, manual results), and a status pill in the title row opens a small menu for the working status and publishing.',
+      tradeoff: 'Each tab has one kind of work and the day settings stay next to the candidates in a disclosure, but fixing a file problem and reviewing the result it causes means switching tabs, and the status menu hides publishing one click away.',
+    },
     {
       id: '2e', file: '2e-one-page.html', name: 'One page', round: 2,
       idea: 'A class day is one scrolling page (day settings, task, results, publish) with a sticky section index carrying each section\'s marks, and a sticky footer bar that always shows the day status and the publish action.',
@@ -60,7 +64,7 @@
       tradeoff: 'Publishing happens where the results are checked and the task tab stays about tasks, but the status has no prominent place of its own and the day settings sit one tab away from the candidates they apply to.',
     },
   ];
-  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a', '2b', '2c', '2e', '2f'];
+  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a', '2b', '2c', '2d', '2e', '2f'];
   // The prototype bar and the arrow keys cycle through the built directions of the current round.
   KH.siblings = () => {
     const round = KH.DIRECTIONS.find((d) => d.id === KH.app.id).round;
