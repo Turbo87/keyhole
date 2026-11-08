@@ -288,23 +288,177 @@ pub struct ScoringParameters {
     pub handicap_scale: Option<HandicapScale>,
 }
 
+/// A rule value outside what any edition could apply.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum InvalidValue {
+    #[error("{}", .0.requirement())]
+    OutOfRange(Parameter),
+    #[error("the start must not close before it opens")]
+    StartClosesBeforeOpening,
+}
+
+/// A class's scoring value or a rule override parameter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Parameter {
+    Dm,
+    D1,
+    StartLineLength,
+    TurnpointZone,
+    AssignedAreaZone,
+    FinishZone,
+    StartOpeningTime,
+    StartClosingTime,
+    MaximumStartAltitude,
+    MaximumStartGroundSpeed,
+    PevStartWindow,
+    TowAltitude,
+    MaximumAltitude,
+    ScoringEndTime,
+}
+
+impl Parameter {
+    /// What a valid value of the parameter must be.
+    fn requirement(self) -> &'static str {
+        match self {
+            Self::Dm => "Dm must be a distance of at least 0 km",
+            Self::D1 => "D1 must be a distance above 0 km",
+            Self::StartLineLength => "the start line length must be above 0 km",
+            Self::TurnpointZone => "the turnpoint zone must be a valid observation zone",
+            Self::AssignedAreaZone => "the assigned area zone must be a valid observation zone",
+            Self::FinishZone => "the finish zone must be a valid observation zone",
+            Self::StartOpeningTime => "the start opening time must be a time of day",
+            Self::StartClosingTime => "the start closing time must be a time of day",
+            Self::MaximumStartAltitude => "the maximum start altitude must be finite",
+            Self::MaximumStartGroundSpeed => "the maximum start ground speed must be above 0 km/h",
+            Self::PevStartWindow => "the PEV start window must be at least 1 minute",
+            Self::TowAltitude => "the tow altitude must be finite",
+            Self::MaximumAltitude => {
+                "the maximum altitude must be finite or a flight level above 0"
+            }
+            Self::ScoringEndTime => "the scoring end time must be a time of day",
+        }
+    }
+}
+
 impl RuleSetEdition {
     /// Resolves a class day's effective parameters, where class day overrides
     /// win over class overrides, which win over the edition's defaults.
-    pub fn resolve(&self, class: &Class, class_day: &ClassDayOverrides) -> EffectiveParameters {
+    pub fn resolve(
+        &self,
+        class: &Class,
+        class_day: &ClassDayOverrides,
+    ) -> Result<EffectiveParameters, InvalidValue> {
+        let dm = class_day.dm.unwrap_or(class.dm);
+        let d1 = class_day.d1.unwrap_or(class.d1);
+        for value in [Some(class.dm), class_day.dm] {
+            check(
+                value.is_none_or(|dm| dm >= 0. && dm.is_finite()),
+                Parameter::Dm,
+            )?;
+        }
+        for value in [Some(class.d1), class_day.d1] {
+            check(value.is_none_or(is_positive), Parameter::D1)?;
+        }
+
         let mut parameters = EffectiveParameters {
             analysis: self.defaults.clone(),
             scoring: ScoringParameters {
-                dm: class_day.dm.unwrap_or(class.dm),
-                d1: class_day.d1.unwrap_or(class.d1),
+                dm,
+                d1,
                 handicap_scale: class.handicapped.then_some(class.handicap_scale),
             },
             default_zones: self.default_zones.clone(),
         };
         for rule_override in class.overrides.iter().chain(&class_day.rules) {
+            rule_override.check()?;
             parameters.apply(rule_override.clone());
         }
-        parameters
+
+        let start = &parameters.analysis.start;
+        if let (Some(opening), Some(closing)) = (start.opening_time, start.closing_time)
+            && closing < opening
+        {
+            return Err(InvalidValue::StartClosesBeforeOpening);
+        }
+        Ok(parameters)
+    }
+}
+
+fn check(valid: bool, parameter: Parameter) -> Result<(), InvalidValue> {
+    if valid {
+        Ok(())
+    } else {
+        Err(InvalidValue::OutOfRange(parameter))
+    }
+}
+
+fn is_positive(value: f64) -> bool {
+    value > 0. && value.is_finite()
+}
+
+fn is_time_of_day(time: Duration) -> bool {
+    time < hours(24)
+}
+
+impl RuleOverride {
+    fn check(&self) -> Result<(), InvalidValue> {
+        match self {
+            Self::EarthModel(_)
+            | Self::FinishRingSubtracted(_)
+            | Self::DeliveryPeriod(_)
+            | Self::PevStart(_)
+            | Self::PevWaitTime(_) => Ok(()),
+            Self::StartLineLength(length) => {
+                check(length.is_none_or(is_positive), Parameter::StartLineLength)
+            }
+            Self::TurnpointZone(zone) => check(zone.is_valid(), Parameter::TurnpointZone),
+            Self::AssignedAreaZone(zone) => check(zone.is_valid(), Parameter::AssignedAreaZone),
+            Self::FinishZone(zone) => check(zone.is_valid(), Parameter::FinishZone),
+            Self::StartOpeningTime(time) => {
+                check(time.is_none_or(is_time_of_day), Parameter::StartOpeningTime)
+            }
+            Self::StartClosingTime(time) => {
+                check(time.is_none_or(is_time_of_day), Parameter::StartClosingTime)
+            }
+            Self::MaximumStartAltitude(altitude) => check(
+                altitude.is_none_or(f64::is_finite),
+                Parameter::MaximumStartAltitude,
+            ),
+            Self::MaximumStartGroundSpeed(speed) => check(
+                speed.is_none_or(is_positive),
+                Parameter::MaximumStartGroundSpeed,
+            ),
+            Self::PevStartWindow(minutes) => check(*minutes > 0, Parameter::PevStartWindow),
+            Self::TowAltitude(altitude) => {
+                check(altitude.is_none_or(f64::is_finite), Parameter::TowAltitude)
+            }
+            Self::MaximumAltitude(altitude) => check(
+                altitude.is_none_or(|altitude| match altitude {
+                    MaximumAltitude::Msl(altitude) => altitude.is_finite(),
+                    MaximumAltitude::FlightLevel(level) => level > 0,
+                }),
+                Parameter::MaximumAltitude,
+            ),
+            Self::ScoringEndTime(time) => {
+                check(time.is_none_or(is_time_of_day), Parameter::ScoringEndTime)
+            }
+        }
+    }
+}
+
+impl ObservationZone {
+    fn is_valid(&self) -> bool {
+        let is_angle = |angle: f64| (0. ..=180.).contains(&angle);
+        let orientation_is_valid = match self.orientation {
+            Orientation::Fixed(bearing) => (0. ..360.).contains(&bearing),
+            Orientation::Symmetric | Orientation::Previous | Orientation::Next => true,
+        };
+        is_positive(self.r1)
+            && self.r2 >= 0.
+            && self.r2.is_finite()
+            && is_angle(self.a1)
+            && is_angle(self.a2)
+            && orientation_is_valid
     }
 }
 

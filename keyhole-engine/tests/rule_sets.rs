@@ -2,9 +2,9 @@ use std::time::Duration;
 
 use keyhole_engine::rule_sets::{
     AnalysisParameters, Class, ClassDayOverrides, DAEC_SWO_2026, DefaultZones, EarthModel,
-    EffectiveParameters, FAI_ANNEX_A_2025A, HandicapScale, MaximumAltitude, MissingPevPenalty,
-    ObservationZone, Orientation, PevRules, PevScope, RuleOverride, RuleSetEdition,
-    ScoringParameters, StartProcedure,
+    EffectiveParameters, FAI_ANNEX_A_2025A, HandicapScale, InvalidValue, MaximumAltitude,
+    MissingPevPenalty, ObservationZone, Orientation, Parameter, PevRules, PevScope, RuleOverride,
+    RuleSetEdition, ScoringParameters, StartProcedure,
 };
 
 #[test]
@@ -200,7 +200,18 @@ fn club_class(overrides: Vec<RuleOverride>) -> Class {
 }
 
 fn resolve(class: &Class, class_day: &ClassDayOverrides) -> EffectiveParameters {
-    FAI_ANNEX_A_2025A.resolve(class, class_day)
+    FAI_ANNEX_A_2025A.resolve(class, class_day).unwrap()
+}
+
+fn resolve_class_day(class_day: ClassDayOverrides) -> Result<EffectiveParameters, InvalidValue> {
+    FAI_ANNEX_A_2025A.resolve(&club_class(vec![]), &class_day)
+}
+
+fn resolve_rules(rules: Vec<RuleOverride>) -> Result<EffectiveParameters, InvalidValue> {
+    resolve_class_day(ClassDayOverrides {
+        rules,
+        ..ClassDayOverrides::default()
+    })
 }
 
 #[test]
@@ -368,4 +379,173 @@ fn scoring_only_change_leaves_the_analysis_parameters_equal() {
 
     assert_ne!(changed.scoring, unchanged.scoring);
     assert_eq!(changed.analysis, unchanged.analysis);
+}
+
+#[test]
+fn invalid_class_values_are_errors() {
+    for (class, parameter) in [
+        (
+            Class {
+                dm: -1.,
+                ..club_class(vec![])
+            },
+            Parameter::Dm,
+        ),
+        (
+            Class {
+                dm: f64::NAN,
+                ..club_class(vec![])
+            },
+            Parameter::Dm,
+        ),
+        (
+            Class {
+                d1: 0.,
+                ..club_class(vec![])
+            },
+            Parameter::D1,
+        ),
+    ] {
+        let result = FAI_ANNEX_A_2025A.resolve(&class, &ClassDayOverrides::default());
+
+        assert_eq!(result, Err(InvalidValue::OutOfRange(parameter)));
+    }
+}
+
+#[test]
+fn invalid_class_day_dm_and_d1_are_errors() {
+    for (class_day, parameter) in [
+        (
+            ClassDayOverrides {
+                dm: Some(-50.),
+                ..ClassDayOverrides::default()
+            },
+            Parameter::Dm,
+        ),
+        (
+            ClassDayOverrides {
+                d1: Some(f64::INFINITY),
+                ..ClassDayOverrides::default()
+            },
+            Parameter::D1,
+        ),
+    ] {
+        assert_eq!(
+            resolve_class_day(class_day),
+            Err(InvalidValue::OutOfRange(parameter))
+        );
+    }
+}
+
+#[test]
+fn invalid_rule_overrides_are_errors() {
+    let zone = |r1, a1, r2, a2, orientation| ObservationZone {
+        r1,
+        a1,
+        r2,
+        a2,
+        orientation,
+    };
+    let symmetric = Orientation::Symmetric;
+    let day = Some(Duration::from_secs(24 * 3600));
+    for (rule_override, parameter) in [
+        (
+            RuleOverride::StartLineLength(Some(0.)),
+            Parameter::StartLineLength,
+        ),
+        (
+            RuleOverride::TurnpointZone(zone(0., 180., 0., 0., symmetric)),
+            Parameter::TurnpointZone,
+        ),
+        (
+            RuleOverride::TurnpointZone(zone(1., 181., 0., 0., symmetric)),
+            Parameter::TurnpointZone,
+        ),
+        (
+            RuleOverride::AssignedAreaZone(zone(1., 180., -1., 0., symmetric)),
+            Parameter::AssignedAreaZone,
+        ),
+        (
+            RuleOverride::AssignedAreaZone(zone(1., 180., 0.5, -1., symmetric)),
+            Parameter::AssignedAreaZone,
+        ),
+        (
+            RuleOverride::FinishZone(zone(3., 180., 0., 0., Orientation::Fixed(360.))),
+            Parameter::FinishZone,
+        ),
+        (
+            RuleOverride::StartOpeningTime(day),
+            Parameter::StartOpeningTime,
+        ),
+        (
+            RuleOverride::StartClosingTime(day),
+            Parameter::StartClosingTime,
+        ),
+        (
+            RuleOverride::MaximumStartAltitude(Some(f64::NAN)),
+            Parameter::MaximumStartAltitude,
+        ),
+        (
+            RuleOverride::MaximumStartGroundSpeed(Some(0.)),
+            Parameter::MaximumStartGroundSpeed,
+        ),
+        (RuleOverride::PevStartWindow(0), Parameter::PevStartWindow),
+        (
+            RuleOverride::TowAltitude(Some(f64::INFINITY)),
+            Parameter::TowAltitude,
+        ),
+        (
+            RuleOverride::MaximumAltitude(Some(MaximumAltitude::Msl(f64::NAN))),
+            Parameter::MaximumAltitude,
+        ),
+        (
+            RuleOverride::MaximumAltitude(Some(MaximumAltitude::FlightLevel(0))),
+            Parameter::MaximumAltitude,
+        ),
+        (RuleOverride::ScoringEndTime(day), Parameter::ScoringEndTime),
+    ] {
+        assert_eq!(
+            resolve_rules(vec![rule_override.clone()]),
+            Err(InvalidValue::OutOfRange(parameter)),
+            "{rule_override:?}"
+        );
+    }
+}
+
+#[test]
+fn start_closing_before_opening_is_an_error() {
+    let result = resolve_rules(vec![
+        RuleOverride::StartOpeningTime(Some(hours(13))),
+        RuleOverride::StartClosingTime(Some(hours(12))),
+    ]);
+
+    assert_eq!(result, Err(InvalidValue::StartClosesBeforeOpening));
+}
+
+#[test]
+fn invalid_class_override_is_an_error_even_when_the_class_day_replaces_it() {
+    let class = club_class(vec![RuleOverride::TowAltitude(Some(f64::NAN))]);
+    let class_day = ClassDayOverrides {
+        rules: vec![RuleOverride::TowAltitude(None)],
+        ..ClassDayOverrides::default()
+    };
+
+    let result = FAI_ANNEX_A_2025A.resolve(&class, &class_day);
+
+    assert_eq!(
+        result,
+        Err(InvalidValue::OutOfRange(Parameter::TowAltitude))
+    );
+}
+
+#[test]
+fn invalid_value_describes_the_valid_range() {
+    assert_eq!(
+        InvalidValue::OutOfRange(Parameter::Dm).to_string(),
+        "Dm must be a distance of at least 0 km"
+    );
+    assert_eq!(
+        InvalidValue::StartClosesBeforeOpening.to_string(),
+        "the start must not close before it opens"
+    );
 }
