@@ -79,14 +79,18 @@
       idea: 'The analysis log of the scored file is the spine of the review page: start choices, credits, flight end, finish time, AAT pins and penalty suggestions sit as actions on the log rows they concern, existing overrides appear as marked rows at their time, and the map and output stay in a sticky aside.',
       tradeoff: 'Every decision sits next to the evidence that prompted it and there is no separate overrides or start candidates panel to cross-reference, but the page depends on the log being readable, and actions with no log entry, such as a free start or a flight end without a warning, are easier to miss.',
     },
-    { id: '3e', file: '3e-reason-cards.html', name: 'Reason cards', round: 3, idea: 'Not built yet.', tradeoff: '' },
+    {
+      id: '3e', file: '3e-reason-cards.html', name: 'Reason cards', round: 3,
+      idea: 'The result review page is driven by what still needs work: every check reason, stale analysis, unknown or manual result becomes a card with only the evidence and the action it needs, and the full analysis waits folded below.',
+      tradeoff: 'Quick for clearing typical results and hard to miss an open item, but evidence for different reasons can repeat across cards, and anything not tied to a reason, such as penalty, remarks or overrides, is one fold away.',
+    },
     {
       id: '3f', file: '3f-review-tabs.html', name: 'Review tabs', round: 3,
       idea: 'A compact sticky header keeps the pilot, previous and next, the check reasons and the Reviewed button in view above review sub-tabs for summary, log, start, overrides, and penalty and remarks, each with its own URL.',
       tradeoff: 'Each part of the review stays short and focused and works well on a phone, but comparing the map with the log or the start candidates means switching sub-tabs.',
     },
   ];
-  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a', '2b', '2c', '2d', '2e', '2f', '3a', '3b', '3f', '3d'];
+  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a', '2b', '2c', '2d', '2e', '2f', '3a', '3b', '3f', '3d', '3e'];
   // The prototype bar and the arrow keys cycle through the built directions of the current round.
   KH.siblings = () => {
     const round = KH.DIRECTIONS.find((d) => d.id === KH.app.id).round;

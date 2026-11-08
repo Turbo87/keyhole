@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3E · Reason cards · Keyhole scorer UX prototype</title>
+<link rel="stylesheet" href="shared/wire.css">
+<link rel="stylesheet" href="shared/round3.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
+<style>
+  .e3-head { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); padding: 8px 0; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .e3-head .wf-row { flex-wrap: wrap; }
+  .e3-card { border: 1px solid var(--ink2); border-left-width: 4px; border-radius: 4px; background: var(--bg); padding: 12px 14px; }
+  .e3-card > header { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+  .e3-card > header h3 { margin: 0; overflow-wrap: anywhere; }
+  .e3-reasons { margin: 0 0 8px; padding-left: 18px; }
+  .e3-card > footer { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
+  .e3-kind { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--mute); }
+  .e3-findings { list-style: none; margin: 0; padding: 0; }
+  .e3-findings li { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; padding: 4px 0; border-bottom: 1px solid var(--line2); }
+  .e3-findings li .grow { flex: 1; min-width: 200px; }
+  .e3-done { padding: 12px 14px; border: 1px dashed var(--line); border-radius: 4px; color: var(--mute); }
+  .e3-end { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 14px; background: var(--fill); border-radius: 4px; }
+  details.e3-full > summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
+  details.e3-full > .wf-stack { margin-top: 8px; }
+</style>
+</head>
+<body>
+<script src="shared/data.js"></script>
+<script src="shared/proto.js"></script>
+<script src="shared/widgets.js"></script>
+<script src="shared/round3.js"></script>
+<script src="3e-reason-cards.js"></script>
+</body>
+</html>
