@@ -13,12 +13,16 @@
       idea: 'The workspace is one competition date: a date strip picks the day, every class of that date sits side by side as a column with its task, results and publish state, and flight review opens in a drawer over the desk. Competition-wide setup is a separate Setup mode.',
       tradeoff: 'Today\'s work across all classes is on one screen and review never loses the day\'s context, but setup is a separate mode, and following one class or competitor across days means stepping through dates or detouring through setup.',
     },
-    { id: 'c', file: 'c-review-inbox.html', name: 'Review inbox', idea: 'Not built yet.', tradeoff: '' },
+    {
+      id: 'c', file: 'c-review-inbox.html', name: 'Review inbox',
+      idea: 'The competition opens on a work queue like an email client: folders of open work with counts, a list of items, and the selected item\'s detail with its actions. Finishing an item moves on to the next, and setup pages wait behind a Browse menu and a jump box.',
+      tradeoff: 'Fastest for working through a competition day and makes leftover work impossible to miss, but the structure of the competition is hidden, so setup and looking things up depend on the Browse menu and search rather than on seeing where you are.',
+    },
     { id: 'd', file: 'd-overview-grid.html', name: 'Overview grid', idea: 'Not built yet.', tradeoff: '' },
     { id: 'e', file: 'e-checklists.html', name: 'Checklists', idea: 'Not built yet.', tradeoff: '' },
     { id: 'f', file: 'f-workspace.html', name: 'Workspace', idea: 'Not built yet.', tradeoff: '' },
   ];
-  KH.BUILT = ['a', 'b'];
+  KH.BUILT = ['a', 'b', 'c'];
 
   const store = {
     get(k, d) {

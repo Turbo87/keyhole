@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>C · Review inbox · Keyhole scorer UX prototype</title>
+<link rel="stylesheet" href="shared/wire.css">
+<style>
+  body { padding-bottom: 0; }
+  .c-head { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 12px; height: 46px; padding: 0 16px; border-bottom: 1px solid var(--line); background: var(--bg); }
+  .c-head > a { text-decoration: none; }
+  .c-brand { font-weight: 700; letter-spacing: 0.02em; }
+  .c-switch { min-width: 210px; }
+  .c-tab { padding: 4px 10px; border-radius: var(--radius); text-decoration: none; cursor: pointer; list-style: none; }
+  .c-tab::-webkit-details-marker { display: none; }
+  .c-tab.on { background: var(--ink); color: #fff; }
+  .c-browse { position: relative; }
+  .c-menu { position: absolute; top: 32px; left: 0; z-index: 20; min-width: 210px; background: var(--bg); border: 1px solid var(--ink2); border-radius: var(--radius); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15); padding: 4px 0; }
+  .c-menu a { display: block; padding: 5px 14px; text-decoration: none; }
+  .c-menu a:hover { background: var(--fill); }
+  .c-jump input { width: 340px; }
+
+  .c-inbox { display: grid; grid-template-columns: 220px 360px 1fr; height: calc(100vh - 46px); }
+  .c-folders, .c-list, .c-detail { overflow: auto; padding-bottom: 90px; }
+  .c-folders { background: var(--fill); border-right: 1px solid var(--line); padding-top: 8px; font-size: 13px; }
+  .c-folder { display: flex; justify-content: space-between; padding: 5px 12px; text-decoration: none; border-left: 3px solid transparent; }
+  .c-folder:hover { background: var(--fill2); }
+  .c-folder.on { background: var(--bg); border-left-color: var(--ink); font-weight: 600; }
+  .c-folder.zero { color: var(--mute); }
+  .c-count { font-variant-numeric: tabular-nums; }
+  .c-folder:not(.zero) .c-count { background: var(--ink); color: #fff; border-radius: 9px; padding: 0 7px; font-size: 11.5px; font-weight: 600; }
+  .c-sec { padding: 14px 12px 4px; color: var(--mute); text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.06em; }
+  .c-list { border-right: 1px solid var(--line); }
+  .c-list-head { position: sticky; top: 0; background: var(--bg); padding: 10px 14px; border-bottom: 2px solid var(--line); z-index: 1; }
+  .c-item { display: block; padding: 8px 14px; border-bottom: 1px solid var(--line2); text-decoration: none; border-left: 3px solid transparent; }
+  .c-item:hover { background: var(--fill); }
+  .c-item.on { background: var(--fill2); border-left-color: var(--ink); }
+  .c-detail { padding: 16px 24px 90px; min-width: 0; }
+
+  .c-page { padding: 14px 24px 90px; max-width: 1280px; }
+  .c-crumbs { font-size: 12.5px; color: var(--mute); margin-bottom: 6px; }
+  .c-crumbs a { color: var(--mute); }
+  .c-title { margin-bottom: 12px; }
+  .c-title h1 { margin: 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .c-sheet-jump { display: flex; gap: 14px; margin-bottom: 10px; }
+  .c-sec-block { margin-top: 26px; padding-top: 14px; border-top: 2px solid var(--line); }
+</style>
+</head>
+<body>
+<script src="shared/data.js"></script>
+<script src="shared/proto.js"></script>
+<script src="shared/widgets.js"></script>
+<script src="c-review-inbox.js"></script>
+</body>
+</html>
