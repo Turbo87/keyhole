@@ -217,7 +217,7 @@
     const ctx = KH.current();
     let html;
     try {
-      html = ctx.route ? KH.app.render(ctx) : KH.app.notFound ? KH.app.notFound(ctx) : '<p>No page at ' + KH.esc(ctx.path) + '</p>';
+      html = KH.memoize(() => (ctx.route ? KH.app.render(ctx) : KH.app.notFound ? KH.app.notFound(ctx) : '<p>No page at ' + KH.esc(ctx.path) + '</p>'));
     } catch (e) {
       console.error(e);
       html = '<div class="wf-error"><b>Prototype error</b><pre>' + KH.esc(e.stack || e.message) + '</pre></div>';

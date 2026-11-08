@@ -413,7 +413,22 @@
 
   // ---------- queries ----------
 
-  const byId = (list, id) => list.find((x) => x.id === id);
+  // Lookups are cached while a page renders, because rendering does not change the data. Actions run uncached.
+  let memo = null;
+  KH.memoize = (fn) => {
+    memo = { byId: new Map(), results: null, filesByResult: null };
+    try {
+      return fn();
+    } finally {
+      memo = null;
+    }
+  };
+  const byId = (list, id) => {
+    if (!memo) return list.find((x) => x.id === id);
+    let index = memo.byId.get(list);
+    if (!index) memo.byId.set(list, (index = new Map(list.map((x) => [x.id, x]))));
+    return index.get(id);
+  };
   const Q = (KH.q = {});
   Q.user = (id) => byId(S.users, id);
   Q.competition = (id) => byId(S.competitions, id);
@@ -486,19 +501,36 @@
     return { ok: true, competitor, classDay: cd, role: link.role, result: Q.resultFor(cd.id, competitor.id) };
   };
   Q.resultFor = (classDayId, competitorId) => {
-    let r = S.results.find((x) => x.classDayId === classDayId && x.competitorId === competitorId);
+    const key = classDayId + ' ' + competitorId;
+    if (memo && !memo.results) memo.results = new Map(S.results.map((x) => [x.classDayId + ' ' + x.competitorId, x]));
+    let r = memo ? memo.results.get(key) : S.results.find((x) => x.classDayId === classDayId && x.competitorId === competitorId);
     if (!r) {
       r = { id: newId('r'), classDayId, competitorId, status: 'unknown', scoredFileId: null, checkReasons: [], manual: null, handicapOverride: '', publicRemark: '', internalRemark: '', penalty: null };
       S.results.push(r);
+      if (memo) memo.results.set(key, r);
     }
     return r;
   };
-  Q.filesOfResult = (result) =>
-    S.files.filter((f) => {
+  Q.filesOfResult = (result) => {
+    if (memo) {
+      if (!memo.filesByResult) {
+        memo.filesByResult = new Map();
+        for (const f of S.files) {
+          if (f.deleted) continue;
+          const res = Q.resolve(f);
+          if (!res.ok) continue;
+          if (!memo.filesByResult.has(res.result)) memo.filesByResult.set(res.result, []);
+          memo.filesByResult.get(res.result).push(f);
+        }
+      }
+      return (memo.filesByResult.get(result) || []).slice();
+    }
+    return S.files.filter((f) => {
       if (f.deleted) return false;
       const res = Q.resolve(f);
       return res.ok && res.result === result;
     });
+  };
   Q.resultsOf = (cd) => Q.competitorsOf(Q.class(cd.classId).competitionId, cd.classId).map((c) => Q.resultFor(cd.id, c.id));
   Q.unresolvedFiles = (compId) => Q.filesOf(compId).filter((f) => !f.deleted && !Q.resolve(f).ok);
   Q.staleFilesOf = (cd) => S.files.filter((f) => !f.deleted && f.analysis.stale.length && (() => { const r = Q.resolve(f); return r.ok && r.classDay === cd; })());
