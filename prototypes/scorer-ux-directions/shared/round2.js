@@ -189,7 +189,7 @@
     const c = R.counts(cd);
     const flt = (k, label, n) => '<a class="wf-btn small' + (f === k ? ' primary' : '') + '" href="#' + links.classDayResults(cd, k) + '">' + label + ' ' + n + '</a>';
     return '<div class="wf-stack"><div class="wf-row">' + flt('', 'All', c.results) + flt('check', 'In check', c.check) + flt('unknown', 'Unknown', c.unknown) + flt('stale', 'Stale', c.stale) + flt('manual', 'Manual', c.manual) + '</div>' +
-      (f === 'stale' || (!f && c.stale) ? R.staleBox(cd) : '') + W.resultsTable(cd, { filter: f }) + '</div>';
+      (f === 'stale' || (!f && c.stale) ? R.staleBox(cd) : '') + '<div class="r2-wide">' + W.resultsTable(cd, { filter: f }) + '</div></div>';
   };
 
   R.taskSection = (ctx) => (ctx.cand ? '<p><a href="#' + links.classDayTasks(ctx.cd) + '">← All task candidates</a></p>' + W.taskEditor(ctx.cand) : W.candidateList(ctx.cd));
