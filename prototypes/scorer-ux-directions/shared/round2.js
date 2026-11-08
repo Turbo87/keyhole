@@ -1,4 +1,4 @@
-// PROTOTYPE: round 2 shell shared by prototypes 2A to 2D.
+// PROTOTYPE: round 2 shell shared by prototypes 2A to 2F.
 //
 // It implements every decision from the round 1 review (README.md, "Round 1 decisions"): the sidebar without a
 // top bar, the overview page, the date page, the overall standings per class, the full-page result review, the

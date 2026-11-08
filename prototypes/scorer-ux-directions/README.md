@@ -6,7 +6,7 @@ Throwaway clickable wireframes that explore the page inventory, routes, navigati
 - `shared/proto.js` is the hash router, the dialogs and the black prototype bar with the direction switcher, the role switch and the sitemap panel.
 - `shared/widgets.js` holds the leaf forms and tables. The issues decide their data and actions, so directions share them and differ in where and how they appear.
 - `<key>-<name>.html` and `.js` are one direction each.
-- Round 2 prototypes are named `2a-…` to `2d-…`. They share the round 2 shell in `shared/round2.js` and differ only in the open questions below.
+- Round 2 prototypes are named `2a-…` to `2f-…`. They share the round 2 shell in `shared/round2.js` and differ only in the open questions below.
 
 ## Round 1 decisions
 

@@ -41,6 +41,8 @@
     { id: '2b', file: '2b-status-tab.html', name: 'Status tab', round: 2, idea: 'Not built yet.', tradeoff: '' },
     { id: '2c', file: '2c-day-hub.html', name: 'Day hub', round: 2, idea: 'Not built yet.', tradeoff: '' },
     { id: '2d', file: '2d-flights-tab.html', name: 'Flights tab', round: 2, idea: 'Not built yet.', tradeoff: '' },
+    { id: '2e', file: '2e-one-page.html', name: 'One page', round: 2, idea: 'Not built yet.', tradeoff: '' },
+    { id: '2f', file: '2f-settings-tab.html', name: 'Settings tab', round: 2, idea: 'Not built yet.', tradeoff: '' },
   ];
   KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a'];
   // The prototype bar and the arrow keys cycle through the built directions of the current round.
