@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A · Tree · Keyhole scorer UX prototype</title>
+<link rel="stylesheet" href="shared/wire.css">
+<style>
+  .a-head { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 14px; padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--bg); }
+  .a-head a { text-decoration: none; }
+  .a-brand { font-weight: 700; letter-spacing: 0.02em; }
+  .a-switch { min-width: 240px; }
+  .a-body { display: grid; grid-template-columns: 270px 1fr; min-height: calc(100vh - 45px); }
+  .a-side { border-right: 1px solid var(--line); background: var(--fill); padding: 8px 0 80px; position: sticky; top: 45px; height: calc(100vh - 45px); overflow: auto; font-size: 13px; }
+  .a-sec { padding: 12px 10px 4px; color: var(--mute); text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.06em; display: flex; justify-content: space-between; }
+  .a-sec-add { text-transform: none; letter-spacing: 0; font-size: 11.5px; }
+  .a-nav { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 3px 10px; text-decoration: none; color: var(--ink); border-left: 3px solid transparent; }
+  .a-nav:hover { background: var(--fill2); }
+  .a-nav.cur { background: var(--bg); border-left-color: var(--ink); font-weight: 600; }
+  .a-nav.within { font-weight: 600; }
+  .a-nav-x { color: var(--mute); font-size: 11px; font-weight: 400; display: inline-flex; gap: 4px; align-items: center; }
+  .a-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--ink2); }
+  .a-dot.none, .a-dot.unplanned { border-style: dashed; border-color: var(--mute); }
+  .a-dot.task-published { background: linear-gradient(90deg, var(--ink2) 50%, transparent 50%); }
+  .a-dot.preliminary { background: var(--line); }
+  .a-dot.unofficial { background: var(--mute); }
+  .a-dot.final { background: var(--ink); }
+  .a-dot.cancelled { border-color: var(--mute); background: repeating-linear-gradient(45deg, var(--mute) 0 1px, transparent 1px 3px); }
+  .a-main { padding: 14px 24px 40px; min-width: 0; }
+  .a-crumbs { font-size: 12.5px; color: var(--mute); margin-bottom: 6px; }
+  .a-crumbs a { color: var(--mute); }
+  .a-title { margin-bottom: 12px; }
+  .a-title h1 { margin: 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<script src="shared/data.js"></script>
+<script src="shared/proto.js"></script>
+<script src="shared/widgets.js"></script>
+<script src="a-tree.js"></script>
+</body>
+</html>

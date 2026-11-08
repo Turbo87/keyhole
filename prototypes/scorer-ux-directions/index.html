@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Keyhole scorer UX directions · prototype</title>
+<link rel="stylesheet" href="shared/wire.css">
+<style>
+  main { max-width: 1000px; margin: 0 auto; padding: 28px 24px 60px; }
+  .dir { display: grid; grid-template-columns: 56px 1fr auto; gap: 16px; align-items: start; padding: 16px 0; border-top: 1px solid var(--line2); }
+  .dir .key { font-size: 30px; font-weight: 700; line-height: 1; }
+  .dir.off { color: var(--mute); }
+  .dir h2 { margin-bottom: 4px; }
+  .dir p { max-width: 70ch; }
+  .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--mute); }
+</style>
+</head>
+<body>
+<main class="wf-stack">
+  <div>
+    <div class="lbl">Throwaway prototype · prototype/scorer-ux-directions</div>
+    <h1>Keyhole signed-in application: UX directions</h1>
+    <p>Each direction is a clickable wireframe of the whole staff, admin and scorer application. They share one in-memory dataset and the same leaf forms, and differ in page inventory, route structure, navigation and layout. Nothing persists: reload a direction to reset its data.</p>
+  </div>
+  <div id="dirs"></div>
+  <div class="wf-cols">
+    <div class="wf-box">
+      <h3>Dataset</h3>
+      <p>The prototype clock is <b>Tue 28 Jul 2026, 17:42</b> in Europe/Berlin.</p>
+      <ul>
+        <li><b>Albtrauf Spring Contest 2027</b> was created two minutes ago and has nothing set up.</li>
+        <li><b>Oberrhein Cup 2026</b> runs today on Day 8: Club, Standard and 18 m (Annex A) with 25 competitors each, about 640 IGC files, finals, an unofficial day past its deadline, a preliminary day with unpublished changes, today's flights arriving, 18 m files gone stale after a start time change, and three unresolved files.</li>
+        <li><b>Oberrhein Cup 2025</b> is archived.</li>
+      </ul>
+    </div>
+    <div class="wf-box">
+      <h3>Prototype bar</h3>
+      <p>The black bar at the bottom of every direction is not part of the design. It switches between directions (also with ← and →), shows the app as <b>Staff</b> (Mara Keller), <b>Competition admin</b> (Jonas Weber) or <b>Scorer</b> (Lena Fischer), and opens the direction's <b>sitemap</b> with the current URL and route.</p>
+      <p class="muted small">The scorer has a pending invitation to the new competition, so the setup workflow as a scorer starts by accepting it.</p>
+    </div>
+  </div>
+  <div class="wf-box fill small">
+    <h3>Deliberate gaps</h3>
+    <p>Competition approval is not modelled: #91 removed it, so staff moderate by blocking users and competitions and by invitation limits. Stale files rerun one at a time as #75 decides. Competitor import is undecided and left out. Scoring is fake but deterministic.</p>
+  </div>
+</main>
+<script src="shared/data.js"></script>
+<script src="shared/proto.js"></script>
+<script>
+  document.getElementById('dirs').innerHTML = KH.DIRECTIONS.map(function (d) {
+    var built = KH.BUILT.indexOf(d.id) >= 0;
+    return '<div class="dir' + (built ? '' : ' off') + '"><div class="key">' + d.id.toUpperCase() + '</div><div><h2>' + KH.esc(d.name) + '</h2>' +
+      (built ? '<p><span class="lbl">Core idea</span><br>' + KH.esc(d.idea) + '</p><p><span class="lbl">Trade-off</span><br>' + KH.esc(d.tradeoff) + '</p>' : '<p>Not built yet. Waiting for feedback on direction A.</p>') +
+      '</div><div>' + (built ? '<a class="wf-btn primary" href="' + d.file + '">Open</a>' : '') + '</div></div>';
+  }).join('');
+</script>
+</body>
+</html>
