@@ -45,10 +45,14 @@
     },
     { id: '2c', file: '2c-day-hub.html', name: 'Day hub', round: 2, idea: 'Not built yet.', tradeoff: '' },
     { id: '2d', file: '2d-flights-tab.html', name: 'Flights tab', round: 2, idea: 'Not built yet.', tradeoff: '' },
-    { id: '2e', file: '2e-one-page.html', name: 'One page', round: 2, idea: 'Not built yet.', tradeoff: '' },
+    {
+      id: '2e', file: '2e-one-page.html', name: 'One page', round: 2,
+      idea: 'A class day is one scrolling page (day settings, task, results, publish) with a sticky section index carrying each section\'s marks, and a sticky footer bar that always shows the day status and the publish action.',
+      tradeoff: 'Nothing about a day is hidden behind a tab and the status is always in view, but the page is long, the results push publishing far down, and the footer bar costs screen height on every class day page.',
+    },
     { id: '2f', file: '2f-settings-tab.html', name: 'Settings tab', round: 2, idea: 'Not built yet.', tradeoff: '' },
   ];
-  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a', '2b'];
+  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a', '2b', '2e'];
   // The prototype bar and the arrow keys cycle through the built directions of the current round.
   KH.siblings = () => {
     const round = KH.DIRECTIONS.find((d) => d.id === KH.app.id).round;

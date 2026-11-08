@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>2E · One page · Keyhole scorer UX prototype</title>
+<link rel="stylesheet" href="shared/wire.css">
+<link rel="stylesheet" href="shared/round2.css">
+<style>
+  .e2-index { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 4px; margin: -4px -24px 14px; padding: 6px 24px; background: var(--bg); border-bottom: 1px solid var(--line); font-size: 13px; }
+  .e2-index a { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; text-decoration: none; color: var(--ink); }
+  .e2-index a:hover { background: var(--fill2); }
+  .e2-index a.on { border-color: var(--ink); font-weight: 600; }
+  .e2-sec { scroll-margin-top: 52px; padding: 14px 0 18px; border-top: 2px solid var(--ink); }
+  .e2-sec:first-of-type { border-top-width: 1px; }
+  .e2-sec > h2 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; }
+  .e2-settings summary { cursor: pointer; padding: 8px 12px; background: var(--fill); border: 1px solid var(--line); border-radius: var(--radius); }
+  .e2-settings[open] summary { border-radius: var(--radius) var(--radius) 0 0; }
+  .e2-settings > div { border: 1px solid var(--line); border-top: 0; padding: 12px; }
+  /* The bottom padding leaves room for the black prototype bar, which is not part of the design. */
+  .e2-foot { position: sticky; bottom: 0; z-index: 6; margin: 18px -24px -40px; padding: 10px 24px 58px; background: var(--bg); border-top: 2px solid var(--ink); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; box-shadow: 0 -6px 14px rgba(0, 0, 0, 0.06); }
+  .e2-foot .grow { flex: 1; }
+  .e2-foot .st { font-weight: 700; }
+  .e2-hm { display: inline-block; width: 22px; height: 14px; vertical-align: middle; border: 1px solid var(--ink2); }
+  .e2-hm.ok { background: var(--fill2); border-color: var(--line); }
+  .e2-hm.check { background: var(--ink); }
+  .e2-hm.stale { background: repeating-linear-gradient(45deg, var(--ink2) 0 2px, transparent 2px 5px); }
+  .e2-hm.unknown { border-style: dashed; background: transparent; }
+  .e2-hm.manual { background: var(--mute); }
+  .e2-hm.dnf { border-color: var(--line); background: transparent; position: relative; }
+  .e2-hm.dnf::after { content: ''; position: absolute; left: 3px; right: 3px; top: 6px; border-top: 1px solid var(--mute); }
+  .e2-hm.pen { box-shadow: inset 0 -3px 0 var(--ink2); }
+  .r2-st td a .e2-hm { margin: 1px auto; }
+  .e2-legend { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; color: var(--mute); font-size: 11.5px; margin-top: 6px; }
+  .e2-legend .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+  .e2-legend .seg a { padding: 2px 10px; text-decoration: none; color: var(--ink); }
+  .e2-legend .seg a.on { background: var(--ink); color: #fff; }
+  @media (max-width: 800px) {
+    .e2-index { margin: -4px -14px 12px; padding: 6px 14px; }
+    .e2-foot { margin: 18px -14px -40px; padding: 8px 14px 58px; }
+  }
+</style>
+</head>
+<body>
+<script src="shared/data.js"></script>
+<script src="shared/proto.js"></script>
+<script src="shared/widgets.js"></script>
+<script src="shared/round2.js"></script>
+<script src="2e-one-page.js"></script>
+</body>
+</html>
