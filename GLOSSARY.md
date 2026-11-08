@@ -45,7 +45,7 @@ A competition that staff have taken down, so that it looks like it does not exis
 _Avoid_: Suspended, frozen, hidden competition
 
 **Admin**:
-A user who manages a competition's identity, its members and its lifecycle, and can do everything a scorer can.
+A user who manages a competition's identity, its members and its lifecycle, and can do everything a scorer can. The interface lists a competition's admins and scorers with their pending invitations on a tab labelled Team, which names no role of its own.
 _Avoid_: Owner, competition director
 
 **Scorer**:
@@ -205,7 +205,7 @@ The competition's published list of turnpoints that its tasks may use.
 _Avoid_: Waypoint file, control point file
 
 **Turnpoint**:
-A named location from the turnpoint file that a task uses as its start, its finish or a point in between.
+A named location from the turnpoint file that a task uses as its start, its finish or a point in between. Its type is the style name from the CUP file, such as Waypoint or Outlanding, which is not a synonym for turnpoint.
 _Avoid_: Waypoint, control point, task point
 
 **Observation zone**:
