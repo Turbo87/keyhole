@@ -133,7 +133,7 @@
   };
 
   W.datesEditor = (comp) => {
-    const admin = Q.can('admin-fields', comp);
+    const admin = KH.scorerEditsDates || Q.can('admin-fields', comp);
     if (!comp.dates.length) return '<p class="muted">No dates</p>';
     const first = comp.dates[0];
     const last = comp.dates[comp.dates.length - 1];

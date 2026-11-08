@@ -108,11 +108,13 @@
     ['Freudenstadt', 48.46, 8.41, 728], ['Baiersbronn', 48.5, 8.37, 584], ['Hornisgrinde', 48.6, 8.2, 1164], ['Achern', 48.63, 8.07, 143],
     ['Buehl', 48.7, 8.13, 135], ['Ettenheim', 48.26, 7.81, 194],
   ];
+  // CUP style, reduced to what a scorer reads off the map.
+  const TP_TYPE = ['Airfield', 'Waypoint', 'Waypoint', 'Outlanding', 'Waypoint', 'Waypoint', 'Gliding airfield', 'Waypoint'];
   function turnpointFile(name, uploadedAt, count) {
     return {
       name,
       uploadedAt,
-      turnpoints: TP_NAMES.slice(0, count).map(([n, lat, lon, elev], i) => ({ code: String(i + 1).padStart(3, '0'), name: n, lat, lon, elev })),
+      turnpoints: TP_NAMES.slice(0, count).map(([n, lat, lon, elev], i) => ({ code: String(i + 1).padStart(3, '0'), name: n, lat, lon, elev, type: TP_TYPE[i % TP_TYPE.length] })),
     };
   }
   const AIRSPACES = [
@@ -1164,7 +1166,7 @@
     touch();
   };
   A.setDates = (comp, dates) => {
-    requireAdmin(comp, ['dates']);
+    if (!KH.scorerEditsDates) requireAdmin(comp, ['dates']);
     comp.dates = dates.slice().sort();
     touch();
   };
