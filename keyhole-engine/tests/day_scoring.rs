@@ -31,6 +31,7 @@ fn competitor(competition_id: &str, result: ResultStatus) -> CompetitorResult {
         competition_id: competition_id.into(),
         result,
         hors_concours: false,
+        disqualified: false,
         penalty: 0,
     }
 }
@@ -433,4 +434,87 @@ fn day_without_competitors_who_are_not_hors_concours_is_invalid() {
     assert_eq!(result.parameters.n, 0);
     assert_eq!(result.validity, DayValidity::Invalid);
     assert_eq!(day_scores(&result), [("G", 0)]);
+}
+
+#[test]
+fn disqualified_row_scores_zero_unranked_and_still_feeds_the_day_parameters() {
+    let competitors = vec![
+        finisher("A", 300., hours(3.)),
+        finisher("B", 300., hours(3.75)),
+    ];
+    let undisqualified = score_class_day(&class_day(competitors.clone()));
+    let mut disqualified_competitors = competitors;
+    disqualified_competitors[0].disqualified = true;
+
+    let result = score_class_day(&class_day(disqualified_competitors));
+
+    assert_eq!(result.parameters, undisqualified.parameters);
+    assert_eq!(
+        ranks(&result),
+        [("B", Rank::Ranked(1)), ("A", Rank::Disqualified),]
+    );
+    assert_eq!(result.rows[0].raw_score, undisqualified.rows[1].raw_score);
+    assert_eq!((result.rows[1].raw_score, result.rows[1].score), (0., 0));
+    assert_eq!(result.rows[1].speed, Some(100.));
+}
+
+fn disqualified(competitor: CompetitorResult) -> CompetitorResult {
+    CompetitorResult {
+        disqualified: true,
+        ..competitor
+    }
+}
+
+#[test]
+fn disqualified_rows_are_listed_below_ranked_rows_and_above_did_not_fly_rows() {
+    let day = class_day(vec![
+        competitor("A", ResultStatus::DidNotFly),
+        disqualified(finisher("B", 300., hours(3.))),
+        landed("C", 0.),
+        finisher("D", 300., hours(3.)),
+    ]);
+
+    let result = score_class_day(&day);
+
+    assert_eq!(
+        ranks(&result),
+        [
+            ("D", Rank::Ranked(1)),
+            ("C", Rank::Ranked(2)),
+            ("B", Rank::Disqualified),
+            ("A", Rank::DidNotFly),
+        ]
+    );
+}
+
+#[test]
+fn disqualified_marker_takes_precedence_over_hors_concours_and_did_not_fly() {
+    let day = class_day(vec![
+        finisher("A", 300., hours(3.)),
+        disqualified(hors_concours(finisher("B", 300., hours(3.)))),
+        disqualified(competitor("C", ResultStatus::DidNotFly)),
+    ]);
+
+    let result = score_class_day(&day);
+
+    assert_eq!(
+        ranks(&result),
+        [
+            ("A", Rank::Ranked(1)),
+            ("B", Rank::Disqualified),
+            ("C", Rank::Disqualified),
+        ]
+    );
+}
+
+#[test]
+fn penalty_leaves_a_disqualified_row_at_zero() {
+    let day = class_day(vec![
+        finisher("A", 300., hours(3.)),
+        penalised(50, disqualified(finisher("B", 300., hours(3.)))),
+    ]);
+
+    let result = score_class_day(&day);
+
+    assert_eq!(day_scores(&result), [("A", 1000), ("B", 0)]);
 }
