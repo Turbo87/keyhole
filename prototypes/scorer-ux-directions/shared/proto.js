@@ -68,13 +68,17 @@
       idea: 'The result review page is one column in the order a scorer works through a result: check reasons, result status, files, the scored file with its map, start candidates, analysis log, overrides, manual result, penalty and remarks, under a sticky header with the pilot, previous and next, and the Reviewed button.',
       tradeoff: 'Simple, predictable and the same on a phone, but the analysis log and the map are never on screen together, and reaching penalty or remarks means a long scroll past the evidence.',
     },
-    { id: '3b', file: '3b-two-columns.html', name: 'Two columns', round: 3, idea: 'Not built yet.', tradeoff: '' },
+    {
+      id: '3b', file: '3b-two-columns.html', name: 'Two columns', round: 3,
+      idea: 'The result review page splits into the scorer\'s decision on the left (check reasons, result status, files, manual result, penalty, remarks) and the evidence on the right (summary, map, start candidates, analysis log, overrides), and the evidence column scrolls on its own so the decision stays in view.',
+      tradeoff: 'The decision and the evidence for it are visible side by side on a desktop, but both columns are narrow for wide tables like the analysis log, and on a phone the evidence ends up below everything else.',
+    },
     { id: '3c', file: '3c-map-first.html', name: 'Map first', round: 3, idea: 'Not built yet.', tradeoff: '' },
     { id: '3d', file: '3d-log-spine.html', name: 'Log spine', round: 3, idea: 'Not built yet.', tradeoff: '' },
     { id: '3e', file: '3e-reason-cards.html', name: 'Reason cards', round: 3, idea: 'Not built yet.', tradeoff: '' },
     { id: '3f', file: '3f-review-tabs.html', name: 'Review tabs', round: 3, idea: 'Not built yet.', tradeoff: '' },
   ];
-  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a', '2b', '2c', '2d', '2e', '2f', '3a'];
+  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a', '2b', '2c', '2d', '2e', '2f', '3a', '3b'];
   // The prototype bar and the arrow keys cycle through the built directions of the current round.
   KH.siblings = () => {
     const round = KH.DIRECTIONS.find((d) => d.id === KH.app.id).round;

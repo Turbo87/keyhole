@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3B · Two columns · Keyhole scorer UX prototype</title>
+<link rel="stylesheet" href="shared/wire.css">
+<link rel="stylesheet" href="shared/round3.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
+<style>
+  .b3-head { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); padding: 8px 0; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .b3-head .wf-row { flex-wrap: wrap; }
+  .b3-cols { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 16px; align-items: start; margin-top: 10px; }
+  .b3-col > .b3-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--mute); margin: 0 0 6px; display: flex; justify-content: space-between; }
+  .b3-col h3 { margin-top: 0; }
+  .b3-evidence { position: sticky; top: 64px; max-height: calc(100vh - 76px); overflow: auto; padding-right: 4px; padding-bottom: 60px; }
+  .b3-jump { display: none; }
+  @media (max-width: 900px) {
+    .b3-cols { grid-template-columns: minmax(0, 1fr); }
+    .b3-evidence { position: static; max-height: none; overflow: visible; padding: 0; }
+    .b3-label .b3-jump { display: inline; text-transform: none; letter-spacing: 0; font-size: 13px; }
+    .b3-head .r3-rh h2 { font-size: 17px; }
+  }
+</style>
+</head>
+<body>
+<script src="shared/data.js"></script>
+<script src="shared/proto.js"></script>
+<script src="shared/widgets.js"></script>
+<script src="shared/round3.js"></script>
+<script src="3b-two-columns.js"></script>
+</body>
+</html>
