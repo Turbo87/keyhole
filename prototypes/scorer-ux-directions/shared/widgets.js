@@ -1057,7 +1057,7 @@
     const { rows, params } = KH.score(cd);
     const cls = Q.class(cd.classId);
     const filter = (opts && opts.filter) || '';
-    const shown = rows.filter((x) => !filter || (filter === 'check' && x.result.checkReasons.length) || (filter === 'unknown' && x.status === 'unknown') || (filter === 'manual' && x.status === 'manual result') || (filter === 'stale' && x.result.scoredFileId && Q.file(x.result.scoredFileId).analysis.stale.length) || (filter === 'stale' && Q.filesOfResult(x.result).some((f) => f.analysis.stale.length)));
+    const shown = rows.filter((x) => (opts && opts.match ? opts.match(x) : !filter) || (filter === 'check' && x.result.checkReasons.length) || (filter === 'unknown' && x.status === 'unknown') || (filter === 'manual' && x.status === 'manual result') || (filter === 'stale' && x.result.scoredFileId && Q.file(x.result.scoredFileId).analysis.stale.length) || (filter === 'stale' && Q.filesOfResult(x.result).some((f) => f.analysis.stale.length)));
     return '<div class="wf-stack"><div class="muted small">Working scores. N ' + params.N + ', n1 ' + params.n1 + ', Do ' + params.Do + ' km, Vo ' + params.Vo + ' km/h, Pm ' + params.Pm + (cls.handicapScale ? ' · handicapped (scale ' + cls.handicapScale + ')' : '') + '</div>' +
       '<div class="wf-table-wrap"><table class="wf-table"><thead><tr><th>Rank</th><th>CID</th><th>Pilot</th><th>Glider</th><th>Result</th><th>Review</th><th>Files</th><th>Start</th><th>Finish</th><th class="num">Distance</th><th class="num">Speed</th><th class="num">Penalty</th><th class="num">Points</th></tr></thead><tbody>' +
       shown.map((x) => {
