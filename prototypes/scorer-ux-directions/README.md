@@ -6,7 +6,7 @@ Throwaway clickable wireframes that explore the page inventory, routes, navigati
 - `shared/proto.js` is the hash router, the dialogs and the black prototype bar with the direction switcher, the role switch and the sitemap panel.
 - `shared/widgets.js` holds the leaf forms and tables. The issues decide their data and actions, so directions share them and differ in where and how they appear.
 - `<key>-<name>.html` and `.js` are one direction each.
-- Round 2 prototypes are named `2a-…` to `2f-…` and share the round 2 shell in `shared/round2.js`. Round 3 prototypes are named `3a-…` to `3f-…`, share the round 3 shell in `shared/round3.js` and differ only in the result review page. Round 4 prototypes are named `4a-…` to `4f-…`, share the round 4 shell in `shared/round4.js` and differ only in the setup pages.
+- Round 2 prototypes are named `2a-…` to `2f-…` and share the round 2 shell in `shared/round2.js`. Round 3 prototypes are named `3a-…` to `3f-…`, share the round 3 shell in `shared/round3.js` and differ only in the result review page. Round 4 prototypes are named `4a-…` to `4f-…`, share the round 4 shell in `shared/round4.js` and differ only in the setup pages. Round 5 is `5a-…`, the revised 4A.
 
 ## Round 1 decisions
 
@@ -49,12 +49,25 @@ The round 1 review settled these points. Round 2 builds on them.
 8. The shared task settings are edited on their own page, linked from their summary on the Task tab.
 9. Round 4 builds one combined prototype and explores the setup pages.
 
-## Open questions for round 4
+## Round 4 decisions
 
-- How competition setup is split into pages and grouped: details and upload password, dates, classes, turnpoints, airspace, competitors, loggers and members.
-- How competitors, loggers and their links are entered and edited, including many at once.
-- What the setup card on the overview shows and whether it can edit anything itself.
+1. Prototype 4A (a page per item) wins. Its page contents were settled in a Q&A round.
+2. A "Competition" page replaces the details and dates pages. Its tabs are Details, Airfield, Dates, Task sheets, Uploads and Team.
+   - Details holds the name, slug, organiser, country and website. The organiser terms show to staff only. A danger zone at the bottom holds Archive and Delete for admins and staff. In an archived competition Delete sits on the archived overview.
+   - Airfield holds the location, coordinates, elevation and time zone with an interactive map to pinpoint the airfield.
+   - Dates holds the competition dates editor without the class day matrix. Scorers may edit the dates too, which departs from #81 and needs that issue revised.
+   - Task sheets holds the standing notes and flight levels. Uploads holds the pilot upload password.
+   - Team replaces "Members" and holds the members with their roles, pending invitations and the invite form.
+3. Class days are not created on the Dates tab. The overview matrix, the class pages and the sidebar dates link every class day to its class day page, where adding a task, the practice day and cancelling live. A class day nobody acted on shows the day status "unplanned".
+4. A class page has a Standings tab, the default, and a Settings tab with the class form. The sidebar section is called "Classes", lists the classes with an "Add class" link and shows deleted classes at the end with strikethrough. A deleted class opens read-only with Restore. The separate Classes list page is gone.
+5. The Turnpoints page shows the file header, a map and a table with name, type, latitude, longitude and elevation. The CUP code is dropped because Keyhole matches turnpoints by name. Keeping the type needs the turnpoint model in #120 revised.
+6. The Airspace page shows the file header, a map with opened and closed airspaces styled apart and the table with the "opened" toggles. It stays at the competition level and does not mention class day exceptions.
+7. A competitor page has the tabs Results (default), Details and Loggers. Details holds the form, the disqualification and delete. Competitors are added one at a time with the plain form, because #6 puts CSV import out of the MVP. #6 also puts IGC Ranking List IDs out, so the crew table drops that column unless an issue revised it.
+8. Loggers keeps its own sidebar section with the list, the dated links and an "unlinked" filter. Links can also be created from a competitor's Loggers tab and from an unresolved file, prefilled from the pilot's suggestion as #105 decides.
+9. There is no setup card. Setup gaps such as "No turnpoint file" or "Class Std has no competitors" appear in the overview's needs-attention list under a "Setup" heading, each linking to its page.
+10. The sidebar order is Overview, Competition, Competitors, Loggers, Turnpoints, Airspace, IGC files, Classes and then Dates.
+11. Round 5 builds one prototype, 4A revised with these decisions.
 
-## Still open from round 1
+## Still open
 
-- The exact setup steps, pages and form contents.
+- The contents of the Task sheets and Dates tabs beyond what 4A shows.
