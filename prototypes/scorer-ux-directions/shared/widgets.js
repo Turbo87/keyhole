@@ -150,7 +150,15 @@
   H.toggleDate = (ds) => {
     const comp = Q.competition(ds.comp);
     const has = comp.dates.includes(ds.date);
-    A.setDates(comp, has ? comp.dates.filter((d) => d !== ds.date) : comp.dates.concat([ds.date]));
+    if (!has) return A.setDates(comp, comp.dates.concat([ds.date]));
+    const published = Q.classesOf(comp.id).map((c) => Q.classDayOn(c.id, ds.date)).filter((cd) => cd && cd.published);
+    KH.confirm({
+      title: 'Remove ' + W.date(ds.date, true) + ' from the competition dates?',
+      intro: 'Nothing stored changes. Class days, results and files stay, and adding the date back restores them.' + (published.length ? ' These class days on that date are published:' : ''),
+      items: published.map((cd) => e(W.dayTitle(cd)) + ' (' + cd.published.status + ')'),
+      confirmLabel: 'Remove date',
+      onConfirm: () => KH.run(() => A.setDates(comp, comp.dates.filter((d) => d !== ds.date))),
+    });
   };
   H.extendDates = (d, ds) => {
     const comp = Q.competition(ds.comp);

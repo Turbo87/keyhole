@@ -110,10 +110,6 @@
         const counts = cd && !['unplanned', 'cancelled'].includes(cd.status) ? Q.dayCounts(cd) : null;
         const x = (counts && counts.check ? counts.check + ' check ' : '') + dot(cd);
         html += navItem(CL(cls) + '/days/' + date, e(cls.name) + (labels.length > 1 ? ' <span class="muted small">' + e(Q.dayLabel(cls.id, date)) + '</span>' : ''), ctx, x, 1);
-        if (ctx.cls === cls && ctx.params.date === date && cd) {
-          html += navItem(CD(cd) + '/tasks', 'Tasks', ctx, Q.task(cd) ? e(Q.task(cd).letter) : '', 2) + navItem(CD(cd) + '/settings', 'Start, limits, airspace', ctx, '', 2) +
-            navItem(CD(cd) + '/results', 'Results', ctx, counts ? counts.check + ' check' : '', 2) + navItem(CD(cd) + '/publish', 'Publish', ctx, cd.reasons.length ? '●' : '', 2);
-        }
       }
     }
     return html + '</nav>';
