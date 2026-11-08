@@ -6,7 +6,7 @@ Throwaway clickable wireframes that explore the page inventory, routes, navigati
 - `shared/proto.js` is the hash router, the dialogs and the black prototype bar with the direction switcher, the role switch and the sitemap panel.
 - `shared/widgets.js` holds the leaf forms and tables. The issues decide their data and actions, so directions share them and differ in where and how they appear.
 - `<key>-<name>.html` and `.js` are one direction each.
-- Round 2 prototypes are named `2a-…` to `2f-…` and share the round 2 shell in `shared/round2.js`. Round 3 prototypes are named `3a-…` to `3f-…`, share the round 3 shell in `shared/round3.js` and differ only in the result review page.
+- Round 2 prototypes are named `2a-…` to `2f-…` and share the round 2 shell in `shared/round2.js`. Round 3 prototypes are named `3a-…` to `3f-…`, share the round 3 shell in `shared/round3.js` and differ only in the result review page. Round 4 prototypes are named `4a-…` to `4f-…`, share the round 4 shell in `shared/round4.js` and differ only in the setup pages.
 
 ## Round 1 decisions
 
@@ -37,11 +37,23 @@ The round 1 review settled these points. Round 2 builds on them.
 8. The class day Overview tab is roughly a compact day summary: status, task with map, result progress and publish state, each linking to its tab. Its details are still open.
 9. Round 3 builds one combined class day and explores the layout of the result review page.
 
-## Open questions for round 3
+## Round 3 decisions
 
-- The layout of the result review page: how check reasons, files, the analysis log, the map, start candidates, overrides, the manual result and the penalty are arranged, how previous and next work, and how the page collapses on a phone.
-- Whether the shared task settings are edited on a dedicated page or in an accordion.
-- The details of the class day Overview tab.
+1. The result review page has two columns. The left column holds the check reasons with their "Mark OK" action, a result row with the result status, the files and the manual result, then the start candidates, the analysis log in a box with a maximum height that scrolls on its own, the overrides, the penalty and the remarks. The right column is sticky and holds an interactive map with a barogram below it.
+2. Hovering a log line previews that moment on the map and barogram, clicking it pins the moment in the URL (`?at=hh:mm:ss`), and clicking a marker on the map or barogram pins and scrolls to its log line.
+3. Without a scored IGC file there is no map column. Other IGC files show their own map on the IGC file page.
+4. On a phone the log flows with the page, and the map and barogram open as a full-screen view with Close and previous and next through the timed log entries. Above about 900 px the two columns stay.
+5. The IGC file page uses the same layout under a header with the file metadata and its resolution. An unresolved file explains why.
+6. The page header shows only the pilot. There is no previous and next. A "← Results to do" link returns to the results filtered to work to do.
+7. One "Mark OK" action in the check reasons block clears all reasons and sets the result to manually OK. The label may change later. Unknown and manual results show their state there instead and have no Mark OK.
+8. The shared task settings are edited on their own page, linked from their summary on the Task tab.
+9. Round 4 builds one combined prototype and explores the setup pages.
+
+## Open questions for round 4
+
+- How competition setup is split into pages and grouped: details and upload password, dates, classes, turnpoints, airspace, competitors, loggers and members.
+- How competitors, loggers and their links are entered and edited, including many at once.
+- What the setup card on the overview shows and whether it can edit anything itself.
 
 ## Still open from round 1
 

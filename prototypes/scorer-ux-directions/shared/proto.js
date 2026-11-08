@@ -93,6 +93,12 @@
       idea: 'A compact sticky header keeps the pilot, previous and next, the check reasons and the Reviewed button in view above review sub-tabs for summary, log, start, overrides, and penalty and remarks, each with its own URL.',
       tradeoff: 'Each part of the review stays short and focused and works well on a phone, but comparing the map with the log or the start candidates means switching sub-tabs.',
     },
+    { id: '4a', file: '4a-page-per-item.html', name: 'Page per item', round: 4, idea: 'Not built yet.', tradeoff: '' },
+    { id: '4b', file: '4b-grouped-pages.html', name: 'Grouped pages', round: 4, idea: 'Not built yet.', tradeoff: '' },
+    { id: '4c', file: '4c-inline-tables.html', name: 'Inline tables', round: 4, idea: 'Not built yet.', tradeoff: '' },
+    { id: '4d', file: '4d-competitor-first.html', name: 'Competitor first', round: 4, idea: 'Not built yet.', tradeoff: '' },
+    { id: '4e', file: '4e-class-first.html', name: 'Class first', round: 4, idea: 'Not built yet.', tradeoff: '' },
+    { id: '4f', file: '4f-guided-card.html', name: 'Guided card', round: 4, idea: 'Not built yet.', tradeoff: '' },
   ];
   KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a', '2b', '2c', '2d', '2e', '2f', '3a', '3b', '3f', '3d', '3e', '3c'];
   // The prototype bar and the arrow keys cycle through the built directions of the current round.
