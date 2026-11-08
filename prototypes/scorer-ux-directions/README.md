@@ -73,5 +73,8 @@ The round 1 review settled these points. Round 2 builds on them.
 1. Prototype 5A is good enough for now. The remaining details are refined during the implementation.
 2. The class day Overview tab stays as 5A shows it: status, task, results and publish rows next to the task map.
 3. The Task sheets tab keeps only the standing notes and the flight level setting, without a sheet preview.
-4. The Dates tab has start and end date fields. The list of dates between them updates as they change, and each date can be hidden, for example a weekday without flying. Shortening the range or hiding a date with class days asks for the #138 confirmation. 5A still shows the older dates editor.
+4. The Dates tab has start and end date fields. The list of dates between them updates as they change, and each date can be hidden, for example a weekday without flying. Shortening the range or hiding a date asks for the #138 confirmation only when it affects a published class day. 5A still shows the older dates editor.
 5. The "Mark OK" label stays for now.
+6. "Team" is only the tab label. The glossary keeps "competition admin" and "scorer" as the domain terms and gets a note about the label.
+7. The turnpoint type stores and shows the CUP style names unchanged, "Waypoint" included. The glossary gets a note that this is CUP's type name and not a synonym for turnpoint.
+8. Classes are deleted and restored, and dates are hidden. #138, #169 and #240 say "hide" for classes, and #138, #169 and #247 say "remove" for dates, so their wording changes.
