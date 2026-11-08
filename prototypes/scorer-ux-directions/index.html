@@ -46,11 +46,19 @@
 <script src="shared/data.js"></script>
 <script src="shared/proto.js"></script>
 <script>
-  document.getElementById('dirs').innerHTML = KH.DIRECTIONS.map(function (d) {
-    var built = KH.BUILT.indexOf(d.id) >= 0;
+  const ROUNDS = {
+    1: ['Round 1: six directions', 'Materially different directions for the page inventory, routes, navigation and layout. Kept for reference and no longer maintained.'],
+    2: ['Round 2: combined prototypes', 'Every prototype applies the round 1 decisions recorded in README.md and explores a different answer to the questions they left open.'],
+  };
+  function row(d) {
+    const built = KH.BUILT.indexOf(d.id) >= 0;
     return '<div class="dir' + (built ? '' : ' off') + '"><div class="key">' + d.id.toUpperCase() + '</div><div><h2>' + KH.esc(d.name) + '</h2>' +
       (built ? '<p><span class="lbl">Core idea</span><br>' + KH.esc(d.idea) + '</p><p><span class="lbl">Trade-off</span><br>' + KH.esc(d.tradeoff) + '</p>' : '<p>Not built yet.</p>') +
       '</div><div>' + (built ? '<a class="wf-btn primary" href="' + d.file + '">Open</a>' : '') + '</div></div>';
+  }
+  document.getElementById('dirs').innerHTML = Object.keys(ROUNDS).reverse().map(function (r) {
+    return '<section style="margin-bottom:24px"><h2>' + ROUNDS[r][0] + '</h2><p class="muted">' + ROUNDS[r][1] + '</p>' +
+      KH.DIRECTIONS.filter(function (d) { return String(d.round) === r; }).map(row).join('') + '</section>';
   }).join('');
 </script>
 </body>

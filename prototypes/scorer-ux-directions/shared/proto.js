@@ -4,37 +4,46 @@
 
   KH.DIRECTIONS = [
     {
-      id: 'a', file: 'a-tree.html', name: 'Tree',
+      id: 'a', file: 'a-tree.html', name: 'Tree', round: 1,
       idea: 'A persistent sidebar holds one flat menu of competition-wide pages, then every competition date with its classes nested inside. Every object has its own page and deep URL.',
       tradeoff: 'Predictable and fully linkable, and the date-first tree matches how a competition runs, but work on one class across many days, or on one competitor, means hopping between dates.',
     },
     {
-      id: 'b', file: 'b-day-desk.html', name: 'Day desk',
+      id: 'b', file: 'b-day-desk.html', name: 'Day desk', round: 1,
       idea: 'The workspace is one competition date: a date strip picks the day, every class of that date sits side by side as a column with its task, results and publish state, and flight review opens in a drawer over the desk. Competition-wide setup is a separate Setup mode.',
       tradeoff: 'Today\'s work across all classes is on one screen and review never loses the day\'s context, but setup is a separate mode, and following one class or competitor across days means stepping through dates or detouring through setup.',
     },
     {
-      id: 'c', file: 'c-review-inbox.html', name: 'Review inbox',
+      id: 'c', file: 'c-review-inbox.html', name: 'Review inbox', round: 1,
       idea: 'The competition opens on a work queue like an email client: folders of open work with counts, a list of items, and the selected item\'s detail with its actions. Finishing an item moves on to the next, and setup pages wait behind a Browse menu and a jump box.',
       tradeoff: 'Fastest for working through a competition day and makes leftover work impossible to miss, but the structure of the competition is hidden, so setup and looking things up depend on the Browse menu and search rather than on seeing where you are.',
     },
     {
-      id: 'd', file: 'd-overview-grid.html', name: 'Overview grid',
+      id: 'd', file: 'd-overview-grid.html', name: 'Overview grid', round: 1,
       idea: 'Dense matrices are the navigation: dates × classes for the competition and competitors × days for each class, and selecting a cell opens its full editor in a panel under the matrix without leaving it.',
       tradeoff: 'Shows the state of the whole competition at a glance and makes moving between neighbouring days or competitors one click, but the matrices get heavy and need a legend, and setup is pushed into one long settings page and side-panel tables.',
     },
     {
-      id: 'e', file: 'e-checklists.html', name: 'Checklists',
+      id: 'e', file: 'e-checklists.html', name: 'Checklists', round: 1,
       idea: 'Setup is a numbered checklist and every class day is a fixed five-step stepper (Plan, Task, Flights, Review, Publish), so each page says which step you are on and what to do next.',
       tradeoff: 'Guides new organisers and keeps the day\'s work in order, but anything outside the steps, such as one competitor across days, IGC files or a published day reopened by a change, sits off to the side or reads as "back at step 3".',
     },
     {
-      id: 'f', file: 'f-workspace.html', name: 'Workspace',
+      id: 'f', file: 'f-workspace.html', name: 'Workspace', round: 1,
       idea: 'An IDE-like workspace: a searchable object browser on the left, every class day, result, file or setup page opens as a tab, and an inspector on the right shows the active tab\'s context, so the analysis log, map, start candidates and overrides are all on screen at once.',
       tradeoff: 'Fast for long review sessions and for comparing objects side by side, but it is dense, the tab state is something to manage, and it gives a newcomer little guidance on what to do next.',
     },
+    { id: '2a', file: '2a-status-track.html', name: 'Status track', round: 2, idea: 'Not built yet.', tradeoff: '' },
+    { id: '2b', file: '2b-status-tab.html', name: 'Status tab', round: 2, idea: 'Not built yet.', tradeoff: '' },
+    { id: '2c', file: '2c-day-hub.html', name: 'Day hub', round: 2, idea: 'Not built yet.', tradeoff: '' },
+    { id: '2d', file: '2d-flights-tab.html', name: 'Flights tab', round: 2, idea: 'Not built yet.', tradeoff: '' },
   ];
   KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f'];
+  // The prototype bar and the arrow keys cycle through the built directions of the current round.
+  KH.siblings = () => {
+    const round = KH.DIRECTIONS.find((d) => d.id === KH.app.id).round;
+    return KH.DIRECTIONS.filter((d) => d.round === round && KH.BUILT.includes(d.id));
+  };
 
   const store = {
     get(k, d) {
@@ -219,7 +228,7 @@
     if (ev.key === 'Escape') return KH.closeModal();
     if (inField(ev) || ev.metaKey || ev.ctrlKey || ev.altKey) return;
     if (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') {
-      const built = KH.DIRECTIONS.filter((d) => KH.BUILT.includes(d.id));
+      const built = KH.siblings();
       if (built.length < 2) return;
       const i = built.findIndex((d) => d.id === KH.app.id);
       const next = built[(i + (ev.key === 'ArrowLeft' ? -1 : 1) + built.length) % built.length];
@@ -278,7 +287,7 @@
 
   function renderProto(ctx) {
     const app = KH.app;
-    const built = KH.DIRECTIONS.filter((d) => KH.BUILT.includes(d.id));
+    const built = KH.siblings();
     const i = built.findIndex((d) => d.id === app.id);
     const prev = built[(i - 1 + built.length) % built.length];
     const next = built[(i + 1) % built.length];
