@@ -123,8 +123,13 @@
       idea: 'Setup pages stay one per item, but the overview\'s setup card does the light work itself: dates, upload password, adding a class from a template, turnpoint and airspace uploads and inviting members happen inline in the card, bigger steps show counts and link to their page, and the card folds into a one-line bar once setup is complete.',
       tradeoff: 'A new competition can be mostly set up without leaving the overview, but the same actions live in two places, the card gets long, and a class added from the card skips its rule overrides until someone opens the class page.',
     },
+    {
+      id: '5a', file: '5a-revised.html', name: '4A revised', round: 5,
+      idea: 'Prototype 4A with the round 4 decisions: a Competition page with the tabs Details, Airfield, Dates, Task sheets, Uploads and Team, a class page with Standings and Settings tabs, turnpoint and airspace pages with a map, competitor pages with Results, Details and Loggers tabs, and setup gaps in the needs-attention list instead of a setup card.',
+      tradeoff: 'Fewer sidebar entries and one place per thing, but rarely used settings sit one tab deeper, and a new competition has no checklist beyond the needs-attention list.',
+    },
   ];
-  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a', '2b', '2c', '2d', '2e', '2f', '3a', '3b', '3f', '3d', '3e', '3c', '4a', '4b', '4f', '4d', '4e', '4c'];
+  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a', '2b', '2c', '2d', '2e', '2f', '3a', '3b', '3f', '3d', '3e', '3c', '4a', '4b', '4f', '4d', '4e', '4c', '5a'];
   // The prototype bar and the arrow keys cycle through the built directions of the current round.
   KH.siblings = () => {
     const round = KH.DIRECTIONS.find((d) => d.id === KH.app.id).round;
