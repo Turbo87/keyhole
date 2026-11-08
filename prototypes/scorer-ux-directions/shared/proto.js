@@ -104,7 +104,11 @@
       tradeoff: 'Fewer places to look and competitors and their loggers are edited side by side, but the pages are long, the Competition page mixes admin-only and scorer work, and a single class or competitor has no page of its own.',
     },
     { id: '4c', file: '4c-inline-tables.html', name: 'Inline tables', round: 4, idea: 'Not built yet.', tradeoff: '' },
-    { id: '4d', file: '4d-competitor-first.html', name: 'Competitor first', round: 4, idea: 'Not built yet.', tradeoff: '' },
+    {
+      id: '4d', file: '4d-competitor-first.html', name: 'Competitor first', round: 4,
+      idea: 'Entrants are set up on the competitor: adding one includes their logger by manufacturer and serial, "Add and add next" moves straight on to the next competitor, and the competitor page links loggers, shows their dated links and edits their thresholds, while the loggers page is only an overview with the logger-only edits.',
+      tradeoff: 'Entering a field of pilots is one form per pilot with nothing to cross-reference, but a logger that changes hands or is shared between competitors is spread over several competitor pages, and logger thresholds sit away from the logger list.',
+    },
     { id: '4e', file: '4e-class-first.html', name: 'Class first', round: 4, idea: 'Not built yet.', tradeoff: '' },
     {
       id: '4f', file: '4f-guided-card.html', name: 'Guided card', round: 4,
@@ -112,7 +116,7 @@
       tradeoff: 'A new competition can be mostly set up without leaving the overview, but the same actions live in two places, the card gets long, and a class added from the card skips its rule overrides until someone opens the class page.',
     },
   ];
-  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a', '2b', '2c', '2d', '2e', '2f', '3a', '3b', '3f', '3d', '3e', '3c', '4a', '4b', '4f'];
+  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a', '2b', '2c', '2d', '2e', '2f', '3a', '3b', '3f', '3d', '3e', '3c', '4a', '4b', '4f', '4d'];
   // The prototype bar and the arrow keys cycle through the built directions of the current round.
   KH.siblings = () => {
     const round = KH.DIRECTIONS.find((d) => d.id === KH.app.id).round;

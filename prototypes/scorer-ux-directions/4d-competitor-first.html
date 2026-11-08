@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>4D · Competitor first · Keyhole scorer UX prototype</title>
+<link rel="stylesheet" href="shared/wire.css">
+<link rel="stylesheet" href="shared/round4.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
+<style>
+  .d4-lg { border: 1px solid var(--line2); border-radius: 4px; padding: 10px 12px; }
+  .d4-lg + .d4-lg { margin-top: 10px; }
+  .d4-thr { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: flex-end; }
+  .d4-thr label { display: flex; flex-direction: column; font-size: 11.5px; color: var(--mute); }
+  .d4-thr input { width: 70px; }
+  .d4-add { border: 1px dashed var(--mute); border-radius: 4px; padding: 10px 12px; }
+  .d4-add .wf-form { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+  .d4-scroll { overflow-x: auto; min-width: 0; }
+  tr.d4-open td { background: var(--fill); }
+</style>
+</head>
+<body>
+<script src="shared/data.js"></script>
+<script src="shared/proto.js"></script>
+<script src="shared/widgets.js"></script>
+<script src="shared/round4.js"></script>
+<script src="4d-competitor-first.js"></script>
+</body>
+</html>
