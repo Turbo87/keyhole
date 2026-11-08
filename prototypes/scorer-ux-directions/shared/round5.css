@@ -1,0 +1,10 @@
+/* PROTOTYPE: round 5 additions on top of shared/round4.css. */
+.r5-map { background: #fbfbfb; aspect-ratio: 8 / 5; min-height: 0; }
+.r5-map svg { position: absolute; inset: 0; }
+.r5-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 440px); gap: 16px; align-items: start; }
+.r5-sticky { position: sticky; top: 12px; }
+.wf-table tr.sel td { background: var(--fill); }
+@media (max-width: 900px) {
+  .r5-split { grid-template-columns: minmax(0, 1fr); }
+  .r5-sticky { position: static; order: -1; }
+}
