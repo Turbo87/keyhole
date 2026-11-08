@@ -74,7 +74,11 @@
       tradeoff: 'The decision and the evidence for it are visible side by side on a desktop, but both columns are narrow for wide tables like the analysis log, and on a phone the evidence ends up below everything else.',
     },
     { id: '3c', file: '3c-map-first.html', name: 'Map first', round: 3, idea: 'Not built yet.', tradeoff: '' },
-    { id: '3d', file: '3d-log-spine.html', name: 'Log spine', round: 3, idea: 'Not built yet.', tradeoff: '' },
+    {
+      id: '3d', file: '3d-log-spine.html', name: 'Log spine', round: 3,
+      idea: 'The analysis log of the scored file is the spine of the review page: start choices, credits, flight end, finish time, AAT pins and penalty suggestions sit as actions on the log rows they concern, existing overrides appear as marked rows at their time, and the map and output stay in a sticky aside.',
+      tradeoff: 'Every decision sits next to the evidence that prompted it and there is no separate overrides or start candidates panel to cross-reference, but the page depends on the log being readable, and actions with no log entry, such as a free start or a flight end without a warning, are easier to miss.',
+    },
     { id: '3e', file: '3e-reason-cards.html', name: 'Reason cards', round: 3, idea: 'Not built yet.', tradeoff: '' },
     {
       id: '3f', file: '3f-review-tabs.html', name: 'Review tabs', round: 3,
@@ -82,7 +86,7 @@
       tradeoff: 'Each part of the review stays short and focused and works well on a phone, but comparing the map with the log or the start candidates means switching sub-tabs.',
     },
   ];
-  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a', '2b', '2c', '2d', '2e', '2f', '3a', '3b', '3f'];
+  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a', '2b', '2c', '2d', '2e', '2f', '3a', '3b', '3f', '3d'];
   // The prototype bar and the arrow keys cycle through the built directions of the current round.
   KH.siblings = () => {
     const round = KH.DIRECTIONS.find((d) => d.id === KH.app.id).round;

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3D · Log spine · Keyhole scorer UX prototype</title>
+<link rel="stylesheet" href="shared/wire.css">
+<link rel="stylesheet" href="shared/round3.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
+<style>
+  .d3-head { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); padding: 8px 0; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .d3-head .wf-row { flex-wrap: wrap; }
+  .d3-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+  .d3-top h3, .d3-aside h3, .d3-spine h3 { margin: 0 0 6px; }
+  .d3-main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; grid-template-areas: 'spine aside'; gap: 12px; align-items: start; }
+  .d3-spine { grid-area: spine; }
+  .d3-aside { grid-area: aside; position: sticky; top: 64px; display: flex; flex-direction: column; gap: 10px; }
+  .d3-log td { vertical-align: top; }
+  .d3-log td.d3-t { width: 72px; }
+  .d3-log td.d3-act { text-align: right; white-space: nowrap; }
+  .d3-log td.d3-act form { display: inline-flex; gap: 4px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+  .d3-log td.d3-act input { width: 92px; }
+  .d3-log tr.d3-ov td { background: var(--fill); }
+  .d3-log tr.d3-ov td:first-child { box-shadow: inset 3px 0 0 var(--ink); }
+  .d3-log tr.d3-group td { background: var(--fill2); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--mute); padding-top: 4px; padding-bottom: 4px; }
+  .d3-ovtag { display: inline-flex; gap: 3px; align-items: center; font-size: 11.5px; border: 1px solid var(--ink); border-radius: 3px; padding: 0 4px; margin-right: 4px; }
+  .d3-rule { display: block; color: var(--mute); font-size: 11.5px; }
+  .d3-end { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; align-items: start; }
+  .d3-wrap { overflow-x: auto; }
+  @media (max-width: 700px) {
+    .d3-log, .d3-log tbody { display: block; }
+    .d3-log tr { display: grid; grid-template-columns: 70px minmax(0, 1fr); border-bottom: 1px solid var(--line2); }
+    .d3-log td { border: 0; padding: 3px 4px; }
+    .d3-log td:nth-child(2) { display: none; }
+    .d3-log tr.log-warning td:nth-child(3), .d3-log tr.log-error td:nth-child(3) { font-weight: 600; }
+    .d3-log td.d3-act { grid-column: 1 / -1; text-align: left; white-space: normal; }
+    .d3-log td.d3-act:empty { display: none; }
+    .d3-log td.d3-act form { justify-content: flex-start; }
+    .d3-log tr.d3-group td { grid-column: 1 / -1; }
+  }
+  @media (max-width: 900px) {
+    .d3-top { grid-template-columns: minmax(0, 1fr); }
+    .d3-main { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'aside' 'spine'; }
+    .d3-aside { position: static; }
+    .d3-head .r3-rh h2 { font-size: 17px; }
+  }
+</style>
+</head>
+<body>
+<script src="shared/data.js"></script>
+<script src="shared/proto.js"></script>
+<script src="shared/widgets.js"></script>
+<script src="shared/round3.js"></script>
+<script src="3d-log-spine.js"></script>
+</body>
+</html>
