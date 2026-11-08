@@ -103,7 +103,11 @@
       idea: 'Setup shrinks to four larger pages: Competition (details, upload password, dates, members), Classes (every class as a collapsible section), Course (turnpoints and airspace) and Entrants, where competitors and loggers share one page and one side panel.',
       tradeoff: 'Fewer places to look and competitors and their loggers are edited side by side, but the pages are long, the Competition page mixes admin-only and scorer work, and a single class or competitor has no page of its own.',
     },
-    { id: '4c', file: '4c-inline-tables.html', name: 'Inline tables', round: 4, idea: 'Not built yet.', tradeoff: '' },
+    {
+      id: '4c', file: '4c-inline-tables.html', name: 'Inline tables', round: 4,
+      idea: 'Classes, competitors and loggers are edited directly in their table rows, with an empty row at the bottom for the next entry, expandable row details for rarely used fields and rule overrides, and logger links edited inline as small chips.',
+      tradeoff: 'Entering and correcting many entrants takes few page changes and keeps the whole list in view, but the tables get tall and dense, and wide rows are hard to use on a phone.',
+    },
     {
       id: '4d', file: '4d-competitor-first.html', name: 'Competitor first', round: 4,
       idea: 'Entrants are set up on the competitor: adding one includes their logger by manufacturer and serial, "Add and add next" moves straight on to the next competitor, and the competitor page links loggers, shows their dated links and edits their thresholds, while the loggers page is only an overview with the logger-only edits.',
@@ -120,7 +124,7 @@
       tradeoff: 'A new competition can be mostly set up without leaving the overview, but the same actions live in two places, the card gets long, and a class added from the card skips its rule overrides until someone opens the class page.',
     },
   ];
-  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a', '2b', '2c', '2d', '2e', '2f', '3a', '3b', '3f', '3d', '3e', '3c', '4a', '4b', '4f', '4d', '4e'];
+  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a', '2b', '2c', '2d', '2e', '2f', '3a', '3b', '3f', '3d', '3e', '3c', '4a', '4b', '4f', '4d', '4e', '4c'];
   // The prototype bar and the arrow keys cycle through the built directions of the current round.
   KH.siblings = () => {
     const round = KH.DIRECTIONS.find((d) => d.id === KH.app.id).round;
