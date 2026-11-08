@@ -50,9 +50,13 @@
       idea: 'A class day is one scrolling page (day settings, task, results, publish) with a sticky section index carrying each section\'s marks, and a sticky footer bar that always shows the day status and the publish action.',
       tradeoff: 'Nothing about a day is hidden behind a tab and the status is always in view, but the page is long, the results push publishing far down, and the footer bar costs screen height on every class day page.',
     },
-    { id: '2f', file: '2f-settings-tab.html', name: 'Settings tab', round: 2, idea: 'Not built yet.', tradeoff: '' },
+    {
+      id: '2f', file: '2f-settings-tab.html', name: 'Settings tab', round: 2,
+      idea: 'Class day tabs Overview, Day, Task and Results: the Day tab gathers everything about the day itself (working status, practice, start procedure, limits, airspace), and results are published from a bar on top of the Results tab, so the status only shows in the breadcrumb and sidebar.',
+      tradeoff: 'Publishing happens where the results are checked and the task tab stays about tasks, but the status has no prominent place of its own and the day settings sit one tab away from the candidates they apply to.',
+    },
   ];
-  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a', '2b', '2e'];
+  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a', '2b', '2e', '2f'];
   // The prototype bar and the arrow keys cycle through the built directions of the current round.
   KH.siblings = () => {
     const round = KH.DIRECTIONS.find((d) => d.id === KH.app.id).round;
