@@ -18,11 +18,15 @@
       idea: 'The competition opens on a work queue like an email client: folders of open work with counts, a list of items, and the selected item\'s detail with its actions. Finishing an item moves on to the next, and setup pages wait behind a Browse menu and a jump box.',
       tradeoff: 'Fastest for working through a competition day and makes leftover work impossible to miss, but the structure of the competition is hidden, so setup and looking things up depend on the Browse menu and search rather than on seeing where you are.',
     },
-    { id: 'd', file: 'd-overview-grid.html', name: 'Overview grid', idea: 'Not built yet.', tradeoff: '' },
+    {
+      id: 'd', file: 'd-overview-grid.html', name: 'Overview grid',
+      idea: 'Dense matrices are the navigation: dates × classes for the competition and competitors × days for each class, and selecting a cell opens its full editor in a panel under the matrix without leaving it.',
+      tradeoff: 'Shows the state of the whole competition at a glance and makes moving between neighbouring days or competitors one click, but the matrices get heavy and need a legend, and setup is pushed into one long settings page and side-panel tables.',
+    },
     { id: 'e', file: 'e-checklists.html', name: 'Checklists', idea: 'Not built yet.', tradeoff: '' },
     { id: 'f', file: 'f-workspace.html', name: 'Workspace', idea: 'Not built yet.', tradeoff: '' },
   ];
-  KH.BUILT = ['a', 'b', 'c'];
+  KH.BUILT = ['a', 'b', 'c', 'd'];
 
   const store = {
     get(k, d) {
