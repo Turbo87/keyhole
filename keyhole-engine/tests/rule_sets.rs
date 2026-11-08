@@ -1,10 +1,10 @@
 use std::time::Duration;
 
 use keyhole_engine::rule_sets::{
-    AnalysisParameters, Class, ClassDayOverrides, DAEC_SWO_2026, DefaultZones, EarthModel,
-    EffectiveParameters, FAI_ANNEX_A_2025A, HandicapScale, InvalidValue, MaximumAltitude,
-    MissingPevPenalty, ObservationZone, Orientation, Parameter, PevRules, PevScope, RuleOverride,
-    RuleSetEdition, ScoringParameters, StartProcedure,
+    AnalysisParameters, Class, ClassDayOverrides, ClassTemplate, DAEC_SWO_2026, DefaultZones,
+    Departure, EarthModel, EffectiveParameters, FAI_ANNEX_A_2025A, HandicapScale, InvalidValue,
+    MaximumAltitude, MissingPevPenalty, ObservationZone, Orientation, Parameter, PevRules,
+    PevScope, Resolution, RuleOverride, RuleSetEdition, ScoringParameters, StartProcedure,
 };
 
 #[test]
@@ -200,14 +200,17 @@ fn club_class(overrides: Vec<RuleOverride>) -> Class {
 }
 
 fn resolve(class: &Class, class_day: &ClassDayOverrides) -> EffectiveParameters {
-    FAI_ANNEX_A_2025A.resolve(class, class_day).unwrap()
+    FAI_ANNEX_A_2025A
+        .resolve(class, class_day)
+        .unwrap()
+        .parameters
 }
 
-fn resolve_class_day(class_day: ClassDayOverrides) -> Result<EffectiveParameters, InvalidValue> {
+fn resolve_class_day(class_day: ClassDayOverrides) -> Result<Resolution, InvalidValue> {
     FAI_ANNEX_A_2025A.resolve(&club_class(vec![]), &class_day)
 }
 
-fn resolve_rules(rules: Vec<RuleOverride>) -> Result<EffectiveParameters, InvalidValue> {
+fn resolve_rules(rules: Vec<RuleOverride>) -> Result<Resolution, InvalidValue> {
     resolve_class_day(ClassDayOverrides {
         rules,
         ..ClassDayOverrides::default()
@@ -548,4 +551,133 @@ fn invalid_value_describes_the_valid_range() {
         InvalidValue::StartClosesBeforeOpening.to_string(),
         "the start must not close before it opens"
     );
+}
+
+fn departures(edition: &RuleSetEdition, rules: Vec<RuleOverride>) -> Vec<Departure> {
+    let class_day = ClassDayOverrides {
+        rules,
+        ..ClassDayOverrides::default()
+    };
+    edition
+        .resolve(&club_class(vec![]), &class_day)
+        .unwrap()
+        .departures
+}
+
+#[test]
+fn edition_defaults_depart_from_nothing() {
+    for edition in RuleSetEdition::ALL {
+        assert_eq!(departures(edition, vec![]), []);
+    }
+}
+
+#[test]
+fn earth_model_the_edition_does_not_allow_is_a_departure() {
+    let sphere = || vec![RuleOverride::EarthModel(EarthModel::FaiSphere)];
+
+    assert_eq!(
+        departures(&DAEC_SWO_2026, sphere()),
+        [Departure::EarthModel(EarthModel::FaiSphere)]
+    );
+    assert_eq!(departures(&FAI_ANNEX_A_2025A, sphere()), []);
+}
+
+#[test]
+fn pev_times_outside_the_edition_range_are_departures() {
+    let rules = || {
+        vec![
+            RuleOverride::PevWaitTime(4),
+            RuleOverride::PevStartWindow(8),
+        ]
+    };
+
+    assert_eq!(
+        departures(&DAEC_SWO_2026, rules()),
+        [Departure::PevWaitTime(4), Departure::PevStartWindow(8)]
+    );
+    assert_eq!(
+        departures(&FAI_ANNEX_A_2025A, rules()),
+        [Departure::PevWaitTime(4)]
+    );
+}
+
+#[test]
+fn departing_value_replaced_by_the_class_day_is_no_departure() {
+    let class = club_class(vec![RuleOverride::PevStartWindow(11)]);
+    let class_day = ClassDayOverrides {
+        rules: vec![RuleOverride::PevStartWindow(10)],
+        ..ClassDayOverrides::default()
+    };
+
+    let resolution = FAI_ANNEX_A_2025A.resolve(&class, &class_day).unwrap();
+
+    assert_eq!(resolution.departures, []);
+}
+
+fn template(edition: &RuleSetEdition, name: &str) -> &'static ClassTemplate {
+    RuleSetEdition::find(edition.id)
+        .unwrap()
+        .class_templates
+        .iter()
+        .find(|template| template.name == name)
+        .unwrap()
+}
+
+#[test]
+fn class_with_the_template_values_departs_from_nothing() {
+    let club = template(&DAEC_SWO_2026, "Club");
+
+    assert_eq!(club.departures(&club_class(vec![])), []);
+}
+
+#[test]
+fn lower_dm_and_d1_than_the_template_are_departures() {
+    let class = Class {
+        dm: 50.,
+        d1: 200.,
+        ..club_class(vec![])
+    };
+
+    assert_eq!(
+        template(&DAEC_SWO_2026, "Club").departures(&class),
+        [
+            Departure::DmBelowTemplate(50.),
+            Departure::D1BelowTemplate(200.)
+        ]
+    );
+}
+
+#[test]
+fn higher_dm_and_d1_than_the_template_depart_from_nothing() {
+    let class = Class {
+        dm: 120.,
+        d1: 300.,
+        ..club_class(vec![])
+    };
+
+    assert_eq!(template(&DAEC_SWO_2026, "Club").departures(&class), []);
+}
+
+#[test]
+fn unhandicapped_class_departs_from_a_handicapped_template() {
+    let class = Class {
+        handicapped: false,
+        ..club_class(vec![])
+    };
+
+    for (edition, name) in [
+        (&DAEC_SWO_2026, "Club"),
+        (&DAEC_SWO_2026, "Two-seater"),
+        (&FAI_ANNEX_A_2025A, "Club"),
+    ] {
+        assert_eq!(
+            template(edition, name).departures(&Class {
+                dm: 120.,
+                d1: 300.,
+                ..class.clone()
+            }),
+            [Departure::Unhandicapped],
+            "{name}"
+        );
+    }
 }

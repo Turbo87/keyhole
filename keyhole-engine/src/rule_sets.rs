@@ -288,6 +288,31 @@ pub struct ScoringParameters {
     pub handicap_scale: Option<HandicapScale>,
 }
 
+/// A class day's effective parameters with their departures from the edition.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Resolution {
+    pub parameters: EffectiveParameters,
+    pub departures: Vec<Departure>,
+}
+
+/// A valid value that the edition or a class template doesn't foresee, which a
+/// scorer confirms instead of being refused.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Departure {
+    /// An earth model the edition doesn't allow.
+    EarthModel(EarthModel),
+    /// A PEV wait time outside the edition's range, in minutes.
+    PevWaitTime(u32),
+    /// A PEV start window outside the edition's range, in minutes.
+    PevStartWindow(u32),
+    /// A class's Dm below its template's, in km.
+    DmBelowTemplate(f64),
+    /// A class's D1 below its template's, in km.
+    D1BelowTemplate(f64),
+    /// An unhandicapped class from a handicapped template.
+    Unhandicapped,
+}
+
 /// A rule value outside what any edition could apply.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum InvalidValue {
@@ -347,7 +372,7 @@ impl RuleSetEdition {
         &self,
         class: &Class,
         class_day: &ClassDayOverrides,
-    ) -> Result<EffectiveParameters, InvalidValue> {
+    ) -> Result<Resolution, InvalidValue> {
         let dm = class_day.dm.unwrap_or(class.dm);
         let d1 = class_day.d1.unwrap_or(class.d1);
         for value in [Some(class.dm), class_day.dm] {
@@ -380,7 +405,48 @@ impl RuleSetEdition {
         {
             return Err(InvalidValue::StartClosesBeforeOpening);
         }
-        Ok(parameters)
+        Ok(Resolution {
+            departures: self.departures(&parameters.analysis),
+            parameters,
+        })
+    }
+
+    fn departures(&self, analysis: &AnalysisParameters) -> Vec<Departure> {
+        let AnalysisParameters {
+            earth_model, start, ..
+        } = analysis;
+        let mut departures = Vec::new();
+        if !self.allowed.earth_models.contains(earth_model) {
+            departures.push(Departure::EarthModel(*earth_model));
+        }
+        if !self.allowed.pev_wait_time.contains(&start.pev_wait_time) {
+            departures.push(Departure::PevWaitTime(start.pev_wait_time));
+        }
+        if !self
+            .allowed
+            .pev_start_window
+            .contains(&start.pev_start_window)
+        {
+            departures.push(Departure::PevStartWindow(start.pev_start_window));
+        }
+        departures
+    }
+}
+
+impl ClassTemplate {
+    /// Lists where a class's own values depart from this template's.
+    pub fn departures(&self, class: &Class) -> Vec<Departure> {
+        let mut departures = Vec::new();
+        if class.dm < self.dm {
+            departures.push(Departure::DmBelowTemplate(class.dm));
+        }
+        if class.d1 < self.d1 {
+            departures.push(Departure::D1BelowTemplate(class.d1));
+        }
+        if self.handicapped && !class.handicapped {
+            departures.push(Departure::Unhandicapped);
+        }
+        departures
     }
 }
 
