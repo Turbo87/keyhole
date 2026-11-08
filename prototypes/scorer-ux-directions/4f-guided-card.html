@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>4F · Guided card · Keyhole scorer UX prototype</title>
+<link rel="stylesheet" href="shared/wire.css">
+<link rel="stylesheet" href="shared/round4.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
+<style>
+  .f4-card { padding: 0; }
+  .f4-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line2); }
+  .f4-head h3 { margin: 0; }
+  .f4-item { display: grid; grid-template-columns: 22px minmax(150px, 220px) minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 14px; border-bottom: 1px solid var(--line2); }
+  .f4-item:last-child { border-bottom: 0; }
+  .f4-item .mdi { font-size: 18px; color: var(--mute); }
+  .f4-item.done .mdi { color: var(--ink); }
+  .f4-state { color: var(--mute); font-size: 12.5px; }
+  .f4-act form, .f4-act { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .f4-act input, .f4-act select { max-width: 100%; }
+  .f4-bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 14px; }
+  @media (max-width: 700px) {
+    .f4-item { grid-template-columns: 22px minmax(0, 1fr) auto; }
+    .f4-item .f4-act { grid-column: 2 / -1; grid-row: 2; }
+    .f4-item .f4-link { grid-column: 3; grid-row: 1; }
+  }
+</style>
+</head>
+<body>
+<script src="shared/data.js"></script>
+<script src="shared/proto.js"></script>
+<script src="shared/widgets.js"></script>
+<script src="shared/round4.js"></script>
+<script src="4f-guided-card.js"></script>
+</body>
+</html>

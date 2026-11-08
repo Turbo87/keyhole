@@ -106,9 +106,13 @@
     { id: '4c', file: '4c-inline-tables.html', name: 'Inline tables', round: 4, idea: 'Not built yet.', tradeoff: '' },
     { id: '4d', file: '4d-competitor-first.html', name: 'Competitor first', round: 4, idea: 'Not built yet.', tradeoff: '' },
     { id: '4e', file: '4e-class-first.html', name: 'Class first', round: 4, idea: 'Not built yet.', tradeoff: '' },
-    { id: '4f', file: '4f-guided-card.html', name: 'Guided card', round: 4, idea: 'Not built yet.', tradeoff: '' },
+    {
+      id: '4f', file: '4f-guided-card.html', name: 'Guided card', round: 4,
+      idea: 'Setup pages stay one per item, but the overview\'s setup card does the light work itself: dates, upload password, adding a class from a template, turnpoint and airspace uploads and inviting members happen inline in the card, bigger steps show counts and link to their page, and the card folds into a one-line bar once setup is complete.',
+      tradeoff: 'A new competition can be mostly set up without leaving the overview, but the same actions live in two places, the card gets long, and a class added from the card skips its rule overrides until someone opens the class page.',
+    },
   ];
-  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a', '2b', '2c', '2d', '2e', '2f', '3a', '3b', '3f', '3d', '3e', '3c', '4a', '4b'];
+  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a', '2b', '2c', '2d', '2e', '2f', '3a', '3b', '3f', '3d', '3e', '3c', '4a', '4b', '4f'];
   // The prototype bar and the arrow keys cycle through the built directions of the current round.
   KH.siblings = () => {
     const round = KH.DIRECTIONS.find((d) => d.id === KH.app.id).round;
