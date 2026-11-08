@@ -43,7 +43,11 @@
       idea: 'The class day has four tabs, Overview, Task, Results and Status. The day settings sit on the Overview because they apply to every task candidate, and the Status tab\'s label is the only place the day status appears, with every publishing control behind it.',
       tradeoff: 'The page stays calm and the status is always in the same spot, but publishing is a tab away from the results being published, and the status only reads as a label rather than a progression.',
     },
-    { id: '2c', file: '2c-day-hub.html', name: 'Day hub', round: 2, idea: 'Not built yet.', tradeoff: '' },
+    {
+      id: '2c', file: '2c-day-hub.html', name: 'Day hub', round: 2,
+      idea: 'A class day is a hub of four section cards (day settings, task, results, status and publishing), each with its marks and a link to a full page, while the title carries the day status and a button for the next publishing step.',
+      tradeoff: 'The hub makes outstanding work easy to scan and always names the next step, but moving between sections goes back through the hub.',
+    },
     { id: '2d', file: '2d-flights-tab.html', name: 'Flights tab', round: 2, idea: 'Not built yet.', tradeoff: '' },
     {
       id: '2e', file: '2e-one-page.html', name: 'One page', round: 2,
@@ -56,7 +60,7 @@
       tradeoff: 'Publishing happens where the results are checked and the task tab stays about tasks, but the status has no prominent place of its own and the day settings sit one tab away from the candidates they apply to.',
     },
   ];
-  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a', '2b', '2e', '2f'];
+  KH.BUILT = ['a', 'b', 'c', 'd', 'e', 'f', '2a', '2b', '2c', '2e', '2f'];
   // The prototype bar and the arrow keys cycle through the built directions of the current round.
   KH.siblings = () => {
     const round = KH.DIRECTIONS.find((d) => d.id === KH.app.id).round;

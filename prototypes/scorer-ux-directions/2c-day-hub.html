@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>2C · Day hub · Keyhole scorer UX prototype</title>
+<link rel="stylesheet" href="shared/wire.css">
+<link rel="stylesheet" href="shared/round2.css">
+<style>
+  .c2-hub { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .c2-card { display: flex; flex-direction: column; gap: 14px; padding: 18px; min-width: 0; }
+  .c2-card h2 { margin: 0; }
+  .c2-card .wf-kv { grid-template-columns: max-content minmax(0, 1fr); }
+  .c2-card .c2-open { margin-top: auto; padding-top: 4px; font-size: 13px; }
+  .c2-card .wf-row.between { align-items: start; }
+  .c2-context { margin-bottom: 16px; }
+  .c2-back { margin: 0 0 12px; font-size: 13px; }
+  .c2-cell sup { font-size: 10px; margin-left: 2px; font-weight: 700; }
+  .c2-status-letter { color: var(--mute); font-size: 10px; margin-left: 3px; }
+  @media (max-width: 800px) {
+    .c2-hub { grid-template-columns: minmax(0, 1fr); }
+    .c2-card { padding: 14px; }
+    .c2-subpage .wf-cols { grid-template-columns: minmax(0, 1fr) !important; }
+    .c2-subpage .wf-form { grid-template-columns: minmax(0, 1fr); }
+    .c2-subpage input, .c2-subpage select, .c2-subpage textarea { max-width: 100%; }
+  }
+</style>
+</head>
+<body>
+<script src="shared/data.js"></script>
+<script src="shared/proto.js"></script>
+<script src="shared/widgets.js"></script>
+<script src="shared/round2.js"></script>
+<script src="2c-day-hub.js"></script>
+</body>
+</html>
