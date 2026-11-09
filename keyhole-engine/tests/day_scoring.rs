@@ -2,8 +2,9 @@ use std::time::Duration;
 
 use keyhole_engine::day_scoring::{
     Achievement, ClassDay, CompetitorResult, DayOutcome, DayResult, DayValidity, ResultStatus,
-    ScoringError, ScoringParameters, Standing, Task, score_class_day,
+    ScoringError, Standing, Task, score_class_day,
 };
+use keyhole_engine::rule_sets::ScoringParameters;
 
 fn hours(hours: f64) -> Duration {
     Duration::from_secs_f64(hours * 3600.)
@@ -14,15 +15,16 @@ fn racing_day(distance: f64, competitors: Vec<CompetitorResult>) -> ClassDay {
         parameters: ScoringParameters {
             dm: 100.,
             d1: 250.,
-            task: Task::Racing { distance },
+            handicap_scale: None,
         },
+        task: Task::Racing { distance },
         competitors,
     }
 }
 
 fn assigned_area_day(minimum_task_time: Duration, competitors: Vec<CompetitorResult>) -> ClassDay {
     let mut day = racing_day(0., competitors);
-    day.parameters.task = Task::AssignedArea { minimum_task_time };
+    day.task = Task::AssignedArea { minimum_task_time };
     day
 }
 

@@ -281,7 +281,9 @@ pub struct EffectiveParameters {
 /// The parameters day scoring depends on, in km.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScoringParameters {
+    /// The minimum distance `Dm` that a day needs enough competitors to reach.
     pub dm: f64,
+    /// The distance `D1` a winner needs for 1000 points.
     pub d1: f64,
     /// The scale handicaps are divided on, or `None` for an unhandicapped
     /// class.
