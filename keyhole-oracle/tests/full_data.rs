@@ -228,6 +228,36 @@ fn status_rows_keep_their_cause_after_a_day_parameter_mismatch() {
 }
 
 #[test]
+fn class_day_without_dm_and_d1_scores_with_its_class_template() {
+    let download = write_download(&[ClassDay {
+        path: "dm-zwickau-2024/club/2024-06-10",
+        task_info: "Warning: Longest handicapped distance is zero!",
+        ..DAY
+    }]);
+
+    let report = check(&download, Baseline::Gate);
+
+    assert!(report.passes(), "{report}");
+    assert!(report.to_string().starts_with("Checked 1 class days.\n"));
+}
+
+#[test]
+fn class_day_without_dm_and_d1_and_a_class_template_is_an_error() {
+    let download = write_download(&[ClassDay {
+        path: "dm-zwickau-2024/igel/2024-06-10",
+        task_info: "Warning: Longest handicapped distance is zero!",
+        ..DAY
+    }]);
+
+    let report = check(&download, Baseline::Gate);
+
+    assert!(!report.passes());
+    assert!(report.to_string().contains(
+        "dm-zwickau-2024/igel/2024-06-10 error: the task info line names no Dm and D1, and the class `igel` has no class template in DAeC SWO 2026"
+    ));
+}
+
+#[test]
 fn left_out_class_days_are_counted() {
     let cancelled = TASK.replace("official", "cancelled");
     let download = write_download(&[

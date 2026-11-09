@@ -55,13 +55,15 @@ impl Fixture {
         rows: Vec<PublishedRow>,
         file: FixtureFile,
     ) -> anyhow::Result<Self> {
-        let PublishedDayParameters {
+        if let Some(PublishedDayParameters {
             f,
             fcr,
             maximum_points,
             ..
-        } = file.published_day_parameters;
-        if f.is_some() != maximum_points.is_some() || fcr.is_some() != maximum_points.is_some() {
+        }) = file.published_day_parameters
+            && (f.is_some() != maximum_points.is_some()
+                || fcr.is_some() != maximum_points.is_some())
+        {
             bail!("the published day parameters need all or none of F, FCR and maximum points");
         }
         let scoring = file.scoring_parameters()?;
@@ -86,8 +88,8 @@ pub(crate) struct FixtureFile {
     #[serde(default)]
     pub class_day: FixtureClassDay,
     /// The day parameters transcribed from the task info line of
-    /// `results.html`.
-    pub published_day_parameters: PublishedDayParameters,
+    /// `results.html`, or `None` when it publishes none.
+    pub published_day_parameters: Option<PublishedDayParameters>,
     /// Scorer decisions by competition ID, winning over derived ones.
     #[serde(default)]
     pub decisions: BTreeMap<String, FixtureDecisions>,

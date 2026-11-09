@@ -182,13 +182,14 @@ pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
         mismatch
     };
 
-    let day_parameter_mismatches = day_parameter_mismatches(
-        &file.published_day_parameters,
-        result.validity,
-        &result.parameters,
-    )
-    .map(&mut explain)
-    .collect();
+    let day_parameter_mismatches = file
+        .published_day_parameters
+        .iter()
+        .flat_map(|published| {
+            day_parameter_mismatches(published, result.validity, &result.parameters)
+        })
+        .map(&mut explain)
+        .collect();
     let row_mismatches = fixture
         .rows
         .iter()

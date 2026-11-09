@@ -7,6 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, bail};
+use keyhole_engine::rule_sets::{ClassTemplate, RuleSetEdition};
 use serde::Deserialize;
 
 use crate::comparison::{Field, check};
@@ -202,11 +203,18 @@ fn check_class_day(name: &str, directory: &Path) -> anyhow::Result<ClassDayOutco
             LeftOut::HandicappedWithoutHandicapColumn,
         ));
     }
-    let (Some(dm), Some(d1)) = (info.dm, info.d1) else {
-        bail!("the task info line names no Dm and D1");
-    };
-    let Some(published_day_parameters) = info.published else {
-        bail!("the task info line publishes no day parameters");
+    let (dm, d1) = match (info.dm, info.d1) {
+        (Some(dm), Some(d1)) => (dm, d1),
+        _ => {
+            let class = name.split('/').nth(1).unwrap_or_default();
+            let Some(template) = class_template(edition, class) else {
+                bail!(
+                    "the task info line names no Dm and D1, and the class `{class}` has no class template in {}",
+                    edition.id
+                );
+            };
+            (template.dm, template.d1)
+        }
     };
 
     let task = serde_json::from_str::<PublishedTask>(&task_json)
@@ -224,7 +232,7 @@ fn check_class_day(name: &str, directory: &Path) -> anyhow::Result<ClassDayOutco
             rule_overrides: Default::default(),
         },
         class_day: Default::default(),
-        published_day_parameters,
+        published_day_parameters: info.published,
         decisions: BTreeMap::new(),
         deviations: Vec::new(),
     };
@@ -289,6 +297,58 @@ fn check_class_day(name: &str, directory: &Path) -> anyhow::Result<ClassDayOutco
         .count();
     checked.allowed_matching = checked.allowed_rows - mismatching_allowed_rows.len();
     Ok(ClassDayOutcome::Checked(checked))
+}
+
+/// Class slugs that name one class template, by the template names of the
+/// editions.
+const CLASS_SLUGS: &[(&[&str], &[&str])] = &[
+    (&["club", "club-klasse", "class-club"], &["Club"]),
+    (
+        &[
+            "standard",
+            "standardklasse",
+            "standard-klasse",
+            "class-standard",
+        ],
+        &["Standard"],
+    ),
+    (&["15-meter", "15m", "15-metre"], &["15 m"]),
+    (
+        &[
+            "18-meter",
+            "18m",
+            "18-metre",
+            "18m-klasse",
+            "18-meter-klasse",
+        ],
+        &["18 m"],
+    ),
+    (&["open", "offene"], &["Open"]),
+    (&["13-5-meter"], &["13.5 m"]),
+    (
+        &[
+            "20m-multi-seat",
+            "double-seater",
+            "doppelsitzer",
+            "two-seat",
+            "2seat",
+            "2-seater",
+            "dosi",
+        ],
+        &["Two-seater", "20 m multi-seat"],
+    ),
+];
+
+/// The class template of a class slug, for class days whose task info line
+/// names no `Dm` and `D1` and so score with the edition's defaults.
+fn class_template(edition: &RuleSetEdition, class: &str) -> Option<&'static ClassTemplate> {
+    let (_, names) = CLASS_SLUGS
+        .iter()
+        .find(|(slugs, _)| slugs.contains(&class))?;
+    edition
+        .class_templates
+        .iter()
+        .find(|template| names.contains(&template.name))
 }
 
 /// Whether a row's remark has an effect on scoring the download can't show,

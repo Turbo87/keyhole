@@ -37,7 +37,8 @@ dm = 50
 
 # Transcribed from the task info line of results.html, with decimal points.
 # An invalid day publishes no F, FCR or maximum points, so leaving out all
-# three publishes the day as not valid.
+# three publishes the day as not valid. Without a task info line, leave out the
+# section and only rows are compared.
 [published_day_parameters]
 d1 = 300
 n = 19
