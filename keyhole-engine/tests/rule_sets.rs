@@ -492,6 +492,7 @@ fn invalid_rule_overrides_are_errors() {
             RuleOverride::MaximumStartGroundSpeed(Some(0.)),
             Parameter::MaximumStartGroundSpeed,
         ),
+        (RuleOverride::PevWaitTime(0), Parameter::PevWaitTime),
         (RuleOverride::PevStartWindow(0), Parameter::PevStartWindow),
         (
             RuleOverride::TowAltitude(Some(f64::INFINITY)),

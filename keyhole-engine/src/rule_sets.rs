@@ -335,6 +335,7 @@ pub enum Parameter {
     StartClosingTime,
     MaximumStartAltitude,
     MaximumStartGroundSpeed,
+    PevWaitTime,
     PevStartWindow,
     TowAltitude,
     MaximumAltitude,
@@ -355,6 +356,7 @@ impl Parameter {
             Self::StartClosingTime => "the start closing time must be a time of day",
             Self::MaximumStartAltitude => "the maximum start altitude must be finite",
             Self::MaximumStartGroundSpeed => "the maximum start ground speed must be above 0 km/h",
+            Self::PevWaitTime => "the PEV wait time must be at least 1 minute",
             Self::PevStartWindow => "the PEV start window must be at least 1 minute",
             Self::TowAltitude => "the tow altitude must be finite",
             Self::MaximumAltitude => {
@@ -472,8 +474,7 @@ impl RuleOverride {
             Self::EarthModel(_)
             | Self::FinishRingSubtracted(_)
             | Self::DeliveryPeriod(_)
-            | Self::PevStart(_)
-            | Self::PevWaitTime(_) => Ok(()),
+            | Self::PevStart(_) => Ok(()),
             Self::StartLineLength(length) => {
                 check(length.is_none_or(is_positive), Parameter::StartLineLength)
             }
@@ -494,6 +495,7 @@ impl RuleOverride {
                 speed.is_none_or(is_positive),
                 Parameter::MaximumStartGroundSpeed,
             ),
+            Self::PevWaitTime(minutes) => check(*minutes > 0, Parameter::PevWaitTime),
             Self::PevStartWindow(minutes) => check(*minutes > 0, Parameter::PevStartWindow),
             Self::TowAltitude(altitude) => {
                 check(altitude.is_none_or(f64::is_finite), Parameter::TowAltitude)
