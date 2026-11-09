@@ -102,6 +102,7 @@ pub struct DayParameters {
 /// One competitor's day score.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Row {
+    pub rank: Rank,
     pub competition_id: String,
     /// The distance `D`, or `None` without a counting result.
     pub distance: Option<f64>,
@@ -111,6 +112,15 @@ pub struct Row {
     pub raw_score: f64,
     /// The day score, rounded half away from zero.
     pub score: u32,
+}
+
+/// A row's rank, or the marker of a row without one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Rank {
+    /// Shared by rows with equal day scores, skipping the ranks after them.
+    Ranked(u32),
+    /// Shown as "DNF".
+    DidNotFly,
 }
 
 /// A counting competitor's achievement with its speed.
@@ -140,8 +150,10 @@ fn hours(duration: Duration) -> f64 {
     duration.as_secs_f64() / 3600.
 }
 
-/// Scores a class day, returning its day parameters and a row per competitor in
-/// competitor order.
+/// Scores a class day, returning its day parameters and a row per competitor.
+///
+/// Rows are ordered by rank, then unrounded score, then competition ID, with
+/// unranked rows below the ranked ones.
 pub fn score_class_day(day: &ClassDay) -> DayResult {
     let achievements: Vec<_> = day
         .competitors
@@ -163,7 +175,7 @@ pub fn score_class_day(day: &ClassDay) -> DayResult {
         DayValidity::Invalid
     };
 
-    let rows = day
+    let mut rows: Vec<_> = day
         .competitors
         .iter()
         .zip(&achievements)
@@ -177,7 +189,12 @@ pub fn score_class_day(day: &ClassDay) -> DayResult {
             };
             let raw_score = (points - f64::from(competitor.penalty)).max(0.);
             let finish = achievement.and_then(|a| a.finish.as_ref());
+            let rank = match competitor.result {
+                ResultStatus::DidNotFly => Rank::DidNotFly,
+                ResultStatus::Flown(_) => Rank::Ranked(0),
+            };
             Row {
+                rank,
                 competition_id: competitor.competition_id.clone(),
                 distance: achievement.map(|a| a.distance),
                 speed: finish.map(|finish| finish.speed),
@@ -186,11 +203,34 @@ pub fn score_class_day(day: &ClassDay) -> DayResult {
             }
         })
         .collect();
+    rank(&mut rows);
 
     DayResult {
         parameters,
         validity,
         rows,
+    }
+}
+
+/// Orders the rows and numbers the ranked ones, which carry a placeholder rank.
+fn rank(rows: &mut [Row]) {
+    rows.sort_by(|a, b| {
+        let unranked = |row: &Row| !matches!(row.rank, Rank::Ranked(_));
+        unranked(a)
+            .cmp(&unranked(b))
+            .then(b.raw_score.total_cmp(&a.raw_score))
+            .then_with(|| a.competition_id.cmp(&b.competition_id))
+    });
+    let mut previous = None;
+    for (index, row) in rows.iter_mut().enumerate() {
+        let Rank::Ranked(rank) = &mut row.rank else {
+            break;
+        };
+        *rank = match previous {
+            Some((score, previous_rank)) if score == row.score => previous_rank,
+            _ => index as u32 + 1,
+        };
+        previous = Some((row.score, *rank));
     }
 }
 

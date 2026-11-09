@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use keyhole_engine::day_scoring::{
-    Achievement, ClassDay, CompetitorResult, DayResult, DayValidity, ResultStatus,
+    Achievement, ClassDay, CompetitorResult, DayResult, DayValidity, Rank, ResultStatus,
     ScoringParameters, score_class_day,
 };
 
@@ -290,4 +290,90 @@ fn assigned_area_finisher_is_raised_to_the_minimum_task_time() {
     assert_eq!(result.rows[0].speed, Some(90.));
     assert_eq!(result.rows[1].speed, Some(80.));
     assert_eq!(result.parameters.t0, Some(hours(3.)));
+}
+
+fn ranks(result: &DayResult) -> Vec<(&str, Rank)> {
+    let rows = result.rows.iter();
+    rows.map(|row| (row.competition_id.as_str(), row.rank))
+        .collect()
+}
+
+#[test]
+fn equal_day_scores_share_a_rank_and_skip_the_next() {
+    let day = class_day(vec![
+        finisher("D", 300., hours(5.)),
+        finisher("B", 300., hours(3.75)),
+        finisher("C", 300., hours(3.75)),
+        finisher("A", 300., hours(3.)),
+    ]);
+
+    let result = score_class_day(&day);
+
+    assert_eq!(
+        ranks(&result),
+        [
+            ("A", Rank::Ranked(1)),
+            ("B", Rank::Ranked(2)),
+            ("C", Rank::Ranked(2)),
+            ("D", Rank::Ranked(4)),
+        ]
+    );
+}
+
+#[test]
+fn tied_rows_order_by_unrounded_score_then_competition_id() {
+    let day = class_day(vec![
+        finisher("A", 300., hours(3.)),
+        finisher("Z", 300., hours(3.75)),
+        finisher("Y", 300., hours(3.75)),
+        finisher("X", 300., hours(3.7501)),
+    ]);
+
+    let result = score_class_day(&day);
+
+    assert_eq!(result.rows[3].score, result.rows[1].score);
+    assert_eq!(
+        ranks(&result),
+        [
+            ("A", Rank::Ranked(1)),
+            ("Y", Rank::Ranked(2)),
+            ("Z", Rank::Ranked(2)),
+            ("X", Rank::Ranked(2)),
+        ]
+    );
+}
+
+#[test]
+fn did_not_fly_results_are_unranked_below_the_ranked_rows() {
+    let day = class_day(vec![
+        competitor("B", ResultStatus::DidNotFly),
+        finisher("A", 300., hours(3.)),
+    ]);
+
+    let result = score_class_day(&day);
+
+    assert_eq!(
+        ranks(&result),
+        [("A", Rank::Ranked(1)), ("B", Rank::DidNotFly),]
+    );
+}
+
+#[test]
+fn launched_competitor_without_a_valid_start_shares_the_last_rank_with_zero_points() {
+    let day = class_day(vec![
+        landed("C", 0.),
+        finisher("A", 300., hours(3.)),
+        penalised(5000, finisher("B", 300., hours(3.))),
+    ]);
+
+    let result = score_class_day(&day);
+
+    assert_eq!(
+        ranks(&result),
+        [
+            ("A", Rank::Ranked(1)),
+            ("B", Rank::Ranked(2)),
+            ("C", Rank::Ranked(2)),
+        ]
+    );
 }
