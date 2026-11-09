@@ -1,0 +1,28 @@
+# Annex A assigned area task with a minimum task time of 3:30, no penalties,
+# every competitor finished. The task info line says "handicapping enabled",
+# but the class has no Handicap column and Do and Vo equal the unhandicapped
+# maxima, so every competitor is scored without a handicap.
+
+edition = "FAI Annex A 2025a"
+flown_under = "unknown"
+# SeeYou's distances on this day match a sphere slightly smaller than the FAI
+# Sphere, which is a known SeeYou deviation.
+earth_model = "FAI Sphere"
+
+[scoring_parameters]
+dm = 120
+d1 = 300
+
+# Assigned Area Task, Maximum Points: 1000, F = 1,000, Fcr = 1,000, Max speed pts: 667
+# ; Dm = 120km, D1 = 300km, handicapping enabled
+# ; PEVWaitTime: 5min, PEVStartWindow: 8min,  N: 19, n1: 19, n2: 19, Do: 439,38km, Vo: 120,27km/h
+[published_day_parameters]
+d1 = 300
+n = 19
+n1 = 19
+n2 = 19
+do = 439.38
+vo = 120.27
+f = 1.000
+fcr = 1.000
+maximum_points = 1000
