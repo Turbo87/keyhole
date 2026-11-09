@@ -353,3 +353,36 @@ fn duplicate_competition_id_is_an_error() {
 
     assert_eq!(error.to_string(), "A has more than one row");
 }
+
+const GUEST: &str = "HC,G,Crew G,de,,,Arcus,,12:00:00,15:00:00,3:00:00,100,300,1000,0,,";
+
+#[test]
+fn hc_rows_are_hors_concours() {
+    let report = check_day(&[FINISHER, GUEST], FIXTURE_FILE);
+
+    assert!(report.passes(), "{report}");
+    assert_eq!(
+        decisions(&report)[1],
+        (
+            "G",
+            "manual result finished from 12:00:00 to 15:00:00, 300 km (from the download), hors concours (from the download)"
+        )
+    );
+}
+
+#[test]
+fn fixture_file_decides_on_hors_concours() {
+    let fixture_file = format!("{FIXTURE_FILE}\n[decisions.G]\nhors_concours = false\n")
+        .replace("n = 1\nn1 = 1\nn2 = 1", "n = 2\nn1 = 2\nn2 = 2");
+
+    let report = check_day(&[FINISHER, GUEST], &fixture_file);
+
+    assert_eq!(
+        report.to_string().lines().next(),
+        Some("G rank: published HC, Keyhole 1")
+    );
+    assert_eq!(
+        decisions(&report)[1].1,
+        "manual result finished from 12:00:00 to 15:00:00, 300 km (from the download), not hors concours (from the fixture file)"
+    );
+}

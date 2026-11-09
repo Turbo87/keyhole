@@ -30,6 +30,7 @@ fn competitor(competition_id: &str, result: ResultStatus) -> CompetitorResult {
     CompetitorResult {
         competition_id: competition_id.into(),
         result,
+        hors_concours: false,
         penalty: 0,
     }
 }
@@ -460,4 +461,28 @@ fn launched_competitor_without_a_valid_start_shares_the_last_rank_with_zero_poin
             ("C", Standing::Ranked(2)),
         ]
     );
+}
+
+fn hors_concours(competitor: CompetitorResult) -> CompetitorResult {
+    CompetitorResult {
+        hors_concours: true,
+        ..competitor
+    }
+}
+
+#[test]
+fn hors_concours_rows_are_scored_but_unranked_and_never_change_other_points() {
+    let competitors = vec![finisher("A", 300., hours(3.75)), landed("B", 150.)];
+    let without_guest = score(&racing_day(300., competitors.clone()));
+    let mut with_guest_competitors = competitors;
+    with_guest_competitors.insert(0, hors_concours(finisher("G", 300., hours(3.))));
+
+    let result = score(&racing_day(300., with_guest_competitors));
+
+    assert_eq!(result.parameters, without_guest.parameters);
+    assert_eq!(result.rows[..2], without_guest.rows[..]);
+    assert_eq!(result.rows[2].competition_id, "G");
+    assert_eq!(result.rows[2].standing, Standing::HorsConcours);
+    assert_eq!(result.rows[2].speed, Some(100.));
+    assert_eq!(result.rows[2].day_score, 1250);
 }

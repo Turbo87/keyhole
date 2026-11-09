@@ -35,6 +35,9 @@ pub enum Task {
 pub struct CompetitorResult {
     pub competition_id: String,
     pub result: ResultStatus,
+    /// Whether the competitor is scored against the day parameters without
+    /// feeding them or being ranked.
+    pub hors_concours: bool,
     /// Points deducted from the day score after the formula.
     pub penalty: u32,
 }
@@ -127,6 +130,7 @@ pub struct Row {
 pub enum Standing {
     /// Shared by rows with equal day scores, skipping the ranks after them.
     Ranked(u32),
+    HorsConcours,
     /// Shown as "DNF".
     DidNotFly,
 }
@@ -206,7 +210,13 @@ pub fn score_class_day(day: &ClassDay) -> Result<DayResult, ScoringError> {
         })
         .collect::<Result<_, _>>()?;
 
-    let counting: Vec<_> = achievements.iter().flatten().collect();
+    let counting: Vec<_> = day
+        .competitors
+        .iter()
+        .zip(&achievements)
+        .filter(|(competitor, _)| !competitor.hors_concours)
+        .filter_map(|(_, achievement)| achievement.as_ref())
+        .collect();
     let parameters = day_parameters(&day.parameters, &counting);
 
     let validity = if 4 * parameters.n1 > parameters.n {
@@ -230,6 +240,7 @@ pub fn score_class_day(day: &ClassDay) -> Result<DayResult, ScoringError> {
             let score = (points - f64::from(competitor.penalty)).max(0.);
             let finish = achievement.and_then(|a| a.finish.as_ref());
             let standing = match competitor.result {
+                _ if competitor.hors_concours => Standing::HorsConcours,
                 ResultStatus::DidNotFly => Standing::DidNotFly,
                 ResultStatus::Flown(_) => Standing::Ranked(0),
             };

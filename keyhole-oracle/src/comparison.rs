@@ -325,6 +325,7 @@ fn row_mismatches(
 fn rank(standing: Standing) -> String {
     match standing {
         Standing::Ranked(rank) => rank.to_string(),
+        Standing::HorsConcours => "HC".into(),
         Standing::DidNotFly => "DNF".into(),
     }
 }

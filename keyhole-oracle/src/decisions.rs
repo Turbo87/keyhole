@@ -104,6 +104,7 @@ pub(crate) enum Source {
 pub(crate) struct RowDecisions {
     pub result: (ResultDecision, Source),
     pub penalty: (u32, Source),
+    pub hors_concours: (bool, Source),
 }
 
 impl RowDecisions {
@@ -119,13 +120,22 @@ impl RowDecisions {
             Some(penalty) => (penalty, Source::FixtureFile),
             None => (penalty_from_published(row)?, Source::Download),
         };
-        Ok(Self { result, penalty })
+        let hors_concours = match fixture.and_then(|fixture| fixture.hors_concours) {
+            Some(hors_concours) => (hors_concours, Source::FixtureFile),
+            None => (row.rank == "HC", Source::Download),
+        };
+        Ok(Self {
+            result,
+            penalty,
+            hors_concours,
+        })
     }
 
     pub(crate) fn competitor_result(&self, competition_id: &str) -> CompetitorResult {
         CompetitorResult {
             competition_id: competition_id.into(),
             result: self.result.0.status(),
+            hors_concours: self.hors_concours.0,
             penalty: self.penalty.0,
         }
     }
@@ -135,6 +145,11 @@ impl fmt::Display for RowDecisions {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (result, result_source) = self.result;
         write!(f, "{result} ({result_source})")?;
+        match self.hors_concours {
+            (false, Source::Download) => {}
+            (true, source) => write!(f, ", hors concours ({source})")?,
+            (false, source) => write!(f, ", not hors concours ({source})")?,
+        }
         match self.penalty {
             (0, Source::Download) => Ok(()),
             (penalty, source) => write!(f, ", penalty {penalty} ({source})"),
