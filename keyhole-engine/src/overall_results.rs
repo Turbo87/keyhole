@@ -54,6 +54,8 @@ pub enum OverallStanding {
 pub enum OverallResultsError {
     #[error("{competition_id} is ranked 0 on a class day")]
     RankedZero { competition_id: String },
+    #[error("{competition_id} has a non-finite score on a class day")]
+    NonFiniteScore { competition_id: String },
 }
 
 /// Adds up the day scores of the counting class days into one row per
@@ -69,12 +71,16 @@ pub fn overall_results(
     days: &[ClassDayScores<'_>],
 ) -> Result<Vec<OverallRow>, OverallResultsError> {
     for day in days {
-        if let ClassDayScores::Counting { rows, .. } = day
-            && let Some(row) = rows.iter().find(|row| row.standing == Standing::Ranked(0))
-        {
-            return Err(OverallResultsError::RankedZero {
-                competition_id: row.competition_id.clone(),
-            });
+        let ClassDayScores::Counting { rows, .. } = day else {
+            continue;
+        };
+        for row in *rows {
+            let competition_id = row.competition_id.clone();
+            if row.standing == Standing::Ranked(0) {
+                return Err(OverallResultsError::RankedZero { competition_id });
+            } else if !row.score.is_finite() {
+                return Err(OverallResultsError::NonFiniteScore { competition_id });
+            }
         }
     }
 

@@ -312,3 +312,18 @@ fn row_ranked_zero_is_an_error() {
     assert_eq!(error, OverallResultsError::RankedZero { competition_id });
     assert_eq!(error.to_string(), "A is ranked 0 on a class day");
 }
+
+#[test]
+fn row_with_a_non_finite_score_is_an_error() {
+    let competitors = ["A", "B"].map(competitor);
+    let day = [row("B", 1, 500.), row("A", 2, f64::NAN)];
+
+    let error = overall_results(&FAI_ANNEX_A_2025A, &competitors, &[counting(&day)]).unwrap_err();
+
+    let competition_id = "A".into();
+    assert_eq!(
+        error,
+        OverallResultsError::NonFiniteScore { competition_id }
+    );
+    assert_eq!(error.to_string(), "A has a non-finite score on a class day");
+}
