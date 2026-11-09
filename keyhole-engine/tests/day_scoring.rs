@@ -35,7 +35,7 @@ fn competitor(competition_id: &str, result: ResultStatus) -> CompetitorResult {
         result,
         hors_concours: false,
         competition_disqualified: false,
-        handicap: 0.,
+        handicap: None,
         handicap_override: None,
         penalty: 0,
     }
@@ -631,7 +631,7 @@ fn handicapped(scale: HandicapScale, day: ClassDay) -> ClassDay {
 
 fn with_handicap(handicap: f64, competitor: CompetitorResult) -> CompetitorResult {
     CompetitorResult {
-        handicap,
+        handicap: Some(handicap),
         ..competitor
     }
 }

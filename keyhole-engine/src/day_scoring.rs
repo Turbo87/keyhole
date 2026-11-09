@@ -36,8 +36,8 @@ pub struct CompetitorResult {
     /// makes every day score 0 while the achievement still feeds the day
     /// parameters.
     pub competition_disqualified: bool,
-    /// The competitor's handicap on the class's scale, or 0 when not set.
-    pub handicap: f64,
+    /// The competitor's handicap on the class's scale.
+    pub handicap: Option<f64>,
     /// The result's handicap for this class day only, which replaces the
     /// competitor's handicap.
     pub handicap_override: Option<f64>,
@@ -227,15 +227,17 @@ fn hours(duration: Duration) -> f64 {
 /// counting achievement leave the class day with nothing to score yet. A
 /// handicapped class can't be scored while competitors have no handicap.
 pub fn score_class_day(day: &ClassDay) -> Result<DayOutcome, ScoringError> {
-    let handicap = |competitor: &CompetitorResult| {
-        day.parameters.handicap_scale.map_or(1., |scale| {
-            scale.factor(competitor.handicap_override.unwrap_or(competitor.handicap))
-        })
+    let handicap = |competitor: &CompetitorResult| match day.parameters.handicap_scale {
+        Some(scale) => competitor
+            .handicap_override
+            .or(competitor.handicap)
+            .map(|handicap| scale.factor(handicap)),
+        None => Some(1.),
     };
     let competition_ids: Vec<_> = day
         .competitors
         .iter()
-        .filter(|competitor| handicap(competitor) <= 0.)
+        .filter(|competitor| handicap(competitor).is_none_or(|handicap| handicap <= 0.))
         .map(|competitor| competitor.competition_id.clone())
         .collect();
     if !competition_ids.is_empty() {
@@ -249,7 +251,8 @@ pub fn score_class_day(day: &ClassDay) -> Result<DayOutcome, ScoringError> {
             let ResultStatus::Flown(achievement) = &competitor.result else {
                 return Ok(None);
             };
-            HandicappedAchievement::new(achievement, &day.task, handicap(competitor))
+            let handicap = handicap(competitor).expect("every handicap was checked");
+            HandicappedAchievement::new(achievement, &day.task, handicap)
                 .map(Some)
                 .ok_or_else(|| ScoringError::FinishNotAfterStart {
                     competition_id: competitor.competition_id.clone(),
