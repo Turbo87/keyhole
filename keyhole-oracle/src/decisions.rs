@@ -152,6 +152,7 @@ impl RowDecisions {
             hors_concours: self.hors_concours.0,
             competition_disqualified: false,
             handicap: 0.,
+            handicap_override: None,
             penalty: self.penalty.0,
         }
     }

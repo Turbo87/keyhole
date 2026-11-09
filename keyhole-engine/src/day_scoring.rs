@@ -38,6 +38,9 @@ pub struct CompetitorResult {
     pub competition_disqualified: bool,
     /// The competitor's handicap on the class's scale.
     pub handicap: f64,
+    /// The result's handicap for this class day only, which replaces the
+    /// competitor's handicap.
+    pub handicap_override: Option<f64>,
     /// Points deducted from the day score after the formula.
     pub penalty: u32,
 }
@@ -227,10 +230,9 @@ pub fn score_class_day(day: &ClassDay) -> Result<DayOutcome, ScoringError> {
             let ResultStatus::Flown(achievement) = &competitor.result else {
                 return Ok(None);
             };
-            let handicap = day
-                .parameters
-                .handicap_scale
-                .map_or(1., |scale| scale.factor(competitor.handicap));
+            let handicap = day.parameters.handicap_scale.map_or(1., |scale| {
+                scale.factor(competitor.handicap_override.unwrap_or(competitor.handicap))
+            });
             HandicappedAchievement::new(achievement, &day.task, handicap)
                 .map(Some)
                 .ok_or_else(|| ScoringError::FinishNotAfterStart {

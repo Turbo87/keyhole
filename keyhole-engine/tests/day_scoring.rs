@@ -36,6 +36,7 @@ fn competitor(competition_id: &str, result: ResultStatus) -> CompetitorResult {
         hors_concours: false,
         competition_disqualified: false,
         handicap: 0.,
+        handicap_override: None,
         penalty: 0,
     }
 }
@@ -729,4 +730,15 @@ fn n1_and_day_validity_count_handicapped_distances_of_at_least_dm() {
 
     assert_eq!(result.parameters.n1, 1);
     assert_eq!(result.validity, DayValidity::Valid);
+}
+
+#[test]
+fn result_handicap_override_replaces_the_competitors_handicap() {
+    let mut competitor = with_handicap(1.25, finisher("A", 300., hours(3.)));
+    competitor.handicap_override = Some(1.5);
+    let day = handicapped(HandicapScale::One, racing_day(300., vec![competitor]));
+
+    let result = score(&day);
+
+    assert_eq!(best_distance_and_speed(&result), (200., 200. / 3.));
 }
