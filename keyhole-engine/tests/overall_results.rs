@@ -2,6 +2,7 @@ use keyhole_engine::day_scoring::{Row, Standing};
 use keyhole_engine::overall_results::{
     ClassDayScores, Competitor, OverallRow, OverallStanding, overall_results,
 };
+use keyhole_engine::rule_sets::{DAEC_SWO_2026, FAI_ANNEX_A_2025A};
 
 fn competitor(competition_id: &str) -> Competitor {
     Competitor {
@@ -48,7 +49,7 @@ fn totals_sum_rounded_day_scores_and_equal_totals_share_a_rank() {
         ClassDayScores::Counting(&day_2),
     ];
 
-    let rows = overall_results(&competitors, &days);
+    let rows = overall_results(&DAEC_SWO_2026, &competitors, &days);
 
     assert_eq!(
         totals(&rows),
@@ -66,7 +67,11 @@ fn rows_with_equal_unrounded_totals_order_by_competition_id() {
     let competitors = ["B", "A"].map(competitor);
     let day = [row("B", 1, 500.), row("A", 1, 500.)];
 
-    let rows = overall_results(&competitors, &[ClassDayScores::Counting(&day)]);
+    let rows = overall_results(
+        &DAEC_SWO_2026,
+        &competitors,
+        &[ClassDayScores::Counting(&day)],
+    );
 
     assert_eq!(
         totals(&rows),
@@ -88,7 +93,7 @@ fn practice_days_and_cancelled_days_are_left_out() {
         ClassDayScores::Counting(&day),
     ];
 
-    let rows = overall_results(&competitors, &days);
+    let rows = overall_results(&DAEC_SWO_2026, &competitors, &days);
 
     assert_eq!(
         totals(&rows),
@@ -118,7 +123,7 @@ fn invalid_days_and_did_not_fly_results_count_as_zero() {
         ClassDayScores::Counting(&day_3),
     ];
 
-    let rows = overall_results(&competitors, &days);
+    let rows = overall_results(&DAEC_SWO_2026, &competitors, &days);
 
     assert_eq!(
         totals(&rows),
@@ -150,7 +155,11 @@ fn hors_concours_and_competition_disqualified_competitors_are_unranked_below() {
         unranked("D", Standing::CompetitionDisqualified, 0.),
     ];
 
-    let rows = overall_results(&competitors, &[ClassDayScores::Counting(&day)]);
+    let rows = overall_results(
+        &DAEC_SWO_2026,
+        &competitors,
+        &[ClassDayScores::Counting(&day)],
+    );
 
     assert_eq!(
         totals(&rows),
@@ -159,6 +168,130 @@ fn hors_concours_and_competition_disqualified_competitors_are_unranked_below() {
             ("B", OverallStanding::Ranked(2), 600),
             ("C", OverallStanding::HorsConcours, 900),
             ("D", OverallStanding::CompetitionDisqualified, 0),
+        ]
+    );
+}
+
+#[test]
+fn podium_tie_is_broken_by_daily_first_places_under_annex_a_and_shared_under_the_swo() {
+    let competitors = ["A", "B"].map(competitor);
+    let day_1 = [row("A", 1, 600.), row("B", 2, 400.4)];
+    let day_2 = [row("B", 1, 600.), row("A", 2, 400.)];
+    let day_3 = [row("A", 1, 500.), row("B", 2, 500.4)];
+    let days = [
+        ClassDayScores::Counting(&day_1),
+        ClassDayScores::Counting(&day_2),
+        ClassDayScores::Counting(&day_3),
+    ];
+
+    let annex_a = overall_results(&FAI_ANNEX_A_2025A, &competitors, &days);
+    let swo = overall_results(&DAEC_SWO_2026, &competitors, &days);
+
+    assert_eq!(
+        totals(&annex_a),
+        [
+            ("A", OverallStanding::Ranked(1), 1500),
+            ("B", OverallStanding::Ranked(2), 1500),
+        ]
+    );
+    assert_eq!(
+        totals(&swo),
+        [
+            ("B", OverallStanding::Ranked(1), 1500),
+            ("A", OverallStanding::Ranked(1), 1500),
+        ]
+    );
+}
+
+#[test]
+fn podium_countback_moves_on_to_lower_daily_places_when_first_places_are_equal() {
+    let competitors = ["A", "B", "X", "Y"].map(competitor);
+    let day_1 = [
+        row("X", 1, 1000.),
+        row("A", 2, 700.),
+        row("B", 3, 600.),
+        row("Y", 4, 100.),
+    ];
+    let day_2 = [
+        row("X", 1, 1000.),
+        row("B", 2, 700.),
+        row("Y", 3, 650.),
+        row("A", 4, 600.),
+    ];
+    let days = [
+        ClassDayScores::Counting(&day_1),
+        ClassDayScores::Counting(&day_2),
+    ];
+
+    let rows = overall_results(&FAI_ANNEX_A_2025A, &competitors, &days);
+
+    assert_eq!(
+        totals(&rows),
+        [
+            ("X", OverallStanding::Ranked(1), 2000),
+            ("B", OverallStanding::Ranked(2), 1300),
+            ("A", OverallStanding::Ranked(3), 1300),
+            ("Y", OverallStanding::Ranked(4), 750),
+        ]
+    );
+}
+
+#[test]
+fn podium_tie_with_equal_daily_places_stays_shared_under_annex_a() {
+    let competitors = ["A", "B"].map(competitor);
+    let day_1 = [row("A", 1, 600.), row("B", 2, 400.)];
+    let day_2 = [row("B", 1, 600.), row("A", 2, 400.)];
+    let days = [
+        ClassDayScores::Counting(&day_1),
+        ClassDayScores::Counting(&day_2),
+    ];
+
+    let rows = overall_results(&FAI_ANNEX_A_2025A, &competitors, &days);
+
+    assert_eq!(
+        totals(&rows),
+        [
+            ("A", OverallStanding::Ranked(1), 1000),
+            ("B", OverallStanding::Ranked(1), 1000),
+        ]
+    );
+}
+
+#[test]
+fn tie_below_the_podium_stays_shared_under_annex_a() {
+    let competitors = ["E", "F", "G", "W", "X", "Y"].map(competitor);
+    let day_1 = [
+        row("X", 1, 1000.),
+        row("Y", 2, 900.),
+        row("W", 3, 800.),
+        row("E", 4, 300.),
+        row("F", 5, 200.),
+        row("G", 6, 100.),
+    ];
+    let day_2 = [
+        row("X", 1, 1000.),
+        row("Y", 2, 900.),
+        row("W", 3, 800.),
+        row("F", 4, 400.),
+        row("G", 5, 350.),
+        row("E", 6, 300.),
+    ];
+    let days = [
+        ClassDayScores::Counting(&day_1),
+        ClassDayScores::Counting(&day_2),
+    ];
+
+    let rows = overall_results(&FAI_ANNEX_A_2025A, &competitors, &days);
+
+    assert_eq!(
+        totals(&rows),
+        [
+            ("X", OverallStanding::Ranked(1), 2000),
+            ("Y", OverallStanding::Ranked(2), 1800),
+            ("W", OverallStanding::Ranked(3), 1600),
+            ("E", OverallStanding::Ranked(4), 600),
+            ("F", OverallStanding::Ranked(4), 600),
+            ("G", OverallStanding::Ranked(6), 450),
         ]
     );
 }
