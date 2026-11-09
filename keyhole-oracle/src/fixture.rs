@@ -6,7 +6,7 @@ use std::fs;
 use std::path::Path;
 
 use anyhow::{Context, bail};
-use keyhole_engine::day_scoring::Task;
+use keyhole_engine::day_scoring::{DayValidity, Task};
 use keyhole_engine::rule_sets::{
     self, Class, ClassDayOverrides, HandicapScale, RuleOverride, RuleSetEdition,
 };
@@ -47,6 +47,15 @@ impl Fixture {
             .task()?;
         let rows = parse_results(results_csv).context("parsing results.csv")?;
         let file: FixtureFile = toml::from_str(fixture_file).context("parsing fixture.toml")?;
+        let PublishedDayParameters {
+            f,
+            fcr,
+            maximum_points,
+            ..
+        } = file.published_day_parameters;
+        if f.is_some() != maximum_points.is_some() || fcr.is_some() != maximum_points.is_some() {
+            bail!("the published day parameters need all or none of F, FCR and maximum points");
+        }
         let scoring = file.scoring_parameters()?;
         Ok(Self {
             task,
@@ -206,9 +215,22 @@ pub(crate) struct PublishedDayParameters {
     pub d0: f64,
     #[serde(rename = "vo")]
     pub v0: f64,
-    pub f: f64,
-    pub fcr: f64,
-    pub maximum_points: f64,
+    /// `F`, `FCR` and the maximum points, which an invalid day doesn't
+    /// publish.
+    pub f: Option<f64>,
+    pub fcr: Option<f64>,
+    pub maximum_points: Option<f64>,
+}
+
+impl PublishedDayParameters {
+    /// The task info line of an invalid day says so instead of publishing the
+    /// maximum points.
+    pub fn validity(&self) -> DayValidity {
+        match self.maximum_points {
+            Some(_) => DayValidity::Valid,
+            None => DayValidity::Invalid,
+        }
+    }
 }
 
 #[derive(Debug, Default, Deserialize)]

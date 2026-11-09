@@ -1,0 +1,27 @@
+# SWO Club class racing task on the 1.000 scale where nobody reached Dm, so the
+# day fails the n1/N rule. SoaringSpot already publishes 0 points on every row.
+# Two competitors fly hors concours.
+
+edition = "DAeC SWO 2026"
+flown_under = "DAeC SWO 2024"
+
+[class]
+dm = 100
+d1 = 250
+handicapped = true
+handicap_scale = "1.000"
+
+[class.rule_overrides]
+earth_model = "WGS84"
+
+# !! n1/N <= 25% -> Day not valid and has to be canceled !!
+# ; Dm = 100km, D1 = 250km, handicapping enabled
+# ; Use PEV disabled,  N: 14, n1: 0, n2: 0, Do: 97,76km, Vo: 0,00km/h
+# ; DAeC-SWO2024 Script V9.07
+[published_day_parameters]
+d1 = 250
+n = 14
+n1 = 0
+n2 = 0
+do = 97.76
+vo = 0.00

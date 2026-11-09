@@ -6,7 +6,7 @@ use std::fmt;
 
 use anyhow::bail;
 use keyhole_engine::day_scoring::{
-    ClassDay, DayOutcome, DayParameters, Row, Standing, score_class_day,
+    ClassDay, DayOutcome, DayParameters, DayValidity, Row, Standing, score_class_day,
 };
 use serde::Deserialize;
 
@@ -27,6 +27,7 @@ pub enum Field {
     F,
     Fcr,
     MaximumPoints,
+    Validity,
     Rank,
     Points,
     Penalty,
@@ -48,6 +49,7 @@ impl fmt::Display for Field {
             Self::F => "F",
             Self::Fcr => "FCR",
             Self::MaximumPoints => "maximum points",
+            Self::Validity => "validity",
             Self::Rank => "rank",
             Self::Points => "points",
             Self::Penalty => "penalty",
@@ -180,10 +182,13 @@ pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
         mismatch
     };
 
-    let day_parameter_mismatches =
-        day_parameter_mismatches(&file.published_day_parameters, &result.parameters)
-            .map(&mut explain)
-            .collect();
+    let day_parameter_mismatches = day_parameter_mismatches(
+        &file.published_day_parameters,
+        result.validity,
+        &result.parameters,
+    )
+    .map(&mut explain)
+    .collect();
     let row_mismatches = fixture
         .rows
         .iter()
@@ -212,43 +217,53 @@ pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
     })
 }
 
+/// Compares the day parameters. An invalid day publishes no `F`, `FCR` or
+/// maximum points, so those are only compared when published.
 fn day_parameter_mismatches(
     published: &PublishedDayParameters,
+    validity: DayValidity,
     keyhole: &DayParameters,
 ) -> impl Iterator<Item = Mismatch> {
     let count = |value: u32| value.to_string();
+    let rounded = |value: Option<f64>, precision| value.map(|value| decimals(value, precision));
     [
         (
             Field::D1,
-            decimals(published.d1, 0),
+            Some(decimals(published.d1, 0)),
             decimals(keyhole.d1, 0),
         ),
-        (Field::N, count(published.n), count(keyhole.n)),
-        (Field::N1, count(published.n1), count(keyhole.n1)),
-        (Field::N2, count(published.n2), count(keyhole.n2)),
+        (Field::N, Some(count(published.n)), count(keyhole.n)),
+        (Field::N1, Some(count(published.n1)), count(keyhole.n1)),
+        (Field::N2, Some(count(published.n2)), count(keyhole.n2)),
         (
             Field::Do,
-            decimals(published.d0, 2),
+            Some(decimals(published.d0, 2)),
             decimals(keyhole.d0, 2),
         ),
         (
             Field::Vo,
-            decimals(published.v0, 2),
+            Some(decimals(published.v0, 2)),
             decimals(keyhole.v0, 2),
         ),
-        (Field::F, decimals(published.f, 3), decimals(keyhole.f, 3)),
+        (Field::F, rounded(published.f, 3), decimals(keyhole.f, 3)),
         (
             Field::Fcr,
-            decimals(published.fcr, 3),
+            rounded(published.fcr, 3),
             decimals(keyhole.fcr, 3),
         ),
         (
             Field::MaximumPoints,
-            decimals(published.maximum_points, 0),
+            rounded(published.maximum_points, 0),
             decimals(keyhole.pm.round(), 0),
+        ),
+        (
+            Field::Validity,
+            Some(verdict(published.validity())),
+            verdict(validity),
         ),
     ]
     .into_iter()
+    .filter_map(|(field, published, keyhole)| Some((field, published?, keyhole)))
     .filter(|(_, published, keyhole)| published != keyhole)
     .map(|(field, published, keyhole)| Mismatch {
         competition_id: None,
@@ -319,6 +334,13 @@ fn row_mismatches(
         keyhole: keyhole.unwrap_or_else(|| "nothing".into()),
         explanation: None,
     })
+}
+
+fn verdict(validity: DayValidity) -> String {
+    match validity {
+        DayValidity::Valid => "valid".into(),
+        DayValidity::Invalid => "not valid".into(),
+    }
 }
 
 /// Writes a standing the way SoaringSpot's rank column does.

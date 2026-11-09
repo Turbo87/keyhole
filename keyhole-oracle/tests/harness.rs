@@ -614,3 +614,54 @@ fn handicapped_class_without_a_handicap_scale_is_an_error() {
         "a handicapped class needs a handicap scale"
     );
 }
+
+const INVALID_DAY_FIXTURE_FILE: &str = r#"
+edition = "FAI Annex A 2025a"
+flown_under = "unknown"
+
+[class]
+dm = 120
+d1 = 300
+handicapped = false
+
+[published_day_parameters]
+d1 = 300
+n = 1
+n1 = 0
+n2 = 0
+do = 100.00
+vo = 0.00
+"#;
+
+const OUTLANDER: &str = "1,A,Crew A,de,,,Arcus,,12:00:00,,,,100,0,0,,";
+
+#[test]
+fn published_day_without_maximum_points_is_not_valid() {
+    let report = check_day(&[OUTLANDER], INVALID_DAY_FIXTURE_FILE);
+
+    assert!(report.passes(), "{report}");
+}
+
+#[test]
+fn published_validity_is_compared() {
+    let fixture_file = FIXTURE_FILE.replace("maximum_points = 1000", "");
+    let fixture_file = fixture_file.replace("f = 1.000\nfcr = 1.000\n", "");
+
+    let report = check_day(&[FINISHER], &fixture_file);
+
+    assert!(!report.passes());
+    assert_eq!(
+        report.to_string().lines().next(),
+        Some("validity: published not valid, Keyhole valid")
+    );
+}
+
+#[test]
+fn published_f_without_maximum_points_is_an_error() {
+    let fixture_file = FIXTURE_FILE.replace("maximum_points = 1000", "");
+
+    assert_eq!(
+        parse_error(&fixture_file),
+        "the published day parameters need all or none of F, FCR and maximum points"
+    );
+}

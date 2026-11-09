@@ -1,0 +1,38 @@
+# Annex A Club class racing task on the 1.000 scale where every competitor
+# finished and nobody has a penalty.
+
+edition = "FAI Annex A 2025a"
+flown_under = "unknown"
+
+[class]
+dm = 100
+d1 = 250
+handicapped = true
+handicap_scale = "1.000"
+
+[class.rule_overrides]
+# The Annex A editions before 2025 prescribed the FAI Sphere.
+earth_model = "FAI Sphere"
+# The task info line publishes these PEV times without saying whether the day
+# used a PEV start. Keyhole has no pre-start or minimum altitude.
+pev_wait_time = 5
+pev_start_window = 8
+
+# Racing Task, Maximum Points: 1000, F = 1.000, Fcr = 1.000, Max speed pts: 667
+# ; Dm = 100km, D1 = 250km, handicapping enabled
+# ; PEVWaitTime: 5min, PEVStartWindow: 8min, PreStart Alt = 2285m, Minimum Alt = 335m,  N: 30, n1: 30, n2: 30, Do: 396.54km, Vo: 104.88km/h
+[published_day_parameters]
+d1 = 250
+n = 30
+n1 = 30
+n2 = 30
+do = 396.54
+vo = 104.88
+f = 1.000
+fcr = 1.000
+maximum_points = 1000
+
+# The Handicap column shows 1 for IV, but SeeYou scored IV at 1.059 on the
+# class days 1 to 5. With 1, IV would set Vo and 29 rows would mismatch.
+[decisions.IV]
+handicap = 1.059
