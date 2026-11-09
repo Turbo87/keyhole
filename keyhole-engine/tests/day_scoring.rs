@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use keyhole_engine::day_scoring::{
-    Achievement, ClassDay, CompetitorResult, DayResult, ResultStatus, ScoringError,
+    Achievement, ClassDay, CompetitorResult, DayResult, DayValidity, ResultStatus, ScoringError,
     ScoringParameters, Task, score_class_day,
 };
 
@@ -224,4 +224,57 @@ fn finish_at_the_start_is_an_error() {
 
     let competition_id = "A".into();
     assert_eq!(error, ScoringError::FinishNotAfterStart { competition_id });
+}
+
+#[test]
+fn day_where_a_quarter_reached_dm_fails_the_validity_rule() {
+    let day = racing_day(
+        300.,
+        vec![
+            finisher("A", 300., hours(3.)),
+            landed("B", 99.),
+            landed("C", 50.),
+            landed("D", 20.),
+        ],
+    );
+
+    let result = score(&day);
+
+    assert_eq!(result.validity, DayValidity::Invalid);
+    assert_eq!(
+        day_scores(&result),
+        [("A", 0), ("B", 0), ("C", 0), ("D", 0)]
+    );
+    assert!(result.rows.iter().all(|row| row.score == 0.));
+}
+
+#[test]
+fn day_where_more_than_a_quarter_reached_dm_is_valid() {
+    let day = racing_day(
+        300.,
+        vec![
+            finisher("A", 300., hours(3.)),
+            landed("B", 100.),
+            landed("C", 50.),
+            landed("D", 20.),
+        ],
+    );
+
+    let result = score(&day);
+
+    assert_eq!(result.validity, DayValidity::Valid);
+    assert_eq!(result.parameters.f, 0.625);
+    assert_eq!(result.rows[0].day_score, 625);
+}
+
+#[test]
+fn day_without_anyone_flying_fails_the_validity_rule() {
+    let day = racing_day(300., vec![competitor("A", ResultStatus::DidNotFly)]);
+
+    let result = score(&day);
+
+    assert_eq!(result.validity, DayValidity::Invalid);
+    assert_eq!(result.parameters.n, 0);
+    assert_eq!(result.parameters.f, 0.);
+    assert_eq!(day_scores(&result), [("A", 0)]);
 }

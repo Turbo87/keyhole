@@ -61,7 +61,16 @@ pub enum Achievement {
 #[derive(Debug, Clone, PartialEq)]
 pub struct DayResult {
     pub parameters: DayParameters,
+    pub validity: DayValidity,
     pub rows: Vec<Row>,
+}
+
+/// Whether a class day passes the day validity rule.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DayValidity {
+    Valid,
+    /// No more than 25% of `N` reached `Dm`, so every day score is 0.
+    Invalid,
 }
 
 /// The day parameters of the 1000-point formula, all unrounded.
@@ -180,13 +189,24 @@ pub fn score_class_day(day: &ClassDay) -> Result<DayResult, ScoringError> {
     let counting: Vec<_> = achievements.iter().flatten().collect();
     let parameters = day_parameters(&day.parameters, &counting);
 
+    let validity = if 4 * parameters.n1 > parameters.n {
+        DayValidity::Valid
+    } else {
+        DayValidity::Invalid
+    };
+
     let rows = day
         .competitors
         .iter()
         .zip(&achievements)
         .map(|(competitor, achievement)| {
             let achievement = achievement.as_ref();
-            let score = achievement.map_or(0., |a| points(&parameters, a));
+            let score = match achievement {
+                Some(achievement) if validity == DayValidity::Valid => {
+                    points(&parameters, achievement)
+                }
+                _ => 0.,
+            };
             let finish = achievement.and_then(|a| a.finish.as_ref());
             Row {
                 competition_id: competitor.competition_id.clone(),
@@ -198,7 +218,11 @@ pub fn score_class_day(day: &ClassDay) -> Result<DayResult, ScoringError> {
         })
         .collect();
 
-    Ok(DayResult { parameters, rows })
+    Ok(DayResult {
+        parameters,
+        validity,
+        rows,
+    })
 }
 
 fn day_parameters(
@@ -229,10 +253,10 @@ fn day_parameters(
 
     let pm = 1000_f64.min(1250. * d0 / d1 - 250.);
     let pm = t0.map_or(pm, |t0| pm.min(400. * hours(t0) - 200.));
-    let pvm = 2. / 3. * f64::from(n2) / f64::from(n) * pm;
+    let pvm = 2. / 3. * ratio(n2, n) * pm;
     let pdm = pm - pvm;
-    let f = 1_f64.min(1.25 * f64::from(n1) / f64::from(n));
-    let fcr = 1_f64.min(1.2 * f64::from(n2) / f64::from(n1) + 0.6);
+    let f = 1_f64.min(1.25 * ratio(n1, n));
+    let fcr = 1_f64.min(1.2 * ratio(n2, n1) + 0.6);
 
     DayParameters {
         n,
@@ -248,6 +272,16 @@ fn day_parameters(
         pdm,
         f,
         fcr,
+    }
+}
+
+/// Divides two competitor counts, taking 0 for an empty divisor so that a day
+/// without counting competitors yields finite day parameters.
+fn ratio(numerator: u32, denominator: u32) -> f64 {
+    if denominator == 0 {
+        0.
+    } else {
+        f64::from(numerator) / f64::from(denominator)
     }
 }
 
