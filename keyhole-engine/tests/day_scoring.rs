@@ -742,3 +742,31 @@ fn result_handicap_override_replaces_the_competitors_handicap() {
 
     assert_eq!(best_distance_and_speed(&result), (200., 200. / 3.));
 }
+
+#[test]
+fn missing_handicap_in_a_handicapped_class_is_an_error_listing_the_competitors() {
+    let mut overridden = finisher("C", 300., hours(3.));
+    overridden.handicap_override = Some(1.1);
+    let day = handicapped(
+        HandicapScale::One,
+        racing_day(
+            300.,
+            vec![
+                finisher("A", 300., hours(3.)),
+                with_handicap(1., finisher("B", 300., hours(3.))),
+                overridden,
+                competitor("D", ResultStatus::DidNotFly),
+            ],
+        ),
+    );
+
+    let error = score_class_day(&day).unwrap_err();
+
+    assert_eq!(
+        error,
+        ScoringError::MissingHandicaps {
+            competition_ids: vec!["A".into(), "D".into()],
+        }
+    );
+    assert_eq!(error.to_string(), "no handicap for A, D");
+}

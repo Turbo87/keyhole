@@ -36,7 +36,7 @@ pub struct CompetitorResult {
     /// makes every day score 0 while the achievement still feeds the day
     /// parameters.
     pub competition_disqualified: bool,
-    /// The competitor's handicap on the class's scale.
+    /// The competitor's handicap on the class's scale, or 0 when not set.
     pub handicap: f64,
     /// The result's handicap for this class day only, which replaces the
     /// competitor's handicap.
@@ -157,6 +157,9 @@ pub enum ScoringError {
     /// A finish time isn't after its start time.
     #[error("{competition_id} finished at or before the start")]
     FinishNotAfterStart { competition_id: String },
+    /// Competitors of a handicapped class have no positive handicap.
+    #[error("no handicap for {}", competition_ids.join(", "))]
+    MissingHandicaps { competition_ids: Vec<String> },
 }
 
 /// A counting competitor's achievement, with the distance and speed also
@@ -221,8 +224,24 @@ fn hours(duration: Duration) -> f64 {
 ///
 /// Rows are ordered by rank, then unrounded score, then competition ID, with
 /// unranked rows below the ranked ones. Placeholder results without any
-/// counting achievement leave the class day with nothing to score yet.
+/// counting achievement leave the class day with nothing to score yet. A
+/// handicapped class can't be scored while competitors have no handicap.
 pub fn score_class_day(day: &ClassDay) -> Result<DayOutcome, ScoringError> {
+    let handicap = |competitor: &CompetitorResult| {
+        day.parameters.handicap_scale.map_or(1., |scale| {
+            scale.factor(competitor.handicap_override.unwrap_or(competitor.handicap))
+        })
+    };
+    let competition_ids: Vec<_> = day
+        .competitors
+        .iter()
+        .filter(|competitor| handicap(competitor) <= 0.)
+        .map(|competitor| competitor.competition_id.clone())
+        .collect();
+    if !competition_ids.is_empty() {
+        return Err(ScoringError::MissingHandicaps { competition_ids });
+    }
+
     let achievements: Vec<_> = day
         .competitors
         .iter()
@@ -230,10 +249,7 @@ pub fn score_class_day(day: &ClassDay) -> Result<DayOutcome, ScoringError> {
             let ResultStatus::Flown(achievement) = &competitor.result else {
                 return Ok(None);
             };
-            let handicap = day.parameters.handicap_scale.map_or(1., |scale| {
-                scale.factor(competitor.handicap_override.unwrap_or(competitor.handicap))
-            });
-            HandicappedAchievement::new(achievement, &day.task, handicap)
+            HandicappedAchievement::new(achievement, &day.task, handicap(competitor))
                 .map(Some)
                 .ok_or_else(|| ScoringError::FinishNotAfterStart {
                     competition_id: competitor.competition_id.clone(),
