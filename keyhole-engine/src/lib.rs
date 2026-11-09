@@ -3,6 +3,7 @@
 
 pub mod day_scoring;
 pub mod rule_sets;
+pub mod rules_hash;
 
 /// The version of the engine's algorithms, published with every result.
 ///
