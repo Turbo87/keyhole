@@ -44,6 +44,7 @@ pub struct PublishedRow {
     pub distance: Option<f64>,
     pub points: f64,
     pub penalty_points: Option<f64>,
+    pub remarks: String,
 }
 
 pub fn parse_results(results_csv: &str) -> anyhow::Result<Vec<PublishedRow>> {

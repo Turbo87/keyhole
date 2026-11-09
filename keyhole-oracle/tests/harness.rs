@@ -211,7 +211,7 @@ fn penalty_points_become_the_penalty() {
         decisions(&report),
         [(
             "A",
-            "finished 300 km in 3:00:00 (from the download), penalty 12 (from the download)"
+            "finished 300 km in 3:00:00 (from the download), penalty 12 (from the download), public remark \"Start\" (from the download)"
         )]
     );
 }
@@ -425,5 +425,74 @@ fn fixture_file_decides_on_hors_concours() {
     assert_eq!(
         decisions(&report)[1].1,
         "finished 300 km in 3:00:00 (from the download), not hors concours (from the fixture file)"
+    );
+}
+
+fn remark_decision(points: &str, penalty_points: &str, remark: &str) -> String {
+    let finisher = FINISHER.replace(
+        ",1000,0,,",
+        &format!(",{points},0,{penalty_points},\"{remark}\""),
+    );
+    let report = check_day(&[&finisher], FIXTURE_FILE);
+    assert!(report.passes(), "{report}");
+    let (_, decisions) = &report.decisions[0];
+    let (_, remark) = decisions.split_once("(from the download), ").unwrap();
+    remark.into()
+}
+
+#[test]
+fn bare_penalty_points_leave_no_public_remark() {
+    assert_eq!(
+        remark_decision("988", "12", "12 penalty points"),
+        "penalty 12 (from the download)"
+    );
+}
+
+#[test]
+fn penalty_points_with_a_thousands_separator_are_stripped_from_the_public_remark() {
+    assert_eq!(
+        remark_decision("0", "1000", "Gefährliches Verhalten (1,000 penalty points)"),
+        "penalty 1000 (from the download), public remark \"Gefährliches Verhalten\" (from the download)"
+    );
+}
+
+#[test]
+fn official_warning_group_remarks_become_official_warnings() {
+    for remark in [
+        "Verwarnung: Überfliegen abgestellter Flugzeuge",
+        "First offence, warning",
+        "1st offence",
+        "W - Start",
+    ] {
+        assert_eq!(
+            remark_decision("1000", "", remark),
+            format!("official warning \"{remark}\" (from the download)")
+        );
+    }
+}
+
+#[test]
+fn warning_remarks_with_a_penalty_become_the_public_remark() {
+    assert_eq!(
+        remark_decision("975", "25", "2nd warning (25 penalty points)"),
+        "penalty 25 (from the download), public remark \"2nd warning\" (from the download)"
+    );
+}
+
+#[test]
+fn earlier_remark_groups_take_precedence_over_official_warnings() {
+    for remark in ["Disqualified after a warning", "Withdrawn after warning"] {
+        assert_eq!(
+            remark_decision("1000", "", remark),
+            format!("remark \"{remark}\" (not applied)")
+        );
+    }
+}
+
+#[test]
+fn other_remarks_are_reported_but_not_applied() {
+    assert_eq!(
+        remark_decision("1000", "", "Loggerintervall"),
+        "remark \"Loggerintervall\" (not applied)"
     );
 }
