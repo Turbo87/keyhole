@@ -2,6 +2,7 @@
 //! with no I/O, clock, network or randomness.
 
 pub mod day_scoring;
+pub mod overall_results;
 pub mod rule_sets;
 pub mod rules_hash;
 
