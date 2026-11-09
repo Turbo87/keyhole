@@ -2,10 +2,12 @@
 //! replaced by the fixture file's decisions.
 
 use std::fmt;
+use std::sync::LazyLock;
 use std::time::Duration;
 
 use anyhow::{Context, bail};
 use keyhole_engine::day_scoring::{Achievement, CompetitorResult, ResultStatus};
+use regex::Regex;
 use serde::Deserialize;
 
 use crate::fixture::FixtureDecisions;
@@ -105,6 +107,17 @@ pub(crate) struct RowDecisions {
     pub result: (ResultDecision, Source),
     pub penalty: (u32, Source),
     pub hors_concours: (bool, Source),
+    pub remark: Option<RemarkDecision>,
+}
+
+/// What a published remark becomes. Remark text is never compared.
+#[derive(Debug)]
+pub(crate) enum RemarkDecision {
+    /// The public remark of the row's penalty.
+    PublicRemark(String),
+    OfficialWarning(String),
+    /// A remark without an effect on scoring, which only the report shows.
+    NotApplied(String),
 }
 
 impl RowDecisions {
@@ -128,6 +141,7 @@ impl RowDecisions {
             result,
             penalty,
             hors_concours,
+            remark: remark_from_published(row),
         })
     }
 
@@ -152,8 +166,20 @@ impl fmt::Display for RowDecisions {
             (false, source) => write!(f, ", not hors concours ({source})")?,
         }
         match self.penalty {
-            (0, Source::Download) => Ok(()),
-            (penalty, source) => write!(f, ", penalty {penalty} ({source})"),
+            (0, Source::Download) => {}
+            (penalty, source) => write!(f, ", penalty {penalty} ({source})")?,
+        }
+        match &self.remark {
+            None => Ok(()),
+            Some(RemarkDecision::PublicRemark(remark)) => {
+                write!(f, ", public remark \"{remark}\" ({})", Source::Download)
+            }
+            Some(RemarkDecision::OfficialWarning(remark)) => {
+                write!(f, ", official warning \"{remark}\" ({})", Source::Download)
+            }
+            Some(RemarkDecision::NotApplied(remark)) => {
+                write!(f, ", remark \"{remark}\" (not applied)")
+            }
         }
     }
 }
@@ -202,4 +228,32 @@ fn penalty_from_published(row: &PublishedRow) -> anyhow::Result<u32> {
         );
     }
     Ok(penalty.round() as u32)
+}
+
+/// Turns a published remark minus its trailing penalty points into a public
+/// remark, an official warning or a remark without effect.
+fn remark_from_published(row: &PublishedRow) -> Option<RemarkDecision> {
+    static PENALTY_POINTS: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"\s*\(?[\d,.]+ penalty points\)?\s*$").unwrap());
+    // Remarks in these groups state a result status, a crew or a
+    // disqualification, even when they also mention a warning.
+    static EARLIER_GROUPS: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(
+            r"(?i)^(dnf|dns|dnl)$|did not (fly|launch)|withdrawn|nicht abgeflogen|kein abflug|^P1 .* P2|disqual|\bdsq\b",
+        )
+        .unwrap()
+    });
+    static OFFICIAL_WARNING: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?i)warn|first offen|1st offen|^w ?-").unwrap());
+
+    let remark = PENALTY_POINTS.replace(&row.remarks, "").into_owned();
+    if remark.is_empty() {
+        None
+    } else if OFFICIAL_WARNING.is_match(&remark) && !EARLIER_GROUPS.is_match(&remark) {
+        Some(RemarkDecision::OfficialWarning(remark))
+    } else if row.penalty_points.is_some_and(|points| points > 0.) {
+        Some(RemarkDecision::PublicRemark(remark))
+    } else {
+        Some(RemarkDecision::NotApplied(remark))
+    }
 }
