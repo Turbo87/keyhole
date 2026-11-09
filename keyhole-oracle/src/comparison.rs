@@ -6,7 +6,7 @@ use std::fmt;
 
 use anyhow::bail;
 use keyhole_engine::day_scoring::{
-    ClassDay, DayOutcome, DayParameters, Row, ScoringParameters, Standing, score_class_day,
+    ClassDay, DayOutcome, DayParameters, Row, Standing, score_class_day,
 };
 use serde::Deserialize;
 
@@ -158,11 +158,8 @@ pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
         .map(|row| RowDecisions::decide(row, file.decisions.get(&row.competition_id)))
         .collect::<anyhow::Result<Vec<_>>>()?;
     let day = ClassDay {
-        parameters: ScoringParameters {
-            dm: file.scoring_parameters.dm,
-            d1: file.scoring_parameters.d1,
-            task: fixture.task.clone(),
-        },
+        parameters: fixture.scoring.clone(),
+        task: fixture.task.clone(),
         competitors: fixture
             .rows
             .iter()

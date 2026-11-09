@@ -5,8 +5,11 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
-use anyhow::Context;
+use anyhow::{Context, bail};
 use keyhole_engine::day_scoring::Task;
+use keyhole_engine::rule_sets::{
+    self, Class, ClassDayOverrides, HandicapScale, RuleOverride, RuleSetEdition,
+};
 use serde::Deserialize;
 
 use crate::comparison::Field;
@@ -19,6 +22,7 @@ pub struct Fixture {
     pub(crate) task: Task,
     pub(crate) rows: Vec<PublishedRow>,
     pub(crate) file: FixtureFile,
+    pub(crate) scoring: rule_sets::ScoringParameters,
 }
 
 impl Fixture {
@@ -42,23 +46,26 @@ impl Fixture {
             .context("parsing task.json")?
             .task()?;
         let rows = parse_results(results_csv).context("parsing results.csv")?;
-        let file = toml::from_str(fixture_file).context("parsing fixture.toml")?;
-        Ok(Self { task, rows, file })
+        let file: FixtureFile = toml::from_str(fixture_file).context("parsing fixture.toml")?;
+        let scoring = file.scoring_parameters()?;
+        Ok(Self {
+            task,
+            rows,
+            file,
+            scoring,
+        })
     }
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct FixtureFile {
-    /// The rule set edition the fixture scores under.
-    #[expect(dead_code, reason = "resolved once rule set editions exist")]
+    /// The ID of the rule set edition the fixture scores under.
     pub edition: String,
     /// The rule set edition the competition flew under, or `unknown`.
     #[expect(dead_code, reason = "informational")]
     pub flown_under: String,
-    #[expect(dead_code, reason = "used once flight analysis exists")]
-    pub earth_model: EarthModel,
-    pub scoring_parameters: ScoringParameters,
+    pub class: FixtureClass,
     /// The day parameters transcribed from the task info line of
     /// `results.html`.
     pub published_day_parameters: PublishedDayParameters,
@@ -69,7 +76,71 @@ pub(crate) struct FixtureFile {
     pub deviations: Vec<Deviation>,
 }
 
+impl FixtureFile {
+    fn scoring_parameters(&self) -> anyhow::Result<rule_sets::ScoringParameters> {
+        let Some(edition) = RuleSetEdition::find(&self.edition) else {
+            bail!("the rule set edition {} does not exist", self.edition);
+        };
+        let FixtureClass {
+            dm,
+            d1,
+            handicapped,
+            ref rule_overrides,
+        } = self.class;
+        if handicapped {
+            bail!("handicapped classes are not supported yet");
+        }
+        let class = Class {
+            dm,
+            d1,
+            handicapped,
+            handicap_scale: HandicapScale::One,
+            overrides: rule_overrides.rule_overrides(),
+        };
+        let resolution = edition
+            .resolve(&class, &ClassDayOverrides::default())
+            .context("resolving the rule overrides")?;
+        Ok(resolution.parameters.scoring)
+    }
+}
+
+/// The class's own values and its rule overrides, which hold the competition's
+/// local procedures.
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct FixtureClass {
+    pub dm: f64,
+    pub d1: f64,
+    pub handicapped: bool,
+    #[serde(default)]
+    pub rule_overrides: FixtureRuleOverrides,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct FixtureRuleOverrides {
+    pub earth_model: Option<EarthModel>,
+    pub pev_start: Option<bool>,
+    pub pev_wait_time: Option<u32>,
+    pub pev_start_window: Option<u32>,
+}
+
+impl FixtureRuleOverrides {
+    fn rule_overrides(&self) -> Vec<RuleOverride> {
+        [
+            self.earth_model
+                .map(|model| RuleOverride::EarthModel(model.into())),
+            self.pev_start.map(RuleOverride::PevStart),
+            self.pev_wait_time.map(RuleOverride::PevWaitTime),
+            self.pev_start_window.map(RuleOverride::PevStartWindow),
+        ]
+        .into_iter()
+        .flatten()
+        .collect()
+    }
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
 pub(crate) enum EarthModel {
     #[serde(rename = "WGS84")]
     Wgs84,
@@ -77,11 +148,13 @@ pub(crate) enum EarthModel {
     FaiSphere,
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct ScoringParameters {
-    pub dm: f64,
-    pub d1: f64,
+impl From<EarthModel> for rule_sets::EarthModel {
+    fn from(model: EarthModel) -> Self {
+        match model {
+            EarthModel::Wgs84 => Self::Wgs84,
+            EarthModel::FaiSphere => Self::FaiSphere,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]

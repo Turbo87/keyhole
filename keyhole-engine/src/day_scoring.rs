@@ -8,20 +8,14 @@
 
 use std::time::Duration;
 
-/// A class day's scoring parameters and each competitor's result.
+use crate::rule_sets::ScoringParameters;
+
+/// A class day's scoring parameters, its task and each competitor's result.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClassDay {
     pub parameters: ScoringParameters,
-    pub competitors: Vec<CompetitorResult>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ScoringParameters {
-    /// The minimum distance `Dm` that a day needs enough competitors to reach.
-    pub dm: f64,
-    /// The distance `D1` a winner needs for 1000 points.
-    pub d1: f64,
     pub task: Task,
+    pub competitors: Vec<CompetitorResult>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -221,7 +215,7 @@ pub fn score_class_day(day: &ClassDay) -> Result<DayOutcome, ScoringError> {
             let ResultStatus::Flown(achievement) = &competitor.result else {
                 return Ok(None);
             };
-            HandicappedAchievement::new(achievement, &day.parameters.task)
+            HandicappedAchievement::new(achievement, &day.task)
                 .map(Some)
                 .ok_or_else(|| ScoringError::FinishNotAfterStart {
                     competition_id: competitor.competition_id.clone(),
