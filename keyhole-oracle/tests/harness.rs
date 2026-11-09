@@ -186,7 +186,7 @@ explanation = "SoaringSpot leaves DNS rows unranked."
     let rows = [
         FINISHER.replace(",1000,", ",625,").replace("\n", ""),
         "DNS,B,Crew B,de,,,Arcus,,,,,,0,0,0,,".into(),
-        "DNF,C,Crew C,de,,,Arcus,,,,,,,0,0,,".into(),
+        "DNF,C,Crew C,de,,,Arcus,,,,,,0,0,0,,".into(),
     ];
     let rows: Vec<_> = rows.iter().map(String::as_str).collect();
 

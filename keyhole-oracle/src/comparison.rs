@@ -292,7 +292,8 @@ fn row_mismatches(
         (
             Field::Distance,
             hundredths(published.distance),
-            hundredths(keyhole.distance),
+            // SoaringSpot shows 0 km for a row without a counting result.
+            hundredths(Some(keyhole.distance.unwrap_or_default())),
         ),
         (
             Field::Speed,
