@@ -11,8 +11,8 @@ fn handicap(id: &str, glider_type: &str) -> Option<f64> {
 
 #[test]
 fn lookup_by_glider_type_returns_the_entry() {
-    let entry = list("igc-club-2026").lookup("LS 4,a,b").unwrap();
-    assert_eq!((entry.glider_type, entry.handicap), ("LS 4,a,b", 1.030));
+    let entry = list("igc-club-2026").lookup("LS 4a").unwrap();
+    assert_eq!((entry.glider_type, entry.handicap), ("LS 4a", 1.030));
 }
 
 #[test]
@@ -44,23 +44,22 @@ fn summary(id: &str) -> (HandicapScale, usize) {
 
 #[test]
 fn igc_club_class_list_matches_sc3ah_2026_appendix_1() {
-    assert_eq!(summary("igc-club-2026"), (HandicapScale::One, 35));
-    assert_eq!(handicap("igc-club-2026", "ASW 20B,C"), Some(1.080));
-    assert_eq!(handicap("igc-club-2026", "Discus a,b,CS"), Some(1.054));
+    assert_eq!(summary("igc-club-2026"), (HandicapScale::One, 73));
+    assert_eq!(handicap("igc-club-2026", "ASW 20B"), Some(1.080));
+    assert_eq!(handicap("igc-club-2026", "ASW 20C"), Some(1.080));
+    assert_eq!(handicap("igc-club-2026", "Discus CS"), Some(1.054));
     assert_eq!(
         handicap("igc-club-2026", "Std. Cirrus B (16m)"),
         Some(1.006)
     );
-    assert_eq!(
-        handicap("igc-club-2026", "Std. Libelle, 201B,202,203"),
-        Some(0.988)
-    );
+    assert_eq!(handicap("igc-club-2026", "Std. Libelle 203"), Some(0.988));
 }
 
 #[test]
 fn igc_20m_multi_seat_class_list_matches_sc3ah_2026_appendix_2() {
-    assert_eq!(summary("igc-20m-2026"), (HandicapScale::One, 9));
-    assert_eq!(handicap("igc-20m-2026", "ASG 32, Mi, EL"), Some(1.05));
+    assert_eq!(summary("igc-20m-2026"), (HandicapScale::One, 14));
+    assert_eq!(handicap("igc-20m-2026", "ASG 32 Mi"), Some(1.05));
+    assert_eq!(handicap("igc-20m-2026", "LS11"), Some(1.01));
     assert_eq!(
         handicap("igc-20m-2026", "Arcus (pure glider without MoP)"),
         Some(1.04)
