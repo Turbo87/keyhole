@@ -2,7 +2,8 @@ use keyhole_oracle::{Fixture, Report, check};
 
 const HEADER: &str = "rank,cn,contestant,countries,club,team,glider,handicap,start_time_local,finish_time_local,duration,speed_kmh,distance_km,points,points_sort_key,penalty_points,remarks";
 
-const TASK: &str = r#"{"task_type": "assigned_area", "task_duration": 10800}"#;
+const TASK: &str =
+    r#"{"task_type": "assigned_area", "task_distance": 300000.0, "task_duration": 10800}"#;
 
 const FIXTURE_FILE: &str = r#"
 edition = "FAI Annex A 2025a"
@@ -39,7 +40,11 @@ fn results(rows: &[&str]) -> String {
 }
 
 fn check_day(rows: &[&str], fixture_file: &str) -> Report {
-    let fixture = Fixture::parse(TASK, &results(rows), fixture_file).unwrap();
+    check_task(TASK, rows, fixture_file)
+}
+
+fn check_task(task: &str, rows: &[&str], fixture_file: &str) -> Report {
+    let fixture = Fixture::parse(task, &results(rows), fixture_file).unwrap();
     check(&fixture).unwrap()
 }
 
@@ -312,7 +317,7 @@ fn fixture_file_decision_without_a_row_is_an_error() {
 
 #[test]
 fn assigned_area_task_without_a_minimum_task_time_is_an_error() {
-    let task = r#"{"task_type": "assigned_area"}"#;
+    let task = r#"{"task_type": "assigned_area", "task_distance": 0}"#;
 
     let error = Fixture::parse(task, &results(&[FINISHER]), FIXTURE_FILE).unwrap_err();
 
@@ -507,4 +512,17 @@ fn handicapped_class_is_an_error_until_handicaps_are_scored() {
         parse_error(&fixture_file),
         "handicapped classes are not supported yet"
     );
+}
+
+#[test]
+fn racing_task_finisher_flies_the_task_distance_at_the_elapsed_time() {
+    let task = r#"{"task_type": "polygon", "task_distance": 300000.0, "task_duration": 0}"#;
+    let finisher = "1,A,Crew A,de,,,Arcus,,12:00:00,14:30:00,2:30:00,120,300,800,0,,";
+    let fixture_file = FIXTURE_FILE
+        .replace("vo = 100.00", "vo = 120.00")
+        .replace("maximum_points = 1000", "maximum_points = 800");
+
+    let report = check_task(task, &[finisher], &fixture_file);
+
+    assert!(report.passes(), "{report}");
 }

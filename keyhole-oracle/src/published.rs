@@ -11,6 +11,8 @@ use serde::{Deserialize, Deserializer};
 #[derive(Debug, Deserialize)]
 pub(crate) struct PublishedTask {
     task_type: String,
+    /// The task distance of a racing task in m.
+    task_distance: f64,
     /// The minimum task time of an assigned area task in seconds.
     task_duration: Option<u64>,
 }
@@ -26,6 +28,9 @@ impl PublishedTask {
                     minimum_task_time: Duration::from_secs(seconds),
                 })
             }
+            "polygon" => Ok(Task::Racing {
+                distance: self.task_distance / 1000.,
+            }),
             task_type => bail!("unsupported task type `{task_type}`"),
         }
     }
