@@ -6,6 +6,8 @@ use keyhole_engine::overall_results::{
 fn competitor(competition_id: &str) -> Competitor {
     Competitor {
         competition_id: competition_id.into(),
+        hors_concours: false,
+        competition_disqualified: false,
     }
 }
 
@@ -97,10 +99,10 @@ fn practice_days_and_cancelled_days_are_left_out() {
     );
 }
 
-fn unranked(competition_id: &str, standing: Standing) -> Row {
+fn unranked(competition_id: &str, standing: Standing, score: f64) -> Row {
     Row {
         standing,
-        ..row(competition_id, 0, 0.)
+        ..row(competition_id, 0, score)
     }
 }
 
@@ -108,7 +110,7 @@ fn unranked(competition_id: &str, standing: Standing) -> Row {
 fn invalid_days_and_did_not_fly_results_count_as_zero() {
     let competitors = ["A", "B"].map(competitor);
     let day_1 = [row("A", 1, 0.), row("B", 1, 0.)];
-    let day_2 = [row("B", 1, 300.), unranked("A", Standing::DidNotFly)];
+    let day_2 = [row("B", 1, 300.), unranked("A", Standing::DidNotFly, 0.)];
     let day_3 = [row("A", 1, 400.), row("B", 2, 200.)];
     let days = [
         ClassDayScores::Counting(&day_1),
@@ -123,6 +125,40 @@ fn invalid_days_and_did_not_fly_results_count_as_zero() {
         [
             ("B", OverallStanding::Ranked(1), 500),
             ("A", OverallStanding::Ranked(2), 400),
+        ]
+    );
+}
+
+#[test]
+fn hors_concours_and_competition_disqualified_competitors_are_unranked_below() {
+    let competitors = [
+        competitor("A"),
+        competitor("B"),
+        Competitor {
+            hors_concours: true,
+            ..competitor("C")
+        },
+        Competitor {
+            competition_disqualified: true,
+            ..competitor("D")
+        },
+    ];
+    let day = [
+        unranked("C", Standing::HorsConcours, 900.),
+        row("A", 1, 800.),
+        row("B", 2, 600.),
+        unranked("D", Standing::CompetitionDisqualified, 0.),
+    ];
+
+    let rows = overall_results(&competitors, &[ClassDayScores::Counting(&day)]);
+
+    assert_eq!(
+        totals(&rows),
+        [
+            ("A", OverallStanding::Ranked(1), 800),
+            ("B", OverallStanding::Ranked(2), 600),
+            ("C", OverallStanding::HorsConcours, 900),
+            ("D", OverallStanding::CompetitionDisqualified, 0),
         ]
     );
 }

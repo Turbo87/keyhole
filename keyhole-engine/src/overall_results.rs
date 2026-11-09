@@ -6,6 +6,11 @@ use crate::day_scoring::Row;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Competitor {
     pub competition_id: String,
+    /// Whether the competitor's total is shown without a rank.
+    pub hors_concours: bool,
+    /// Whether the competitor is disqualified from the competition, which
+    /// leaves the total unranked.
+    pub competition_disqualified: bool,
 }
 
 /// A class day's day scores, or the reason the class day doesn't count.
@@ -33,12 +38,16 @@ pub struct OverallRow {
 pub enum OverallStanding {
     /// Shared by rows with equal totals, skipping the ranks after them.
     Ranked(u32),
+    HorsConcours,
+    /// Shown as "DSQ".
+    CompetitionDisqualified,
 }
 
 /// Adds up the day scores of the counting class days into one row per
 /// competitor.
 ///
-/// Rows are ordered by rank, then unrounded total, then competition ID.
+/// Rows are ordered by rank, then unrounded total, then competition ID, with
+/// unranked rows below the ranked ones.
 pub fn overall_results(competitors: &[Competitor], days: &[ClassDayScores<'_>]) -> Vec<OverallRow> {
     let mut rows: Vec<_> = competitors
         .iter()
@@ -52,8 +61,15 @@ pub fn overall_results(competitors: &[Competitor], days: &[ClassDayScores<'_>]) 
             let (unrounded_total, total) = day_rows.fold((0., 0), |(unrounded, total), row| {
                 (unrounded + row.score, total + row.day_score)
             });
+            let standing = if competitor.competition_disqualified {
+                OverallStanding::CompetitionDisqualified
+            } else if competitor.hors_concours {
+                OverallStanding::HorsConcours
+            } else {
+                OverallStanding::Ranked(0)
+            };
             OverallRow {
-                standing: OverallStanding::Ranked(0),
+                standing,
                 competition_id: competitor.competition_id.clone(),
                 unrounded_total,
                 total,
@@ -64,17 +80,21 @@ pub fn overall_results(competitors: &[Competitor], days: &[ClassDayScores<'_>]) 
     rows
 }
 
-/// Orders the rows and numbers them.
+/// Orders the rows and numbers the ranked ones, which carry a placeholder rank.
 fn rank(rows: &mut [OverallRow]) {
     rows.sort_by(|a, b| {
-        b.total
-            .cmp(&a.total)
+        let unranked = |row: &OverallRow| !matches!(row.standing, OverallStanding::Ranked(_));
+        unranked(a)
+            .cmp(&unranked(b))
+            .then(b.total.cmp(&a.total))
             .then(b.unrounded_total.total_cmp(&a.unrounded_total))
             .then_with(|| a.competition_id.cmp(&b.competition_id))
     });
     let mut previous = None;
     for (index, row) in rows.iter_mut().enumerate() {
-        let OverallStanding::Ranked(rank) = &mut row.standing;
+        let OverallStanding::Ranked(rank) = &mut row.standing else {
+            break;
+        };
         *rank = match previous {
             Some((total, previous_rank)) if total == row.total => previous_rank,
             _ => index as u32 + 1,
