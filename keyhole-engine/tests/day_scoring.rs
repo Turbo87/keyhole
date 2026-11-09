@@ -30,6 +30,7 @@ fn competitor(competition_id: &str, result: ResultStatus) -> CompetitorResult {
     CompetitorResult {
         competition_id: competition_id.into(),
         result,
+        hors_concours: false,
         penalty: 0,
     }
 }
@@ -376,4 +377,60 @@ fn launched_competitor_without_a_valid_start_shares_the_last_rank_with_zero_poin
             ("C", Rank::Ranked(2)),
         ]
     );
+}
+
+fn hors_concours(competitor: CompetitorResult) -> CompetitorResult {
+    CompetitorResult {
+        hors_concours: true,
+        ..competitor
+    }
+}
+
+#[test]
+fn hors_concours_rows_are_listed_by_score_without_a_rank_and_never_change_other_points() {
+    let competitors = vec![finisher("A", 300., hours(3.75)), landed("B", 150.)];
+    let without_guest = score_class_day(&class_day(competitors.clone()));
+    let mut with_guest_competitors = competitors;
+    with_guest_competitors.push(hors_concours(finisher("G", 300., hours(3.))));
+
+    let result = score_class_day(&class_day(with_guest_competitors));
+
+    assert_eq!(result.parameters, without_guest.parameters);
+    assert_eq!(result.rows[1..], without_guest.rows[..]);
+    assert_eq!(
+        ranks(&result),
+        [
+            ("G", Rank::HorsConcours),
+            ("A", Rank::Ranked(1)),
+            ("B", Rank::Ranked(2)),
+        ]
+    );
+    assert_eq!(result.rows[0].speed, Some(100.));
+    assert_eq!(result.rows[0].score, 1250);
+}
+
+#[test]
+fn hors_concours_marker_takes_precedence_over_did_not_fly() {
+    let day = class_day(vec![
+        finisher("A", 300., hours(3.)),
+        hors_concours(competitor("G", ResultStatus::DidNotFly)),
+    ]);
+
+    let result = score_class_day(&day);
+
+    assert_eq!(
+        ranks(&result),
+        [("A", Rank::Ranked(1)), ("G", Rank::HorsConcours)]
+    );
+}
+
+#[test]
+fn day_without_competitors_who_are_not_hors_concours_is_invalid() {
+    let day = class_day(vec![hors_concours(finisher("G", 300., hours(3.)))]);
+
+    let result = score_class_day(&day);
+
+    assert_eq!(result.parameters.n, 0);
+    assert_eq!(result.validity, DayValidity::Invalid);
+    assert_eq!(day_scores(&result), [("G", 0)]);
 }

@@ -31,6 +31,9 @@ pub struct ScoringParameters {
 pub struct CompetitorResult {
     pub competition_id: String,
     pub result: ResultStatus,
+    /// Whether the competitor is scored against the day parameters without
+    /// feeding them or being ranked.
+    pub hors_concours: bool,
     /// Points deducted from the day score after the formula.
     pub penalty: u32,
 }
@@ -119,6 +122,8 @@ pub struct Row {
 pub enum Rank {
     /// Shared by rows with equal day scores, skipping the ranks after them.
     Ranked(u32),
+    /// Listed among the ranked rows by score without taking a rank.
+    HorsConcours,
     /// Shown as "DNF".
     DidNotFly,
 }
@@ -152,8 +157,8 @@ fn hours(duration: Duration) -> f64 {
 
 /// Scores a class day, returning its day parameters and a row per competitor.
 ///
-/// Rows are ordered by rank, then unrounded score, then competition ID, with
-/// unranked rows below the ranked ones.
+/// Rows are ordered by unrounded score, then competition ID, with hors concours
+/// rows among the ranked ones and did-not-fly rows below them.
 pub fn score_class_day(day: &ClassDay) -> DayResult {
     let achievements: Vec<_> = day
         .competitors
@@ -166,7 +171,13 @@ pub fn score_class_day(day: &ClassDay) -> DayResult {
         })
         .collect();
 
-    let counting: Vec<_> = achievements.iter().flatten().collect();
+    let counting: Vec<_> = day
+        .competitors
+        .iter()
+        .zip(&achievements)
+        .filter(|(competitor, _)| !competitor.hors_concours)
+        .filter_map(|(_, achievement)| achievement.as_ref())
+        .collect();
     let parameters = day_parameters(&day.parameters, &counting);
 
     let validity = if 4 * parameters.n1 > parameters.n {
@@ -190,6 +201,7 @@ pub fn score_class_day(day: &ClassDay) -> DayResult {
             let raw_score = (points - f64::from(competitor.penalty)).max(0.);
             let finish = achievement.and_then(|a| a.finish.as_ref());
             let rank = match competitor.result {
+                _ if competitor.hors_concours => Rank::HorsConcours,
                 ResultStatus::DidNotFly => Rank::DidNotFly,
                 ResultStatus::Flown(_) => Rank::Ranked(0),
             };
@@ -215,22 +227,23 @@ pub fn score_class_day(day: &ClassDay) -> DayResult {
 /// Orders the rows and numbers the ranked ones, which carry a placeholder rank.
 fn rank(rows: &mut [Row]) {
     rows.sort_by(|a, b| {
-        let unranked = |row: &Row| !matches!(row.rank, Rank::Ranked(_));
-        unranked(a)
-            .cmp(&unranked(b))
+        let below = |row: &Row| matches!(row.rank, Rank::DidNotFly);
+        below(a)
+            .cmp(&below(b))
             .then(b.raw_score.total_cmp(&a.raw_score))
             .then_with(|| a.competition_id.cmp(&b.competition_id))
     });
+    let ranked = rows.iter_mut().filter_map(|row| match &mut row.rank {
+        Rank::Ranked(rank) => Some((row.score, rank)),
+        _ => None,
+    });
     let mut previous = None;
-    for (index, row) in rows.iter_mut().enumerate() {
-        let Rank::Ranked(rank) = &mut row.rank else {
-            break;
-        };
+    for (index, (score, rank)) in ranked.enumerate() {
         *rank = match previous {
-            Some((score, previous_rank)) if score == row.score => previous_rank,
+            Some((previous_score, previous_rank)) if previous_score == score => previous_rank,
             _ => index as u32 + 1,
         };
-        previous = Some((row.score, *rank));
+        previous = Some((score, *rank));
     }
 }
 
