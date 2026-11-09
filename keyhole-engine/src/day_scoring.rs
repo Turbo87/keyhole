@@ -73,6 +73,14 @@ pub enum Achievement {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum DayOutcome {
+    Scored(DayResult),
+    /// An unknown result awaits a placeholder, but no counting achievement
+    /// sets the day parameters it needs.
+    NothingToScoreYet,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct DayResult {
     pub parameters: DayParameters,
     pub validity: DayValidity,
@@ -203,8 +211,9 @@ fn hours(duration: Duration) -> f64 {
 /// Scores a class day, returning its day parameters and a row per competitor.
 ///
 /// Rows are ordered by rank, then unrounded score, then competition ID, with
-/// unranked rows below the ranked ones.
-pub fn score_class_day(day: &ClassDay) -> Result<DayResult, ScoringError> {
+/// unranked rows below the ranked ones. Placeholder results without any
+/// counting achievement leave the class day with nothing to score yet.
+pub fn score_class_day(day: &ClassDay) -> Result<DayOutcome, ScoringError> {
     let achievements: Vec<_> = day
         .competitors
         .iter()
@@ -234,6 +243,9 @@ pub fn score_class_day(day: &ClassDay) -> Result<DayResult, ScoringError> {
             !competitor.hors_concours && competitor.result == ResultStatus::Unknown
         })
         .count() as u32;
+    if counting.is_empty() && placeholders > 0 {
+        return Ok(DayOutcome::NothingToScoreYet);
+    }
     let parameters = day_parameters(&day.parameters, &counting, placeholders);
 
     let validity = if 4 * parameters.n1 > parameters.n {
@@ -276,11 +288,11 @@ pub fn score_class_day(day: &ClassDay) -> Result<DayResult, ScoringError> {
         .collect();
     rank(&mut rows);
 
-    Ok(DayResult {
+    Ok(DayOutcome::Scored(DayResult {
         parameters,
         validity,
         rows,
-    })
+    }))
 }
 
 /// Orders the rows and numbers the ranked ones, which carry a placeholder rank.

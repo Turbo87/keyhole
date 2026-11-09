@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use keyhole_engine::day_scoring::{
-    Achievement, ClassDay, CompetitorResult, DayResult, DayValidity, ResultStatus, ScoringError,
-    ScoringParameters, Standing, Task, score_class_day,
+    Achievement, ClassDay, CompetitorResult, DayOutcome, DayResult, DayValidity, ResultStatus,
+    ScoringError, ScoringParameters, Standing, Task, score_class_day,
 };
 
 fn hours(hours: f64) -> Duration {
@@ -60,7 +60,10 @@ fn time_of_day(hour: u64, minute: u64) -> Duration {
 }
 
 fn score(day: &ClassDay) -> DayResult {
-    score_class_day(day).unwrap()
+    match score_class_day(day).unwrap() {
+        DayOutcome::Scored(result) => result,
+        DayOutcome::NothingToScoreYet => panic!("nothing to score yet"),
+    }
 }
 
 #[test]
@@ -593,4 +596,20 @@ fn unknown_result_of_a_hors_concours_competitor_gets_no_placeholder() {
     let parameters = &result.parameters;
     assert_eq!((parameters.n, parameters.n1, parameters.n2), (1, 1, 1));
     assert_eq!(result.rows[1].standing, Standing::HorsConcours);
+}
+
+#[test]
+fn unknown_result_without_any_counting_achievement_leaves_nothing_to_score_yet() {
+    let day = racing_day(
+        300.,
+        vec![
+            competitor("A", ResultStatus::Unknown),
+            competitor("B", ResultStatus::DidNotFly),
+            hors_concours(finisher("G", 300., hours(3.))),
+        ],
+    );
+
+    let outcome = score_class_day(&day).unwrap();
+
+    assert_eq!(outcome, DayOutcome::NothingToScoreYet);
 }
