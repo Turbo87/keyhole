@@ -53,6 +53,8 @@ pub enum Achievement {
     Finished {
         start_time: Duration,
         finish_time: Duration,
+        /// The distance flown, which only an assigned area task uses, since a
+        /// racing task finisher flew the task distance.
         distance: f64,
     },
     Landed {
@@ -139,7 +141,7 @@ struct Finish {
 
 impl HandicappedAchievement {
     /// Returns `None` for a finish at or before the start.
-    fn new(achievement: &Achievement) -> Option<Self> {
+    fn new(achievement: &Achievement, task: &Task) -> Option<Self> {
         let (start_time, finish_time, distance) = match *achievement {
             Achievement::Landed { distance } => {
                 return Some(Self {
@@ -153,15 +155,19 @@ impl HandicappedAchievement {
                 distance,
             } => (start_time, finish_time, distance),
         };
-        let time = finish_time
+        let task_time = finish_time
             .checked_sub(start_time)
-            .filter(|time| !time.is_zero())?;
+            .filter(|task_time| !task_time.is_zero())?;
+        let (dh, time) = match *task {
+            Task::Racing { distance } => (distance, task_time),
+            Task::AssignedArea { minimum_task_time } => {
+                (distance, task_time.max(minimum_task_time))
+            }
+        };
+        let vh = dh / hours(time);
         Some(Self {
-            dh: distance,
-            finish: Some(Finish {
-                vh: distance / hours(time),
-                time,
-            }),
+            dh,
+            finish: Some(Finish { vh, time }),
         })
     }
 }
@@ -180,7 +186,7 @@ pub fn score_class_day(day: &ClassDay) -> Result<DayResult, ScoringError> {
             let ResultStatus::Flown(achievement) = &competitor.result else {
                 return Ok(None);
             };
-            HandicappedAchievement::new(achievement)
+            HandicappedAchievement::new(achievement, &day.parameters.task)
                 .map(Some)
                 .ok_or_else(|| ScoringError::FinishNotAfterStart {
                     competition_id: competitor.competition_id.clone(),

@@ -335,3 +335,31 @@ fn only_the_day_score_is_rounded_with_halves_away_from_zero() {
     assert_eq!(result.rows[0].day_score, 303);
     assert_eq!(result.rows[1].distance, Some(100.123_456));
 }
+
+#[test]
+fn racing_task_finisher_flies_the_task_distance() {
+    let day = racing_day(300., vec![finisher("A", 0., hours(3.))]);
+
+    let result = score(&day);
+
+    assert_eq!(result.rows[0].distance, Some(300.));
+    assert_eq!(result.rows[0].speed, Some(100.));
+}
+
+#[test]
+fn assigned_area_finisher_is_raised_to_the_minimum_task_time() {
+    let day = assigned_area_day(
+        hours(3.),
+        vec![
+            timed_finisher("A", time_of_day(10, 0), time_of_day(12, 30), 270.),
+            timed_finisher("B", time_of_day(10, 0), time_of_day(13, 30), 280.),
+        ],
+    );
+
+    let result = score(&day);
+
+    assert_eq!(result.rows[0].distance, Some(270.));
+    assert_eq!(result.rows[0].speed, Some(90.));
+    assert_eq!(result.rows[1].speed, Some(80.));
+    assert_eq!(result.parameters.t0, Some(hours(3.)));
+}
