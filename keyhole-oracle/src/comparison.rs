@@ -6,7 +6,7 @@ use std::fmt;
 
 use anyhow::bail;
 use keyhole_engine::day_scoring::{
-    ClassDay, DayParameters, Row, ScoringParameters, Standing, score_class_day,
+    ClassDay, DayOutcome, DayParameters, Row, ScoringParameters, Standing, score_class_day,
 };
 use serde::Deserialize;
 
@@ -170,7 +170,9 @@ pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
             .map(|(row, decisions)| decisions.competitor_result(&row.competition_id))
             .collect(),
     };
-    let result = score_class_day(&day)?;
+    let DayOutcome::Scored(result) = score_class_day(&day)? else {
+        bail!("the class day has nothing to score yet");
+    };
 
     let mut deviations = file.deviations.clone();
     let mut explain = |mut mismatch: Mismatch| {
@@ -329,6 +331,7 @@ fn rank(standing: Standing) -> String {
         Standing::HorsConcours => "HC".into(),
         Standing::CompetitionDisqualified => "DSQ".into(),
         Standing::DidNotFly => "DNF".into(),
+        Standing::NoResultYet => "No result yet".into(),
     }
 }
 

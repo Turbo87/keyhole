@@ -48,6 +48,9 @@ pub struct CompetitorResult {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ResultStatus {
+    /// No achievement is known yet, such as before the competitor's file
+    /// arrives.
+    Unknown,
     DidNotFly,
     /// The achievement analysed from a scored file or entered as a manual
     /// result.
@@ -70,6 +73,14 @@ pub enum Achievement {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum DayOutcome {
+    Scored(DayResult),
+    /// An unknown result awaits a placeholder, but no counting achievement
+    /// sets the day parameters it needs.
+    NothingToScoreYet,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct DayResult {
     pub parameters: DayParameters,
     pub validity: DayValidity,
@@ -87,7 +98,7 @@ pub enum DayValidity {
 /// The day parameters of the 1000-point formula, all unrounded.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DayParameters {
-    /// The number of competitors who flew.
+    /// The number of competitors who flew, including placeholder results.
     pub n: u32,
     /// The number of competitors who reached `Dm`.
     pub n1: u32,
@@ -139,6 +150,7 @@ pub enum Standing {
     CompetitionDisqualified,
     /// Shown as "DNF".
     DidNotFly,
+    NoResultYet,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -199,8 +211,9 @@ fn hours(duration: Duration) -> f64 {
 /// Scores a class day, returning its day parameters and a row per competitor.
 ///
 /// Rows are ordered by rank, then unrounded score, then competition ID, with
-/// unranked rows below the ranked ones.
-pub fn score_class_day(day: &ClassDay) -> Result<DayResult, ScoringError> {
+/// unranked rows below the ranked ones. Placeholder results without any
+/// counting achievement leave the class day with nothing to score yet.
+pub fn score_class_day(day: &ClassDay) -> Result<DayOutcome, ScoringError> {
     let achievements: Vec<_> = day
         .competitors
         .iter()
@@ -223,7 +236,17 @@ pub fn score_class_day(day: &ClassDay) -> Result<DayResult, ScoringError> {
         .filter(|(competitor, _)| !competitor.hors_concours)
         .filter_map(|(_, achievement)| achievement.as_ref())
         .collect();
-    let parameters = day_parameters(&day.parameters, &counting);
+    let placeholders = day
+        .competitors
+        .iter()
+        .filter(|competitor| {
+            !competitor.hors_concours && competitor.result == ResultStatus::Unknown
+        })
+        .count() as u32;
+    if counting.is_empty() && placeholders > 0 {
+        return Ok(DayOutcome::NothingToScoreYet);
+    }
+    let parameters = day_parameters(&day.parameters, &counting, placeholders);
 
     let validity = if 4 * parameters.n1 > parameters.n {
         DayValidity::Valid
@@ -249,6 +272,7 @@ pub fn score_class_day(day: &ClassDay) -> Result<DayResult, ScoringError> {
             let standing = match competitor.result {
                 _ if competitor.competition_disqualified => Standing::CompetitionDisqualified,
                 _ if competitor.hors_concours => Standing::HorsConcours,
+                ResultStatus::Unknown => Standing::NoResultYet,
                 ResultStatus::DidNotFly => Standing::DidNotFly,
                 ResultStatus::Flown(_) => Standing::Ranked(0),
             };
@@ -264,11 +288,11 @@ pub fn score_class_day(day: &ClassDay) -> Result<DayResult, ScoringError> {
         .collect();
     rank(&mut rows);
 
-    Ok(DayResult {
+    Ok(DayOutcome::Scored(DayResult {
         parameters,
         validity,
         rows,
-    })
+    }))
 }
 
 /// Orders the rows and numbers the ranked ones, which carry a placeholder rank.
@@ -293,9 +317,13 @@ fn rank(rows: &mut [Row]) {
     }
 }
 
+/// Computes the day parameters from the counting achievements and the number
+/// of placeholder results, which feed `N`, `n1` and `n2` but never `D0`, `V0`
+/// or `T0`.
 fn day_parameters(
     scoring: &ScoringParameters,
     achievements: &[&HandicappedAchievement],
+    placeholders: u32,
 ) -> DayParameters {
     let ScoringParameters { dm, d1, .. } = *scoring;
 
@@ -315,9 +343,20 @@ fn day_parameters(
     let v0 = winner.map_or(0., |winner| winner.vh);
     let t0 = winner.map(|winner| winner.time);
 
-    let n = achievements.len() as u32;
-    let n1 = achievements.iter().filter(|a| a.dh >= dm).count() as u32;
-    let n2 = finishes().filter(|finish| finish.vh > 2. / 3. * v0).count() as u32;
+    // A placeholder is a finisher at `V0` when anyone finished and a
+    // non-finisher at `D0` otherwise.
+    let placeholders_finish = winner.is_some();
+    let placeholders_in_n1 = if placeholders_finish || d0 >= dm {
+        placeholders
+    } else {
+        0
+    };
+    let placeholders_in_n2 = if placeholders_finish { placeholders } else { 0 };
+
+    let n = achievements.len() as u32 + placeholders;
+    let n1 = achievements.iter().filter(|a| a.dh >= dm).count() as u32 + placeholders_in_n1;
+    let n2 =
+        finishes().filter(|finish| finish.vh > 2. / 3. * v0).count() as u32 + placeholders_in_n2;
 
     let pm = 1000_f64.min(1250. * d0 / d1 - 250.);
     let pm = t0.map_or(pm, |t0| pm.min(400. * hours(t0) - 200.));

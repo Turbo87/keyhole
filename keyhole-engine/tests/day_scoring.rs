@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use keyhole_engine::day_scoring::{
-    Achievement, ClassDay, CompetitorResult, DayResult, DayValidity, ResultStatus, ScoringError,
-    ScoringParameters, Standing, Task, score_class_day,
+    Achievement, ClassDay, CompetitorResult, DayOutcome, DayResult, DayValidity, ResultStatus,
+    ScoringError, ScoringParameters, Standing, Task, score_class_day,
 };
 
 fn hours(hours: f64) -> Duration {
@@ -60,7 +60,10 @@ fn time_of_day(hour: u64, minute: u64) -> Duration {
 }
 
 fn score(day: &ClassDay) -> DayResult {
-    score_class_day(day).unwrap()
+    match score_class_day(day).unwrap() {
+        DayOutcome::Scored(result) => result,
+        DayOutcome::NothingToScoreYet => panic!("nothing to score yet"),
+    }
 }
 
 #[test]
@@ -511,4 +514,102 @@ fn competition_disqualified_row_scores_zero_unranked_and_still_feeds_the_day_par
     assert_eq!(result.rows[0].score, undisqualified.rows[1].score);
     assert_eq!((result.rows[1].score, result.rows[1].day_score), (0., 0));
     assert_eq!(result.rows[1].speed, Some(100.));
+}
+
+#[test]
+fn unknown_result_with_finishers_counts_as_an_unranked_finisher_at_the_best_speed() {
+    let day = racing_day(
+        300.,
+        vec![
+            competitor("C", ResultStatus::Unknown),
+            finisher("A", 300., hours(3.)),
+            landed("B", 150.),
+        ],
+    );
+
+    let result = score(&day);
+
+    let parameters = &result.parameters;
+    assert_eq!((parameters.n, parameters.n1, parameters.n2), (3, 3, 2));
+    assert_eq!(parameters.d0, 300.);
+    assert_eq!(parameters.v0, 100.);
+    assert_eq!(parameters.t0, Some(hours(3.)));
+    assert_eq!(day_scores(&result), [("A", 1000), ("B", 278), ("C", 0)]);
+    assert_eq!(
+        standings(&result),
+        [
+            ("A", Standing::Ranked(1)),
+            ("B", Standing::Ranked(2)),
+            ("C", Standing::NoResultYet),
+        ]
+    );
+    assert_eq!(
+        (result.rows[2].distance, result.rows[2].speed),
+        (None, None)
+    );
+}
+
+#[test]
+fn unknown_result_without_finishers_counts_as_a_non_finisher_at_the_best_distance() {
+    let day = racing_day(
+        300.,
+        vec![landed("A", 200.), competitor("B", ResultStatus::Unknown)],
+    );
+
+    let result = score(&day);
+
+    let parameters = &result.parameters;
+    assert_eq!((parameters.n, parameters.n1, parameters.n2), (2, 2, 0));
+    assert_eq!(parameters.d0, 200.);
+    assert_eq!(parameters.v0, 0.);
+    assert_eq!(parameters.t0, None);
+    assert_eq!(day_scores(&result), [("A", 450), ("B", 0)]);
+    assert_eq!(result.rows[1].standing, Standing::NoResultYet);
+}
+
+#[test]
+fn unknown_result_below_dm_counts_in_n_but_not_in_n1() {
+    let day = racing_day(
+        300.,
+        vec![landed("A", 80.), competitor("B", ResultStatus::Unknown)],
+    );
+
+    let result = score(&day);
+
+    let parameters = &result.parameters;
+    assert_eq!((parameters.n, parameters.n1, parameters.n2), (2, 0, 0));
+    assert_eq!(result.validity, DayValidity::Invalid);
+}
+
+#[test]
+fn unknown_result_of_a_hors_concours_competitor_gets_no_placeholder() {
+    let day = racing_day(
+        300.,
+        vec![
+            finisher("A", 300., hours(3.)),
+            hors_concours(competitor("G", ResultStatus::Unknown)),
+        ],
+    );
+
+    let result = score(&day);
+
+    let parameters = &result.parameters;
+    assert_eq!((parameters.n, parameters.n1, parameters.n2), (1, 1, 1));
+    assert_eq!(result.rows[1].standing, Standing::HorsConcours);
+}
+
+#[test]
+fn unknown_result_without_any_counting_achievement_leaves_nothing_to_score_yet() {
+    let day = racing_day(
+        300.,
+        vec![
+            competitor("A", ResultStatus::Unknown),
+            competitor("B", ResultStatus::DidNotFly),
+            hors_concours(finisher("G", 300., hours(3.))),
+        ],
+    );
+
+    let outcome = score_class_day(&day).unwrap();
+
+    assert_eq!(outcome, DayOutcome::NothingToScoreYet);
 }
