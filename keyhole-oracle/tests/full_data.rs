@@ -290,6 +290,29 @@ fn handicaps_on_the_1000_scale_score_on_the_1000_scale() {
     assert!(report.passes(), "{report}");
 }
 
+#[test]
+fn rows_with_unknown_effect_remarks_are_allowed_failures() {
+    let second =
+        "2,B,Crew B,de,,,Arcus,,12:00:00,15:30:00,3:30:00,85.71,300,999,0,,Airspace infringement";
+    let third =
+        "2,C,Crew C,de,,,Arcus,,12:00:00,15:30:00,3:30:00,85.71,300,714,0,,Turnpoint 2 missed";
+    let task_info = TASK_INFO.replace("N: 1, n1: 1, n2: 1", "N: 3, n1: 3, n2: 3");
+    let download = write_download(&[ClassDay {
+        task_info: &task_info,
+        rows: &[FINISHER, second, third],
+        ..DAY
+    }]);
+
+    let report = check(&download, Baseline::Gate);
+
+    assert!(report.passes(), "{report}");
+    assert!(report.to_string().contains(
+        "Allowed failures: 2 rows with remarks of unknown effect, 1 of them matching.
+  some-competition/open/2024-05-11 B points: published 999, Keyhole 714 (remark \"Airspace infringement\")
+"
+    ));
+}
+
 fn write_download_into(download: &TempDir, days: &[ClassDay]) {
     let fresh = write_download(days);
     for day in days {

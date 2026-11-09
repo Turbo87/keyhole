@@ -10,6 +10,7 @@ use anyhow::{Context, bail};
 use serde::Deserialize;
 
 use crate::comparison::{Field, check};
+use crate::decisions::{RemarkGroup, public_remark};
 use crate::fixture::{Fixture, FixtureClass, FixtureFile, FixtureHandicapScale};
 use crate::published::{PublishedRow, PublishedTask, parse_results};
 use crate::task_info::{RuleSetFamily, TaskInfo, rule_set_family, task_info_line};
@@ -55,6 +56,7 @@ pub fn check_download(directory: &Path, baseline: Baseline) -> anyhow::Result<Do
                     line: format!("{name} error: {error:#}"),
                     group: Group::Error(format!("{error:#}")),
                 }],
+                ..CheckedClassDay::default()
             }),
         }
     }
@@ -147,6 +149,12 @@ enum ClassDayOutcome {
 #[derive(Default)]
 struct CheckedClassDay {
     entries: Vec<Entry>,
+    /// Rows whose remarks have an unknown effect on scoring.
+    allowed_rows: usize,
+    /// Those of them without a mismatch.
+    allowed_matching: usize,
+    /// The mismatches of those rows, which never fail the suite.
+    allowed_mismatches: Vec<String>,
 }
 
 /// Competitions whose handicapped class days SeeYou scored with the handicap
@@ -235,7 +243,11 @@ fn check_class_day(name: &str, directory: &Path) -> anyhow::Result<ClassDayOutco
             group: Group::Mismatch(mismatch.field, Cause::DayParameter),
         })
         .collect();
-    let mut checked = CheckedClassDay { entries };
+    let mut checked = CheckedClassDay {
+        entries,
+        ..CheckedClassDay::default()
+    };
+    let mut mismatching_allowed_rows = BTreeSet::new();
     for mismatch in &report.row_mismatches {
         let competition_id = mismatch
             .competition_id
@@ -250,6 +262,14 @@ fn check_class_day(name: &str, directory: &Path) -> anyhow::Result<ClassDayOutco
             "{name} {competition_id} {}: published {}, Keyhole {}",
             mismatch.field, mismatch.published, mismatch.keyhole
         );
+        if effect_unknown(row) {
+            mismatching_allowed_rows.insert(competition_id);
+            let remark = public_remark(row);
+            checked
+                .allowed_mismatches
+                .push(format!("{line} (remark \"{remark}\")"));
+            continue;
+        }
         let cause = if day_parameters_differ {
             Cause::DayParameterMismatch
         } else {
@@ -260,7 +280,32 @@ fn check_class_day(name: &str, directory: &Path) -> anyhow::Result<ClassDayOutco
             group: Group::Mismatch(mismatch.field, cause),
         });
     }
+    checked.allowed_rows = fixture
+        .rows
+        .iter()
+        .filter(|row| effect_unknown(row))
+        .count();
+    checked.allowed_matching = checked.allowed_rows - mismatching_allowed_rows.len();
     Ok(ClassDayOutcome::Checked(checked))
+}
+
+/// Whether a row's remark has an effect on scoring the download can't show,
+/// such as an airspace or turnpoint remark, a bare rule reference or an
+/// unknown remark, or a start or administrative remark without a penalty.
+fn effect_unknown(row: &PublishedRow) -> bool {
+    let remark = public_remark(row);
+    if remark.is_empty() {
+        return false;
+    }
+    let penalised = row.penalty_points.is_some_and(|points| points != 0.);
+    match RemarkGroup::of(&remark) {
+        RemarkGroup::AirspaceOrCompetitionArea
+        | RemarkGroup::Turnpoint
+        | RemarkGroup::RuleReference
+        | RemarkGroup::Other => true,
+        RemarkGroup::Start | RemarkGroup::Administrative => !penalised,
+        _ => false,
+    }
 }
 
 /// Reads the scale of a handicapped class from its Handicap column. Values on
@@ -353,6 +398,9 @@ pub struct DownloadReport {
     checked: usize,
     left_out: BTreeMap<LeftOut, usize>,
     entries: Vec<Entry>,
+    allowed_rows: usize,
+    allowed_matching: usize,
+    allowed_mismatches: Vec<String>,
     /// Whether the download has no baseline yet.
     baseline_missing: bool,
     /// Mismatches and errors missing from the baseline.
@@ -370,6 +418,9 @@ impl DownloadReport {
     fn add(&mut self, checked: CheckedClassDay) {
         self.checked += 1;
         self.entries.extend(checked.entries);
+        self.allowed_rows += checked.allowed_rows;
+        self.allowed_matching += checked.allowed_matching;
+        self.allowed_mismatches.extend(checked.allowed_mismatches);
     }
 }
 
@@ -394,6 +445,17 @@ impl fmt::Display for DownloadReport {
             writeln!(f, "  {group}: {}", lines.len())?;
             for line in lines.iter().take(EXAMPLES) {
                 writeln!(f, "    {line}")?;
+            }
+        }
+
+        if self.allowed_rows > 0 {
+            writeln!(
+                f,
+                "Allowed failures: {} rows with remarks of unknown effect, {} of them matching.",
+                self.allowed_rows, self.allowed_matching
+            )?;
+            for line in &self.allowed_mismatches {
+                writeln!(f, "  {line}")?;
             }
         }
 
