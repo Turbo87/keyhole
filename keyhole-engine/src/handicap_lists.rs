@@ -2,6 +2,7 @@
 
 use crate::rule_sets::HandicapScale;
 
+mod daec_2026;
 mod igc_2026;
 
 /// One published edition of handicaps per glider type, built in and never
@@ -30,7 +31,16 @@ const fn entry(glider_type: &'static str, handicap: f64) -> HandicapEntry {
 }
 
 impl HandicapList {
-    pub const ALL: [&'static Self; 2] = [&igc_2026::CLUB, &igc_2026::MULTI_SEAT_20M];
+    pub const ALL: [&'static Self; 8] = [
+        &daec_2026::CROSS_CLASS,
+        &daec_2026::OPEN,
+        &daec_2026::CLASS_18M,
+        &daec_2026::CLASS_15M,
+        &daec_2026::STANDARD,
+        &daec_2026::STANDARD_JUNIOR,
+        &igc_2026::CLUB,
+        &igc_2026::MULTI_SEAT_20M,
+    ];
 
     pub fn find(id: &str) -> Option<&'static Self> {
         Self::ALL.into_iter().find(|list| list.id == id)
