@@ -431,6 +431,14 @@ fn official_warning_group_remarks_become_official_warnings() {
 }
 
 #[test]
+fn warning_remarks_with_a_penalty_become_the_public_remark() {
+    assert_eq!(
+        remark_decision("975", "25", "2nd warning (25 penalty points)"),
+        "penalty 25 (from the download), public remark \"2nd warning\" (from the download)"
+    );
+}
+
+#[test]
 fn earlier_remark_groups_take_precedence_over_official_warnings() {
     for remark in ["Disqualified after a warning", "Withdrawn after warning"] {
         assert_eq!(

@@ -249,10 +249,10 @@ fn remark_from_published(row: &PublishedRow) -> Option<RemarkDecision> {
     let remark = PENALTY_POINTS.replace(&row.remarks, "").into_owned();
     if remark.is_empty() {
         None
-    } else if OFFICIAL_WARNING.is_match(&remark) && !EARLIER_GROUPS.is_match(&remark) {
-        Some(RemarkDecision::OfficialWarning(remark))
     } else if row.penalty_points.is_some_and(|points| points > 0.) {
         Some(RemarkDecision::PublicRemark(remark))
+    } else if OFFICIAL_WARNING.is_match(&remark) && !EARLIER_GROUPS.is_match(&remark) {
+        Some(RemarkDecision::OfficialWarning(remark))
     } else {
         Some(RemarkDecision::NotApplied(remark))
     }
