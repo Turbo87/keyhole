@@ -2,7 +2,8 @@ use keyhole_oracle::{Fixture, Report, check};
 
 const HEADER: &str = "rank,cn,contestant,countries,club,team,glider,handicap,start_time_local,finish_time_local,duration,speed_kmh,distance_km,points,points_sort_key,penalty_points,remarks";
 
-const TASK: &str = r#"{"task_type": "assigned_area", "task_duration": 10800}"#;
+const TASK: &str =
+    r#"{"task_type": "assigned_area", "task_distance": 300000.0, "task_duration": 10800}"#;
 
 const FIXTURE_FILE: &str = r#"
 edition = "FAI Annex A 2025a"
@@ -39,7 +40,11 @@ fn results(rows: &[&str]) -> String {
 }
 
 fn check_day(rows: &[&str], fixture_file: &str) -> Report {
-    let fixture = Fixture::parse(TASK, &results(rows), fixture_file).unwrap();
+    check_task(TASK, rows, fixture_file)
+}
+
+fn check_task(task: &str, rows: &[&str], fixture_file: &str) -> Report {
+    let fixture = Fixture::parse(task, &results(rows), fixture_file).unwrap();
     check(&fixture).unwrap()
 }
 
@@ -312,7 +317,7 @@ fn fixture_file_decision_without_a_row_is_an_error() {
 
 #[test]
 fn assigned_area_task_without_a_minimum_task_time_is_an_error() {
-    let task = r#"{"task_type": "assigned_area"}"#;
+    let task = r#"{"task_type": "assigned_area", "task_distance": 0}"#;
 
     let error = Fixture::parse(task, &results(&[FINISHER]), FIXTURE_FILE).unwrap_err();
 
@@ -477,6 +482,21 @@ fn class_dm_reaches_day_scoring() {
 }
 
 #[test]
+fn class_day_dm_wins_over_the_class_dm() {
+    let fixture_file = FIXTURE_FILE.replace(
+        "[published_day_parameters]",
+        "[class_day]\ndm = 301\n\n[published_day_parameters]",
+    );
+
+    let report = check_day(&[FINISHER], &fixture_file);
+
+    assert_eq!(
+        report.to_string().lines().next(),
+        Some("n1: published 1, Keyhole 0")
+    );
+}
+
+#[test]
 fn unknown_edition_is_an_error() {
     let fixture_file = FIXTURE_FILE.replace("FAI Annex A 2025a", "FAI Annex A 2024");
 
@@ -499,12 +519,98 @@ fn invalid_rule_override_is_an_error() {
     );
 }
 
+const HANDICAPPED_FIXTURE_FILE: &str = r#"
+edition = "FAI Annex A 2025a"
+flown_under = "unknown"
+
+[class]
+dm = 120
+d1 = 300
+handicapped = true
+handicap_scale = "100"
+
+[published_day_parameters]
+d1 = 300
+n = 1
+n1 = 1
+n2 = 1
+do = 240.00
+vo = 80.00
+f = 1.000
+fcr = 1.000
+maximum_points = 750
+"#;
+
+const HANDICAPPED_FINISHER: &str =
+    "1,A,Crew A,de,,,Arcus,125,12:00:00,15:00:00,3:00:00,100,300,750,0,,";
+
 #[test]
-fn handicapped_class_is_an_error_until_handicaps_are_scored() {
+fn handicap_column_values_divide_while_rows_compare_unhandicapped_values() {
+    let report = check_day(&[HANDICAPPED_FINISHER], HANDICAPPED_FIXTURE_FILE);
+
+    assert!(report.passes(), "{report}");
+    assert_eq!(
+        decisions(&report),
+        [(
+            "A",
+            "manual result finished from 12:00:00 to 15:00:00, 300 km (from the download), handicap 125 (from the download)"
+        )]
+    );
+}
+
+#[test]
+fn fixture_file_decides_on_a_rows_handicap() {
+    let finisher = HANDICAPPED_FINISHER.replace(",125,", ",120,");
+    let fixture_file = format!("{HANDICAPPED_FIXTURE_FILE}\n[decisions.A]\nhandicap = 125\n");
+
+    let report = check_day(&[&finisher], &fixture_file);
+
+    assert!(report.passes(), "{report}");
+    assert!(
+        decisions(&report)[0]
+            .1
+            .ends_with("handicap 125 (from the fixture file)")
+    );
+}
+
+#[test]
+fn unhandicapped_class_ignores_the_handicap_column() {
+    let finisher = FINISHER.replace(",Arcus,,", ",Arcus,125,");
+
+    let report = check_day(&[&finisher], FIXTURE_FILE);
+
+    assert!(report.passes(), "{report}");
+}
+
+#[test]
+fn handicapped_class_row_without_a_handicap_is_an_error() {
+    let finisher = HANDICAPPED_FINISHER.replace(",125,", ",,");
+    let fixture = Fixture::parse(TASK, &results(&[&finisher]), HANDICAPPED_FIXTURE_FILE).unwrap();
+
+    let error = check(&fixture).unwrap_err();
+
+    assert_eq!(error.to_string(), "no handicap for A");
+}
+
+#[test]
+fn racing_task_finisher_flies_the_task_distance_at_the_elapsed_time() {
+    let task = r#"{"task_type": "polygon", "task_distance": 300000.0, "task_duration": 0}"#;
+    let finisher = "1,A,Crew A,de,,,Arcus,,12:00:00,14:30:00,2:30:00,120,300,800,0,,";
+    let fixture_file = FIXTURE_FILE
+        .replace("vo = 100.00", "vo = 120.00")
+        .replace("maximum_points = 1000", "maximum_points = 800");
+
+    let report = check_task(task, &[finisher], &fixture_file);
+
+    assert!(report.passes(), "{report}");
+}
+
+#[test]
+fn handicapped_class_without_a_handicap_scale_is_an_error() {
     let fixture_file = FIXTURE_FILE.replace("handicapped = false", "handicapped = true");
 
     assert_eq!(
         parse_error(&fixture_file),
-        "handicapped classes are not supported yet"
+        "a handicapped class needs a handicap scale"
     );
 }

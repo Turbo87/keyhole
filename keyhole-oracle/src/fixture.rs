@@ -66,6 +66,8 @@ pub(crate) struct FixtureFile {
     #[expect(dead_code, reason = "informational")]
     pub flown_under: String,
     pub class: FixtureClass,
+    #[serde(default)]
+    pub class_day: FixtureClassDay,
     /// The day parameters transcribed from the task info line of
     /// `results.html`.
     pub published_day_parameters: PublishedDayParameters,
@@ -85,20 +87,22 @@ impl FixtureFile {
             dm,
             d1,
             handicapped,
+            handicap_scale,
             ref rule_overrides,
         } = self.class;
-        if handicapped {
-            bail!("handicapped classes are not supported yet");
-        }
+        let handicap_scale = match (handicapped, handicap_scale) {
+            (true, None) => bail!("a handicapped class needs a handicap scale"),
+            (_, scale) => scale.map_or(HandicapScale::One, HandicapScale::from),
+        };
         let class = Class {
             dm,
             d1,
             handicapped,
-            handicap_scale: HandicapScale::One,
+            handicap_scale,
             overrides: rule_overrides.rule_overrides(),
         };
         let resolution = edition
-            .resolve(&class, &ClassDayOverrides::default())
+            .resolve(&class, &self.class_day.overrides())
             .context("resolving the rule overrides")?;
         Ok(resolution.parameters.scoring)
     }
@@ -112,8 +116,42 @@ pub(crate) struct FixtureClass {
     pub dm: f64,
     pub d1: f64,
     pub handicapped: bool,
+    pub handicap_scale: Option<FixtureHandicapScale>,
     #[serde(default)]
     pub rule_overrides: FixtureRuleOverrides,
+}
+
+/// The class day's rule overrides, which win over the class's.
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct FixtureClassDay {
+    pub dm: Option<f64>,
+}
+
+impl FixtureClassDay {
+    fn overrides(&self) -> ClassDayOverrides {
+        ClassDayOverrides {
+            dm: self.dm,
+            ..ClassDayOverrides::default()
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+pub(crate) enum FixtureHandicapScale {
+    #[serde(rename = "1.000")]
+    One,
+    #[serde(rename = "100")]
+    Hundred,
+}
+
+impl From<FixtureHandicapScale> for HandicapScale {
+    fn from(scale: FixtureHandicapScale) -> Self {
+        match scale {
+            FixtureHandicapScale::One => Self::One,
+            FixtureHandicapScale::Hundred => Self::Hundred,
+        }
+    }
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -179,6 +217,7 @@ pub(crate) struct FixtureDecisions {
     pub result: Option<ResultDecision>,
     pub penalty: Option<u32>,
     pub hors_concours: Option<bool>,
+    pub handicap: Option<f64>,
 }
 
 /// A mismatch with SoaringSpot that the fixture explains.

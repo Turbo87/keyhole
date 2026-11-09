@@ -36,6 +36,11 @@ pub struct CompetitorResult {
     /// makes every day score 0 while the achievement still feeds the day
     /// parameters.
     pub competition_disqualified: bool,
+    /// The competitor's handicap on the class's scale.
+    pub handicap: Option<f64>,
+    /// The result's handicap for this class day only, which replaces the
+    /// competitor's handicap.
+    pub handicap_override: Option<f64>,
     /// Points deducted from the day score after the formula.
     pub penalty: u32,
 }
@@ -152,26 +157,38 @@ pub enum ScoringError {
     /// A finish time isn't after its start time.
     #[error("{competition_id} finished at or before the start")]
     FinishNotAfterStart { competition_id: String },
+    /// Competitors of a handicapped class have no handicap.
+    #[error("no handicap for {}", competition_ids.join(", "))]
+    MissingHandicaps { competition_ids: Vec<String> },
+    /// Competitors of a handicapped class have a handicap that isn't a finite
+    /// number above 0.
+    #[error("the handicap of {} isn't a finite number above 0", competition_ids.join(", "))]
+    InvalidHandicaps { competition_ids: Vec<String> },
 }
 
-/// A counting competitor's handicapped achievement.
+/// A counting competitor's achievement, with the distance and speed also
+/// divided by the handicap for the day formula.
 struct HandicappedAchievement {
+    distance: f64,
     dh: f64,
     finish: Option<Finish>,
 }
 
 struct Finish {
+    speed: f64,
     vh: f64,
     time: Duration,
 }
 
 impl HandicappedAchievement {
-    /// Returns `None` for a finish at or before the start.
-    fn new(achievement: &Achievement, task: &Task) -> Option<Self> {
+    /// Takes the handicap as a factor of 1 and returns `None` for a finish at
+    /// or before the start.
+    fn new(achievement: &Achievement, task: &Task, handicap: f64) -> Option<Self> {
         let (start_time, finish_time, distance) = match *achievement {
             Achievement::Landed { distance } => {
                 return Some(Self {
-                    dh: distance,
+                    distance,
+                    dh: distance / handicap,
                     finish: None,
                 });
             }
@@ -184,16 +201,21 @@ impl HandicappedAchievement {
         let task_time = finish_time
             .checked_sub(start_time)
             .filter(|task_time| !task_time.is_zero())?;
-        let (dh, time) = match *task {
+        let (distance, time) = match *task {
             Task::Racing { distance } => (distance, task_time),
             Task::AssignedArea { minimum_task_time } => {
                 (distance, task_time.max(minimum_task_time))
             }
         };
-        let vh = dh / hours(time);
+        let speed = distance / hours(time);
         Some(Self {
-            dh,
-            finish: Some(Finish { vh, time }),
+            distance,
+            dh: distance / handicap,
+            finish: Some(Finish {
+                speed,
+                vh: speed / handicap,
+                time,
+            }),
         })
     }
 }
@@ -206,8 +228,38 @@ fn hours(duration: Duration) -> f64 {
 ///
 /// Rows are ordered by rank, then unrounded score, then competition ID, with
 /// unranked rows below the ranked ones. Placeholder results without any
-/// counting achievement leave the class day with nothing to score yet.
+/// counting achievement leave the class day with nothing to score yet. A
+/// handicapped class can't be scored while competitors have no handicap.
 pub fn score_class_day(day: &ClassDay) -> Result<DayOutcome, ScoringError> {
+    let handicap = |competitor: &CompetitorResult| match day.parameters.handicap_scale {
+        Some(scale) => competitor
+            .handicap_override
+            .or(competitor.handicap)
+            .map(|handicap| scale.factor(handicap)),
+        None => Some(1.),
+    };
+    let competition_ids = |rejects: fn(Option<f64>) -> bool| -> Vec<_> {
+        day.competitors
+            .iter()
+            .filter(|competitor| rejects(handicap(competitor)))
+            .map(|competitor| competitor.competition_id.clone())
+            .collect()
+    };
+    let without_handicap = competition_ids(|handicap| handicap.is_none());
+    if !without_handicap.is_empty() {
+        return Err(ScoringError::MissingHandicaps {
+            competition_ids: without_handicap,
+        });
+    }
+    let with_invalid_handicap = competition_ids(|handicap| {
+        handicap.is_some_and(|handicap| !(handicap > 0. && handicap.is_finite()))
+    });
+    if !with_invalid_handicap.is_empty() {
+        return Err(ScoringError::InvalidHandicaps {
+            competition_ids: with_invalid_handicap,
+        });
+    }
+
     let achievements: Vec<_> = day
         .competitors
         .iter()
@@ -215,7 +267,8 @@ pub fn score_class_day(day: &ClassDay) -> Result<DayOutcome, ScoringError> {
             let ResultStatus::Flown(achievement) = &competitor.result else {
                 return Ok(None);
             };
-            HandicappedAchievement::new(achievement, &day.task)
+            let handicap = handicap(competitor).expect("every handicap was checked");
+            HandicappedAchievement::new(achievement, &day.task, handicap)
                 .map(Some)
                 .ok_or_else(|| ScoringError::FinishNotAfterStart {
                     competition_id: competitor.competition_id.clone(),
@@ -273,8 +326,8 @@ pub fn score_class_day(day: &ClassDay) -> Result<DayOutcome, ScoringError> {
             Row {
                 standing,
                 competition_id: competitor.competition_id.clone(),
-                distance: achievement.map(|a| a.dh),
-                speed: finish.map(|finish| finish.vh),
+                distance: achievement.map(|a| a.distance),
+                speed: finish.map(|finish| finish.speed),
                 score,
                 day_score: score.round() as u32,
             }

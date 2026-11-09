@@ -1,0 +1,35 @@
+# Annex A Club class racing task on the 1.000 scale. One competitor did not
+# fly and four have penalties.
+
+edition = "FAI Annex A 2025a"
+flown_under = "FAI Annex A 2024"
+
+[class]
+dm = 100
+d1 = 250
+handicapped = true
+handicap_scale = "1.000"
+
+[class.rule_overrides]
+# SeeYou's distances on this day match a sphere slightly smaller than the FAI
+# Sphere, which is a known SeeYou deviation.
+earth_model = "FAI Sphere"
+# The task info line publishes these PEV times without saying whether the day
+# used a PEV start. Keyhole has no pre-start altitude.
+pev_wait_time = 10
+pev_start_window = 5
+
+# Racing Task, Maximum Points: 1000, F = 1.000, Fcr = 1.000, Max speed pts: 455
+# ; Dm = 100km, D1 = 250km, handicapping enabled
+# ; PEVWaitTime: 10min, PEVStartWindow: 5min, PreStart Alt = 1800m,  N: 41, n1: 39, n2: 28, Do: 421.94km, Vo: 94.78km/h
+# ; cZ3qgWaTRcKI+39dv2h07lBOs2lnjOR4D1qpno+K51U
+[published_day_parameters]
+d1 = 250
+n = 41
+n1 = 39
+n2 = 28
+do = 421.94
+vo = 94.78
+f = 1.000
+fcr = 1.000
+maximum_points = 1000
