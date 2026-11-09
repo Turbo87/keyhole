@@ -46,7 +46,15 @@ impl Fixture {
             .context("parsing task.json")?
             .task()?;
         let rows = parse_results(results_csv).context("parsing results.csv")?;
-        let file: FixtureFile = toml::from_str(fixture_file).context("parsing fixture.toml")?;
+        let file = toml::from_str(fixture_file).context("parsing fixture.toml")?;
+        Self::new(task, rows, file)
+    }
+
+    pub(crate) fn new(
+        task: Task,
+        rows: Vec<PublishedRow>,
+        file: FixtureFile,
+    ) -> anyhow::Result<Self> {
         let PublishedDayParameters {
             f,
             fcr,

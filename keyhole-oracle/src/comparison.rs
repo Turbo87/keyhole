@@ -15,7 +15,7 @@ use crate::fixture::{Deviation, Fixture, PublishedDayParameters};
 use crate::published::{PublishedRow, format_time_of_day};
 
 /// A compared value: a day parameter or a field of a row.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Field {
     D1,
