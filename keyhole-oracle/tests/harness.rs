@@ -299,3 +299,15 @@ fn fixture_file_decision_without_a_row_is_an_error() {
         "the fixture file decides on B, which has no row"
     );
 }
+
+#[test]
+fn assigned_area_task_without_a_minimum_task_time_is_an_error() {
+    let task = r#"{"task_type": "assigned_area"}"#;
+
+    let error = Fixture::parse(task, &results(&[FINISHER]), FIXTURE_FILE).unwrap_err();
+
+    assert_eq!(
+        error.to_string(),
+        "the assigned area task has no `task_duration`"
+    );
+}

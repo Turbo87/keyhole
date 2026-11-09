@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-use anyhow::{anyhow, bail};
+use anyhow::{Context, anyhow, bail};
 use keyhole_engine::day_scoring::Task;
 use serde::{Deserialize, Deserializer};
 
@@ -12,16 +12,20 @@ use serde::{Deserialize, Deserializer};
 pub(crate) struct PublishedTask {
     task_type: String,
     /// The minimum task time of an assigned area task in seconds.
-    #[serde(default)]
-    task_duration: u64,
+    task_duration: Option<u64>,
 }
 
 impl PublishedTask {
     pub(crate) fn task(&self) -> anyhow::Result<Task> {
         match self.task_type.as_str() {
-            "assigned_area" => Ok(Task::AssignedArea {
-                minimum_task_time: Duration::from_secs(self.task_duration),
-            }),
+            "assigned_area" => {
+                let seconds = self
+                    .task_duration
+                    .context("the assigned area task has no `task_duration`")?;
+                Ok(Task::AssignedArea {
+                    minimum_task_time: Duration::from_secs(seconds),
+                })
+            }
             task_type => bail!("unsupported task type `{task_type}`"),
         }
     }
