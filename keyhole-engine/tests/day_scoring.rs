@@ -319,3 +319,19 @@ fn penalty_larger_than_the_score_floors_the_day_score_at_zero() {
     assert_eq!(result.rows[1].score, 0.);
     assert_eq!(day_scores(&result), [("A", 1000), ("B", 0)]);
 }
+
+#[test]
+fn only_the_day_score_is_rounded_with_halves_away_from_zero() {
+    let day = racing_day(
+        110.5,
+        vec![finisher("A", 110.5, hours(3.)), landed("B", 100.123_456)],
+    );
+
+    let result = score(&day);
+
+    assert_eq!(result.parameters.pm, 302.5);
+    assert_eq!(result.rows[0].speed, Some(110.5 / 3.));
+    assert_eq!(result.rows[0].score, 302.5);
+    assert_eq!(result.rows[0].day_score, 303);
+    assert_eq!(result.rows[1].distance, Some(100.123_456));
+}
