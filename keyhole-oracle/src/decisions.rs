@@ -322,16 +322,16 @@ impl RemarkGroup {
                 ),
                 (
                     Start,
-                    r"start|abflug|\bpev\b|marker|prestart|pre-start|motorabstell|self-?lau",
+                    r"\bstart|\babflug|\bpev\b|\bmarker|prestart|pre-start|motorabstell|self-?lau",
                 ),
                 (
                     Turnpoint,
-                    r"turn ?point|\btp ?\d|wende|missed|rounded|not claimed|\bwp\b|point \d",
+                    r"turn ?point|\btp ?\d|\bwende|\bmissed|\brounded|not claimed|\bwp\b|point \d",
                 ),
                 (RuleReference, r"^(sc3a|swo) [\d.]+[a-z]?$"),
                 (
                     Administrative,
-                    r"admin|weight|gewicht|mtow|dangerous|hazardous|landing|taxi|late|abgabe",
+                    r"\badmin|weight|gewicht|mtow|dangerous|hazardous|\blanding|\btaxi|\blate\b|abgabe",
                 ),
             ]
             .into_iter()
@@ -342,5 +342,27 @@ impl RemarkGroup {
             .iter()
             .find(|(_, pattern)| pattern.is_match(remark))
             .map_or(Self::Other, |(group, _)| *group)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn group_words_match_at_word_boundaries() {
+        for (remark, group) in [
+            ("Start line crossed twice", RemarkGroup::Start),
+            ("Restarted the logger", RemarkGroup::Other),
+            ("Wendepunkt 2 verfehlt", RemarkGroup::Turnpoint),
+            ("Falsche Datei verwendet", RemarkGroup::Other),
+            ("Landing on the closed runway", RemarkGroup::Administrative),
+            ("Outlanding", RemarkGroup::Other),
+            ("Late delivery", RemarkGroup::Administrative),
+            ("Points recalculated", RemarkGroup::Other),
+            ("Admin penalty", RemarkGroup::Administrative),
+        ] {
+            assert_eq!(RemarkGroup::of(remark), group, "{remark}");
+        }
     }
 }
