@@ -237,6 +237,17 @@ pub enum HandicapScale {
     Hundred,
 }
 
+impl HandicapScale {
+    /// Converts a handicap on this scale to a factor of 1, which day scoring
+    /// divides distances and speeds by.
+    pub fn factor(self, handicap: f64) -> f64 {
+        match self {
+            Self::One => handicap,
+            Self::Hundred => handicap / 100.,
+        }
+    }
+}
+
 /// A class day's rule overrides, which win over its class's.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ClassDayOverrides {

@@ -36,6 +36,8 @@ pub struct CompetitorResult {
     /// makes every day score 0 while the achievement still feeds the day
     /// parameters.
     pub competition_disqualified: bool,
+    /// The competitor's handicap on the class's scale.
+    pub handicap: f64,
     /// Points deducted from the day score after the formula.
     pub penalty: u32,
 }
@@ -154,24 +156,29 @@ pub enum ScoringError {
     FinishNotAfterStart { competition_id: String },
 }
 
-/// A counting competitor's handicapped achievement.
+/// A counting competitor's achievement, with the distance and speed also
+/// divided by the handicap for the day formula.
 struct HandicappedAchievement {
+    distance: f64,
     dh: f64,
     finish: Option<Finish>,
 }
 
 struct Finish {
+    speed: f64,
     vh: f64,
     time: Duration,
 }
 
 impl HandicappedAchievement {
-    /// Returns `None` for a finish at or before the start.
-    fn new(achievement: &Achievement, task: &Task) -> Option<Self> {
+    /// Takes the handicap as a factor of 1 and returns `None` for a finish at
+    /// or before the start.
+    fn new(achievement: &Achievement, task: &Task, handicap: f64) -> Option<Self> {
         let (start_time, finish_time, distance) = match *achievement {
             Achievement::Landed { distance } => {
                 return Some(Self {
-                    dh: distance,
+                    distance,
+                    dh: distance / handicap,
                     finish: None,
                 });
             }
@@ -184,16 +191,21 @@ impl HandicappedAchievement {
         let task_time = finish_time
             .checked_sub(start_time)
             .filter(|task_time| !task_time.is_zero())?;
-        let (dh, time) = match *task {
+        let (distance, time) = match *task {
             Task::Racing { distance } => (distance, task_time),
             Task::AssignedArea { minimum_task_time } => {
                 (distance, task_time.max(minimum_task_time))
             }
         };
-        let vh = dh / hours(time);
+        let speed = distance / hours(time);
         Some(Self {
-            dh,
-            finish: Some(Finish { vh, time }),
+            distance,
+            dh: distance / handicap,
+            finish: Some(Finish {
+                speed,
+                vh: speed / handicap,
+                time,
+            }),
         })
     }
 }
@@ -215,7 +227,11 @@ pub fn score_class_day(day: &ClassDay) -> Result<DayOutcome, ScoringError> {
             let ResultStatus::Flown(achievement) = &competitor.result else {
                 return Ok(None);
             };
-            HandicappedAchievement::new(achievement, &day.task)
+            let handicap = day
+                .parameters
+                .handicap_scale
+                .map_or(1., |scale| scale.factor(competitor.handicap));
+            HandicappedAchievement::new(achievement, &day.task, handicap)
                 .map(Some)
                 .ok_or_else(|| ScoringError::FinishNotAfterStart {
                     competition_id: competitor.competition_id.clone(),
@@ -273,8 +289,8 @@ pub fn score_class_day(day: &ClassDay) -> Result<DayOutcome, ScoringError> {
             Row {
                 standing,
                 competition_id: competitor.competition_id.clone(),
-                distance: achievement.map(|a| a.dh),
-                speed: finish.map(|finish| finish.vh),
+                distance: achievement.map(|a| a.distance),
+                speed: finish.map(|finish| finish.speed),
                 score,
                 day_score: score.round() as u32,
             }

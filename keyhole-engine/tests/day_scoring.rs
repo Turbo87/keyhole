@@ -4,6 +4,7 @@ use keyhole_engine::day_scoring::{
     Achievement, ClassDay, CompetitorResult, DayOutcome, DayResult, DayValidity, ResultStatus,
     ScoringError, Standing, Task, score_class_day,
 };
+use keyhole_engine::rule_sets::HandicapScale;
 use keyhole_engine::rule_sets::ScoringParameters;
 
 fn hours(hours: f64) -> Duration {
@@ -34,6 +35,7 @@ fn competitor(competition_id: &str, result: ResultStatus) -> CompetitorResult {
         result,
         hors_concours: false,
         competition_disqualified: false,
+        handicap: 0.,
         penalty: 0,
     }
 }
@@ -614,4 +616,117 @@ fn unknown_result_without_any_counting_achievement_leaves_nothing_to_score_yet()
     let outcome = score_class_day(&day).unwrap();
 
     assert_eq!(outcome, DayOutcome::NothingToScoreYet);
+}
+
+fn handicapped(scale: HandicapScale, day: ClassDay) -> ClassDay {
+    ClassDay {
+        parameters: ScoringParameters {
+            handicap_scale: Some(scale),
+            ..day.parameters
+        },
+        ..day
+    }
+}
+
+fn with_handicap(handicap: f64, competitor: CompetitorResult) -> CompetitorResult {
+    CompetitorResult {
+        handicap,
+        ..competitor
+    }
+}
+
+fn achievements(result: &DayResult) -> Vec<(&str, Option<f64>, Option<f64>)> {
+    let rows = result.rows.iter();
+    rows.map(|row| (row.competition_id.as_str(), row.distance, row.speed))
+        .collect()
+}
+
+fn best_distance_and_speed(result: &DayResult) -> (f64, f64) {
+    (result.parameters.d0, result.parameters.v0)
+}
+
+#[test]
+fn hundred_scale_handicap_divides_distance_and_speed_by_a_hundredth_of_it() {
+    let day = handicapped(
+        HandicapScale::Hundred,
+        racing_day(
+            300.,
+            vec![
+                with_handicap(125., finisher("A", 300., hours(3.))),
+                with_handicap(100., landed("B", 150.)),
+            ],
+        ),
+    );
+
+    let result = score(&day);
+
+    assert_eq!(best_distance_and_speed(&result), (240., 80.));
+}
+
+#[test]
+fn one_scale_handicap_divides_distance_and_speed_by_itself() {
+    let day = handicapped(
+        HandicapScale::One,
+        racing_day(
+            300.,
+            vec![with_handicap(1.25, finisher("A", 300., hours(3.)))],
+        ),
+    );
+
+    let result = score(&day);
+
+    assert_eq!(best_distance_and_speed(&result), (240., 80.));
+}
+
+#[test]
+fn handicapped_rows_report_the_achieved_distance_and_speed() {
+    let day = handicapped(
+        HandicapScale::One,
+        racing_day(
+            300.,
+            vec![
+                with_handicap(1.25, finisher("A", 300., hours(3.))),
+                with_handicap(1.25, landed("B", 150.)),
+            ],
+        ),
+    );
+
+    let result = score(&day);
+
+    assert_eq!(
+        achievements(&result),
+        [("A", Some(300.), Some(100.)), ("B", Some(150.), None)]
+    );
+}
+
+#[test]
+fn unhandicapped_class_ignores_handicaps() {
+    let day = racing_day(
+        300.,
+        vec![with_handicap(1.25, finisher("A", 300., hours(3.)))],
+    );
+
+    let result = score(&day);
+
+    assert_eq!(best_distance_and_speed(&result), (300., 100.));
+}
+
+#[test]
+fn n1_and_day_validity_count_handicapped_distances_of_at_least_dm() {
+    let day = handicapped(
+        HandicapScale::One,
+        racing_day(
+            300.,
+            vec![
+                with_handicap(1.2, landed("A", 150.)),
+                with_handicap(1.2, landed("B", 110.)),
+                with_handicap(1., landed("C", 90.)),
+            ],
+        ),
+    );
+
+    let result = score(&day);
+
+    assert_eq!(result.parameters.n1, 1);
+    assert_eq!(result.validity, DayValidity::Valid);
 }
