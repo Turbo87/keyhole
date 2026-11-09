@@ -157,9 +157,13 @@ pub enum ScoringError {
     /// A finish time isn't after its start time.
     #[error("{competition_id} finished at or before the start")]
     FinishNotAfterStart { competition_id: String },
-    /// Competitors of a handicapped class have no positive handicap.
+    /// Competitors of a handicapped class have no handicap.
     #[error("no handicap for {}", competition_ids.join(", "))]
     MissingHandicaps { competition_ids: Vec<String> },
+    /// Competitors of a handicapped class have a handicap that isn't a finite
+    /// number above 0.
+    #[error("the handicap of {} isn't a finite number above 0", competition_ids.join(", "))]
+    InvalidHandicaps { competition_ids: Vec<String> },
 }
 
 /// A counting competitor's achievement, with the distance and speed also
@@ -234,14 +238,26 @@ pub fn score_class_day(day: &ClassDay) -> Result<DayOutcome, ScoringError> {
             .map(|handicap| scale.factor(handicap)),
         None => Some(1.),
     };
-    let competition_ids: Vec<_> = day
-        .competitors
-        .iter()
-        .filter(|competitor| handicap(competitor).is_none_or(|handicap| handicap <= 0.))
-        .map(|competitor| competitor.competition_id.clone())
-        .collect();
-    if !competition_ids.is_empty() {
-        return Err(ScoringError::MissingHandicaps { competition_ids });
+    let competition_ids = |rejects: fn(Option<f64>) -> bool| -> Vec<_> {
+        day.competitors
+            .iter()
+            .filter(|competitor| rejects(handicap(competitor)))
+            .map(|competitor| competitor.competition_id.clone())
+            .collect()
+    };
+    let without_handicap = competition_ids(|handicap| handicap.is_none());
+    if !without_handicap.is_empty() {
+        return Err(ScoringError::MissingHandicaps {
+            competition_ids: without_handicap,
+        });
+    }
+    let with_invalid_handicap = competition_ids(|handicap| {
+        handicap.is_some_and(|handicap| !(handicap > 0. && handicap.is_finite()))
+    });
+    if !with_invalid_handicap.is_empty() {
+        return Err(ScoringError::InvalidHandicaps {
+            competition_ids: with_invalid_handicap,
+        });
     }
 
     let achievements: Vec<_> = day

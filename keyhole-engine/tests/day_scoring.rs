@@ -770,3 +770,35 @@ fn missing_handicap_in_a_handicapped_class_is_an_error_listing_the_competitors()
     );
     assert_eq!(error.to_string(), "no handicap for A, D");
 }
+
+#[test]
+fn handicap_that_isnt_a_finite_number_above_zero_is_an_error() {
+    let mut overridden = with_handicap(1., finisher("B", 300., hours(3.)));
+    overridden.handicap_override = Some(f64::NAN);
+    let day = handicapped(
+        HandicapScale::One,
+        racing_day(
+            300.,
+            vec![
+                with_handicap(f64::INFINITY, finisher("A", 300., hours(3.))),
+                overridden,
+                with_handicap(0., landed("C", 150.)),
+                with_handicap(-1., competitor("D", ResultStatus::DidNotFly)),
+                with_handicap(1., landed("E", 150.)),
+            ],
+        ),
+    );
+
+    let error = score_class_day(&day).unwrap_err();
+
+    assert_eq!(
+        error,
+        ScoringError::InvalidHandicaps {
+            competition_ids: vec!["A".into(), "B".into(), "C".into(), "D".into()],
+        }
+    );
+    assert_eq!(
+        error.to_string(),
+        "the handicap of A, B, C, D isn't a finite number above 0"
+    );
+}
