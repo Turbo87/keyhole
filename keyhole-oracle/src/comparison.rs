@@ -329,6 +329,7 @@ fn rank(standing: Standing) -> String {
         Standing::HorsConcours => "HC".into(),
         Standing::CompetitionDisqualified => "DSQ".into(),
         Standing::DidNotFly => "DNF".into(),
+        Standing::NoResultYet => "No result yet".into(),
     }
 }
 
