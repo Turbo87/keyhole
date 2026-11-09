@@ -1,0 +1,39 @@
+# SWO racing task on the 100 scale with a local Dm of 50 km. Two competitors
+# did not fly, one launched without a valid start, three outlanded virtually
+# with 0 points and three have penalties.
+
+edition = "DAeC SWO 2026"
+flown_under = "unknown"
+
+[class]
+dm = 100
+d1 = 250
+handicapped = true
+handicap_scale = "100"
+
+[class.rule_overrides]
+earth_model = "WGS84"
+
+[class_day]
+dm = 50
+
+# Racing Task, Maximum Points: 907, F = 0,919, Fcr = 1,000, Max speed pts: 374
+# ; Dm = 50km, D1 = 250km, handicapping enabled
+# ; Use PEV disabled,  N: 34, n1: 25, n2: 21, Do: 266,00km, Vo: 84,99km/h
+# ; DAeC-SWO2024 Script V9.06
+[published_day_parameters]
+d1 = 250
+n = 34
+n1 = 25
+n2 = 21
+do = 266.00
+vo = 84.99
+f = 0.919
+fcr = 1.000
+maximum_points = 907
+
+# NW2 launched without a valid start, which counts in N and scores 0 points.
+[[deviations]]
+competition_id = "NW2"
+field = "rank"
+explanation = "SoaringSpot leaves a launched competitor without a valid start unranked as DNS, while Keyhole ranks them with 0 points."
