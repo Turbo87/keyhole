@@ -1,0 +1,33 @@
+# Annex A Club class assigned area task on the 1.000 scale that fails rule
+# 8.2.1b, since only 3 of 42 competitors reached Dm. Every day score is 0, and
+# SoaringSpot ranks everyone 1st.
+
+edition = "FAI Annex A 2025a"
+flown_under = "FAI Annex A 2024"
+
+[class]
+dm = 100
+d1 = 250
+handicapped = true
+handicap_scale = "1.000"
+
+[class.rule_overrides]
+# SeeYou's distances on this day match a sphere slightly smaller than the FAI
+# Sphere, which is a known SeeYou deviation.
+earth_model = "FAI Sphere"
+# The task info line publishes these PEV times without saying whether the day
+# used a PEV start.
+pev_wait_time = 8
+pev_start_window = 5
+
+# Day not valid - rule 8.2.1b
+# ; Dm = 100km, D1 = 250km, handicapping enabled
+# ; PEVWaitTime: 8min, PEVStartWindow: 5min,  N: 42, n1: 3, n2: 0, Do: 112.29km, Vo: 0.00km/h
+# ; cZ3qgWaTRcKI+39dv2h07lBOs2lnjOR4D1qpno+K51U
+[published_day_parameters]
+d1 = 250
+n = 42
+n1 = 3
+n2 = 0
+do = 112.29
+vo = 0.00
