@@ -1,0 +1,29 @@
+# SWO racing task on the 100 scale where the best handicapped distance limits
+# the maximum points, so the handicaps set Pm. Nobody has a penalty.
+
+edition = "DAeC SWO 2026"
+flown_under = "unknown"
+
+[class]
+dm = 100
+d1 = 250
+handicapped = true
+handicap_scale = "100"
+
+[class.rule_overrides]
+earth_model = "WGS84"
+
+# Racing Task, Maximum Points: 863, F = 0,609, Fcr = 1,000, Max speed pts: 162
+# ; Dm = 100km, D1 = 250km, handicapping enabled
+# ; Use PEV disabled,  N: 39, n1: 19, n2: 11, Do: 222,52km, Vo: 64,73km/h
+# ; DAeC-SWO2025 Script V9.07
+[published_day_parameters]
+d1 = 250
+n = 39
+n1 = 19
+n2 = 11
+do = 222.52
+vo = 64.73
+f = 0.609
+fcr = 1.000
+maximum_points = 863
