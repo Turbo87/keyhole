@@ -31,6 +31,10 @@ pev_start = true
 pev_wait_time = 5                # minutes
 pev_start_window = 8             # minutes
 
+# The class day's rule overrides, which win over the class's. Optional.
+[class_day]
+dm = 50
+
 # Transcribed from the task info line of results.html, with decimal points.
 [published_day_parameters]
 d1 = 300

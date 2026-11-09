@@ -66,6 +66,8 @@ pub(crate) struct FixtureFile {
     #[expect(dead_code, reason = "informational")]
     pub flown_under: String,
     pub class: FixtureClass,
+    #[serde(default)]
+    pub class_day: FixtureClassDay,
     /// The day parameters transcribed from the task info line of
     /// `results.html`.
     pub published_day_parameters: PublishedDayParameters,
@@ -100,7 +102,7 @@ impl FixtureFile {
             overrides: rule_overrides.rule_overrides(),
         };
         let resolution = edition
-            .resolve(&class, &ClassDayOverrides::default())
+            .resolve(&class, &self.class_day.overrides())
             .context("resolving the rule overrides")?;
         Ok(resolution.parameters.scoring)
     }
@@ -117,6 +119,22 @@ pub(crate) struct FixtureClass {
     pub handicap_scale: Option<FixtureHandicapScale>,
     #[serde(default)]
     pub rule_overrides: FixtureRuleOverrides,
+}
+
+/// The class day's rule overrides, which win over the class's.
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct FixtureClassDay {
+    pub dm: Option<f64>,
+}
+
+impl FixtureClassDay {
+    fn overrides(&self) -> ClassDayOverrides {
+        ClassDayOverrides {
+            dm: self.dm,
+            ..ClassDayOverrides::default()
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]

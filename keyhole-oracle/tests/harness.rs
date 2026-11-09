@@ -482,6 +482,21 @@ fn class_dm_reaches_day_scoring() {
 }
 
 #[test]
+fn class_day_dm_wins_over_the_class_dm() {
+    let fixture_file = FIXTURE_FILE.replace(
+        "[published_day_parameters]",
+        "[class_day]\ndm = 301\n\n[published_day_parameters]",
+    );
+
+    let report = check_day(&[FINISHER], &fixture_file);
+
+    assert_eq!(
+        report.to_string().lines().next(),
+        Some("n1: published 1, Keyhole 0")
+    );
+}
+
+#[test]
 fn unknown_edition_is_an_error() {
     let fixture_file = FIXTURE_FILE.replace("FAI Annex A 2025a", "FAI Annex A 2024");
 
