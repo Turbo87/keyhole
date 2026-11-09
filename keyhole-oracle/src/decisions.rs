@@ -246,27 +246,123 @@ fn penalty_from_published(row: &PublishedRow) -> anyhow::Result<u32> {
 /// Turns a published remark minus its trailing penalty points into a public
 /// remark, an official warning or a remark without effect.
 fn remark_from_published(row: &PublishedRow) -> Option<RemarkDecision> {
-    static PENALTY_POINTS: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"\s*\(?[\d,.]+ penalty points\)?\s*$").unwrap());
-    // Remarks in these groups state a result status, a crew or a
-    // disqualification, even when they also mention a warning.
-    static EARLIER_GROUPS: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(
-            r"(?i)^(dnf|dns|dnl)$|did not (fly|launch)|withdrawn|nicht abgeflogen|kein abflug|^P1 .* P2|disqual|\bdsq\b",
-        )
-        .unwrap()
-    });
-    static OFFICIAL_WARNING: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"(?i)warn|first offen|1st offen|^w ?-").unwrap());
-
-    let remark = PENALTY_POINTS.replace(&row.remarks, "").into_owned();
+    let remark = public_remark(row);
     if remark.is_empty() {
         None
     } else if row.penalty_points.is_some_and(|points| points > 0.) {
         Some(RemarkDecision::PublicRemark(remark))
-    } else if OFFICIAL_WARNING.is_match(&remark) && !EARLIER_GROUPS.is_match(&remark) {
+    } else if RemarkGroup::of(&remark) == RemarkGroup::OfficialWarning {
         Some(RemarkDecision::OfficialWarning(remark))
     } else {
         Some(RemarkDecision::NotApplied(remark))
+    }
+}
+
+/// The published remark minus a trailing `(N penalty points)`.
+pub(crate) fn public_remark(row: &PublishedRow) -> String {
+    static PENALTY_POINTS: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"\s*\(?[\d,.]+ penalty points\)?\s*$").unwrap());
+    PENALTY_POINTS.replace(&row.remarks, "").into_owned()
+}
+
+/// What a public remark is about, by the first group whose pattern matches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RemarkGroup {
+    StatusNotation,
+    CrewList,
+    Disqualification,
+    OfficialWarning,
+    FlightEnd,
+    StartTime,
+    ScoredFile,
+    LoggerCheck,
+    FinishHeight,
+    LandingNote,
+    AirspaceOrCompetitionArea,
+    Start,
+    Turnpoint,
+    RuleReference,
+    Administrative,
+    Other,
+}
+
+impl RemarkGroup {
+    pub(crate) fn of(remark: &str) -> Self {
+        static GROUPS: LazyLock<Vec<(RemarkGroup, Regex)>> = LazyLock::new(|| {
+            use RemarkGroup::*;
+            [
+                (
+                    StatusNotation,
+                    r"^(dnf|dns|dnl)$|did not (fly|launch)|withdrawn|nicht abgeflogen|kein abflug",
+                ),
+                (CrewList, r"^P1 .* P2"),
+                (Disqualification, r"disqual|\bdsq\b"),
+                (OfficialWarning, r"warn|verwarn|first offen|1st offen|^w ?-"),
+                (FlightEnd, r"engine|virtu"),
+                (
+                    StartTime,
+                    r"^start \d|\d ?min penalty|went early|pev.*from pri",
+                ),
+                (
+                    ScoredFile,
+                    r"secondary|sekundär|resubmission|file from primary",
+                ),
+                (
+                    LoggerCheck,
+                    r"logger ?interval|fix ?rate|gps pr|logger gps|validierung|logger failure|loggerausfall",
+                ),
+                (
+                    FinishHeight,
+                    r"zielh|zielkreis|zu tief|finish(ing)? (alt|below)|finish altitude",
+                ),
+                (LandingNote, r"^(ps, )?l/o$|landed out"),
+                (
+                    AirspaceOrCompetitionArea,
+                    r"airspace|luftraum|entering|\btma\b|\bcta\b|dropzone|competition area|wettbewerbsraum",
+                ),
+                (
+                    Start,
+                    r"\bstart|\babflug|\bpev\b|\bmarker|prestart|pre-start|motorabstell|self-?lau",
+                ),
+                (
+                    Turnpoint,
+                    r"turn ?point|\btp ?\d|\bwende|\bmissed|\brounded|not claimed|\bwp\b|point \d",
+                ),
+                (RuleReference, r"^(sc3a|swo) [\d.]+[a-z]?$"),
+                (
+                    Administrative,
+                    r"\badmin|weight|gewicht|mtow|dangerous|hazardous|\blanding|\btaxi|\blate\b|abgabe",
+                ),
+            ]
+            .into_iter()
+            .map(|(group, pattern)| (group, Regex::new(&format!("(?i){pattern}")).unwrap()))
+            .collect()
+        });
+        GROUPS
+            .iter()
+            .find(|(_, pattern)| pattern.is_match(remark))
+            .map_or(Self::Other, |(group, _)| *group)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn group_words_match_at_word_boundaries() {
+        for (remark, group) in [
+            ("Start line crossed twice", RemarkGroup::Start),
+            ("Restarted the logger", RemarkGroup::Other),
+            ("Wendepunkt 2 verfehlt", RemarkGroup::Turnpoint),
+            ("Falsche Datei verwendet", RemarkGroup::Other),
+            ("Landing on the closed runway", RemarkGroup::Administrative),
+            ("Outlanding", RemarkGroup::Other),
+            ("Late delivery", RemarkGroup::Administrative),
+            ("Points recalculated", RemarkGroup::Other),
+            ("Admin penalty", RemarkGroup::Administrative),
+        ] {
+            assert_eq!(RemarkGroup::of(remark), group, "{remark}");
+        }
     }
 }

@@ -15,7 +15,7 @@ use crate::fixture::{Deviation, Fixture, PublishedDayParameters};
 use crate::published::{PublishedRow, format_time_of_day};
 
 /// A compared value: a day parameter or a field of a row.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Field {
     D1,
@@ -182,13 +182,14 @@ pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
         mismatch
     };
 
-    let day_parameter_mismatches = day_parameter_mismatches(
-        &file.published_day_parameters,
-        result.validity,
-        &result.parameters,
-    )
-    .map(&mut explain)
-    .collect();
+    let day_parameter_mismatches = file
+        .published_day_parameters
+        .iter()
+        .flat_map(|published| {
+            day_parameter_mismatches(published, result.validity, &result.parameters)
+        })
+        .map(&mut explain)
+        .collect();
     let row_mismatches = fixture
         .rows
         .iter()
