@@ -214,6 +214,20 @@ fn report_lists_day_parameters_before_rows() {
 }
 
 #[test]
+fn status_rows_keep_their_cause_after_a_day_parameter_mismatch() {
+    let launched_without_start = "DNS,B,Crew B,de,,,Arcus,,,,,,0,0,0,,";
+    let download = write_download(&[ClassDay {
+        rows: &[FINISHER, launched_without_start],
+        ..DAY
+    }]);
+
+    let report = check(&download, Baseline::Gate).to_string();
+
+    assert!(report.contains("\n  N, day parameter: 1\n"), "{report}");
+    assert!(report.contains("\n  rank, DNS row: 1\n"), "{report}");
+}
+
+#[test]
 fn left_out_class_days_are_counted() {
     let cancelled = TASK.replace("official", "cancelled");
     let download = write_download(&[

@@ -270,10 +270,12 @@ fn check_class_day(name: &str, directory: &Path) -> anyhow::Result<ClassDayOutco
                 .push(format!("{line} (remark \"{remark}\")"));
             continue;
         }
-        let cause = if day_parameters_differ {
-            Cause::DayParameterMismatch
-        } else {
-            Cause::of(row)
+        // A row's status explains its mismatch even after a day parameter
+        // mismatch.
+        let cause = match Cause::of(row) {
+            cause @ (Cause::DidNotFly | Cause::LaunchedWithoutStart | Cause::HorsConcours) => cause,
+            _ if day_parameters_differ => Cause::DayParameterMismatch,
+            cause => cause,
         };
         checked.entries.push(Entry {
             line,
