@@ -159,8 +159,8 @@ pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
         .collect::<anyhow::Result<Vec<_>>>()?;
     let day = ClassDay {
         parameters: ScoringParameters {
-            dm: file.scoring_parameters.dm,
-            d1: file.scoring_parameters.d1,
+            dm: fixture.scoring.dm,
+            d1: fixture.scoring.d1,
             task: fixture.task.clone(),
         },
         competitors: fixture

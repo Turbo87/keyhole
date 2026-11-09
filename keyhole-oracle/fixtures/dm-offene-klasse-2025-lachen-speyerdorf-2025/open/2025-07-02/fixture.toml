@@ -3,11 +3,14 @@
 
 edition = "DAeC SWO 2026"
 flown_under = "unknown"
-earth_model = "WGS84"
 
-[scoring_parameters]
+[class]
 dm = 140
 d1 = 350
+handicapped = false
+
+[class.rule_overrides]
+earth_model = "WGS84"
 
 # Assigned Area Task, Maximum Points: 1000, F = 1,000, Fcr = 1,000, Max speed pts: 667
 # ; Dm = 140km, D1 = 350km, no handicaps

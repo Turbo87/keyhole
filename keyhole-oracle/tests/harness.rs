@@ -7,11 +7,14 @@ const TASK: &str = r#"{"task_type": "assigned_area", "task_duration": 10800}"#;
 const FIXTURE_FILE: &str = r#"
 edition = "FAI Annex A 2025a"
 flown_under = "unknown"
-earth_model = "WGS84"
 
-[scoring_parameters]
+[class]
 dm = 120
 d1 = 300
+handicapped = false
+
+[class.rule_overrides]
+earth_model = "WGS84"
 
 [published_day_parameters]
 d1 = 300
@@ -453,5 +456,55 @@ fn other_remarks_are_reported_but_not_applied() {
     assert_eq!(
         remark_decision("1000", "", "Loggerintervall"),
         "remark \"Loggerintervall\" (not applied)"
+    );
+}
+
+fn parse_error(fixture_file: &str) -> String {
+    let error = Fixture::parse(TASK, &results(&[FINISHER]), fixture_file).unwrap_err();
+    format!("{error:#}")
+}
+
+#[test]
+fn class_dm_reaches_day_scoring() {
+    let fixture_file = FIXTURE_FILE.replace("dm = 120", "dm = 301");
+
+    let report = check_day(&[FINISHER], &fixture_file);
+
+    assert_eq!(
+        report.to_string().lines().next(),
+        Some("n1: published 1, Keyhole 0")
+    );
+}
+
+#[test]
+fn unknown_edition_is_an_error() {
+    let fixture_file = FIXTURE_FILE.replace("FAI Annex A 2025a", "FAI Annex A 2024");
+
+    assert_eq!(
+        parse_error(&fixture_file),
+        "the rule set edition FAI Annex A 2024 does not exist"
+    );
+}
+
+#[test]
+fn invalid_rule_override_is_an_error() {
+    let fixture_file = FIXTURE_FILE.replace(
+        "earth_model = \"WGS84\"",
+        "earth_model = \"WGS84\"\npev_start_window = 0",
+    );
+
+    assert_eq!(
+        parse_error(&fixture_file),
+        "resolving the rule overrides: the PEV start window must be at least 1 minute"
+    );
+}
+
+#[test]
+fn handicapped_class_is_an_error_until_handicaps_are_scored() {
+    let fixture_file = FIXTURE_FILE.replace("handicapped = false", "handicapped = true");
+
+    assert_eq!(
+        parse_error(&fixture_file),
+        "handicapped classes are not supported yet"
     );
 }

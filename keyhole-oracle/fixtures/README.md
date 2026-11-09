@@ -11,13 +11,22 @@ Each directory `<competition>/<class>/<date>/` holds one SoaringSpot class day a
 ## `fixture.toml`
 
 ```toml
-edition = "FAI Annex A 2025a"    # the rule set edition the fixture scores under
+edition = "FAI Annex A 2025a"    # the ID of the rule set edition the fixture scores under
 flown_under = "unknown"          # the edition the competition flew under, informational
-earth_model = "FAI Sphere"       # or "WGS84"
 
-[scoring_parameters]
+# The class's own values. Handicapped classes are not supported yet.
+[class]
 dm = 120
 d1 = 300
+handicapped = false
+
+# The competition's local procedures as rule overrides of the class. Every
+# field is optional and defaults to the edition's value.
+[class.rule_overrides]
+earth_model = "FAI Sphere"       # or "WGS84"
+pev_start = true
+pev_wait_time = 5                # minutes
+pev_start_window = 8             # minutes
 
 # Transcribed from the task info line of results.html, with decimal points.
 [published_day_parameters]
