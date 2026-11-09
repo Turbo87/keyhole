@@ -175,13 +175,15 @@ fn result_from_published(row: &PublishedRow) -> anyhow::Result<ResultDecision> {
     })
 }
 
+/// Rounds a fractional published penalty to whole points, which the row's
+/// penalty comparison then reports.
 fn penalty_from_published(row: &PublishedRow) -> anyhow::Result<u32> {
     let penalty = row.penalty_points.unwrap_or_default();
-    if penalty.fract() != 0. || penalty < 0. {
+    if penalty < 0. {
         bail!(
-            "{} has a penalty of {penalty} points, which isn't a whole number",
+            "{} has a negative penalty of {penalty} points",
             row.competition_id
         );
     }
-    Ok(penalty as u32)
+    Ok(penalty.round() as u32)
 }

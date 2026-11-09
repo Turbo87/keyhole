@@ -215,16 +215,46 @@ fn penalty_points_become_the_penalty() {
 }
 
 #[test]
-fn fractional_penalty_points_are_an_error() {
+fn fractional_penalty_points_are_rounded_and_compared() {
     let finisher = FINISHER.replace(",1000,0,,", ",995,0,5.164,");
+
+    let report = check_day(&[&finisher], FIXTURE_FILE);
+
+    assert!(!report.passes());
+    assert_eq!(
+        report.to_string().lines().next(),
+        Some("A penalty: published 5.164, Keyhole 5")
+    );
+    assert_eq!(report.row_mismatches.len(), 1);
+    assert_eq!(
+        decisions(&report),
+        [(
+            "A",
+            "manual result finished from 12:00:00 to 15:00:00, 300 km (from the download), penalty 5 (from the download)"
+        )]
+    );
+}
+
+#[test]
+fn recorded_deviation_explains_a_fractional_penalty() {
+    let finisher = FINISHER.replace(",1000,0,,", ",995,0,5.164,");
+    let fixture_file = format!(
+        "{FIXTURE_FILE}\n[[deviations]]\ncompetition_id = \"A\"\nfield = \"penalty\"\nexplanation = \"Whole points only.\"\n"
+    );
+
+    let report = check_day(&[&finisher], &fixture_file);
+
+    assert!(report.passes(), "{report}");
+}
+
+#[test]
+fn negative_penalty_points_are_an_error() {
+    let finisher = FINISHER.replace(",1000,0,,", ",1000,0,-5,");
     let fixture = Fixture::parse(TASK, &results(&[&finisher]), FIXTURE_FILE).unwrap();
 
     let error = check(&fixture).unwrap_err();
 
-    assert_eq!(
-        error.to_string(),
-        "A has a penalty of 5.164 points, which isn't a whole number"
-    );
+    assert_eq!(error.to_string(), "A has a negative penalty of -5 points");
 }
 
 #[test]

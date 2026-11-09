@@ -9,7 +9,7 @@ use keyhole_engine::day_scoring::{
 };
 use serde::Deserialize;
 
-use crate::decisions::RowDecisions;
+use crate::decisions::{RowDecisions, Source};
 use crate::fixture::{Deviation, Fixture, PublishedDayParameters};
 use crate::published::{PublishedRow, format_time_of_day};
 
@@ -27,6 +27,7 @@ pub enum Field {
     Fcr,
     MaximumPoints,
     Points,
+    Penalty,
     Distance,
     Speed,
     StartTime,
@@ -46,6 +47,7 @@ impl fmt::Display for Field {
             Self::Fcr => "FCR",
             Self::MaximumPoints => "maximum points",
             Self::Points => "points",
+            Self::Penalty => "penalty",
             Self::Distance => "distance",
             Self::Speed => "speed",
             Self::StartTime => "start time",
@@ -250,12 +252,21 @@ fn row_mismatches(
     let result = decisions.result.0;
     let hundredths = |value: Option<f64>| value.map(|value| decimals(value, 2));
     let time = |time: Option<_>| time.map(format_time_of_day);
+    let (published_penalty, keyhole_penalty) = match decisions.penalty {
+        // A penalty from the fixture file fills in what the download lacks.
+        (_, Source::FixtureFile) => (None, None),
+        (penalty, Source::Download) => (
+            Some(published.penalty_points.unwrap_or_default().to_string()),
+            Some(penalty.to_string()),
+        ),
+    };
     [
         (
             Field::Points,
             Some(decimals(published.points, 0)),
             Some(keyhole.day_score.to_string()),
         ),
+        (Field::Penalty, published_penalty, keyhole_penalty),
         (
             Field::Distance,
             hundredths(published.distance),

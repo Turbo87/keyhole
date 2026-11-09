@@ -43,8 +43,8 @@ penalty = 50
 # day parameter. A recorded deviation that no longer occurs fails the test.
 [[deviations]]
 competition_id = "AB"
-field = "points"    # d1 n n1 n2 do vo f fcr maximum_points points distance speed start_time finish_time
+field = "points"    # d1 n n1 n2 do vo f fcr maximum_points points penalty distance speed start_time finish_time
 explanation = "Why Keyhole and SeeYou differ."
 ```
 
-The harness derives each row's decisions from `results.csv`: `DNF` did not fly, `DNS` a manual result landed without starting at 0 km, `penalty_points` the penalty, and every other row a manual result from its start and finish times and distance. Values are compared at the precision SoaringSpot displays: points, `D1` and maximum points as whole numbers, distances, speeds, `Do` and `Vo` to 0.01, `F` and `FCR` to 0.001, and times to the second.
+The harness derives each row's decisions from `results.csv`: `DNF` did not fly, `DNS` a manual result landed without starting at 0 km, `penalty_points` the penalty rounded to whole points, and every other row a manual result from its start and finish times and distance. Values are compared at the precision SoaringSpot displays: points, `D1` and maximum points as whole numbers, a penalty from the download as published against the whole points Keyhole deducts, distances, speeds, `Do` and `Vo` to 0.01, `F` and `FCR` to 0.001, and times to the second.
