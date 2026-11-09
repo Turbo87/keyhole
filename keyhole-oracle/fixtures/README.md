@@ -36,6 +36,8 @@ pev_start_window = 8             # minutes
 dm = 50
 
 # Transcribed from the task info line of results.html, with decimal points.
+# An invalid day publishes no F, FCR or maximum points, so leaving out all
+# three publishes the day as not valid.
 [published_day_parameters]
 d1 = 300
 n = 19
@@ -61,7 +63,7 @@ handicap = 1.062
 # day parameter. A recorded deviation that no longer occurs fails the test.
 [[deviations]]
 competition_id = "AB"
-field = "points"    # d1 n n1 n2 do vo f fcr maximum_points rank points penalty distance speed start_time finish_time
+field = "points"    # d1 n n1 n2 do vo f fcr maximum_points validity rank points penalty distance speed start_time finish_time
 explanation = "Why Keyhole and SeeYou differ."
 ```
 
