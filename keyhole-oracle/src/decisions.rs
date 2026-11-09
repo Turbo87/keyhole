@@ -107,6 +107,9 @@ pub(crate) struct RowDecisions {
     pub result: (ResultDecision, Source),
     pub penalty: (u32, Source),
     pub hors_concours: (bool, Source),
+    /// The result's handicap override, or `None` to leave the competitor
+    /// without a handicap.
+    pub handicap: Option<(f64, Source)>,
     pub remark: Option<RemarkDecision>,
 }
 
@@ -137,10 +140,15 @@ impl RowDecisions {
             Some(hors_concours) => (hors_concours, Source::FixtureFile),
             None => (row.rank == "HC", Source::Download),
         };
+        let handicap = match fixture.and_then(|fixture| fixture.handicap) {
+            Some(handicap) => Some((handicap, Source::FixtureFile)),
+            None => row.handicap.map(|handicap| (handicap, Source::Download)),
+        };
         Ok(Self {
             result,
             penalty,
             hors_concours,
+            handicap,
             remark: remark_from_published(row),
         })
     }
@@ -152,7 +160,7 @@ impl RowDecisions {
             hors_concours: self.hors_concours.0,
             competition_disqualified: false,
             handicap: 0.,
-            handicap_override: None,
+            handicap_override: self.handicap.map(|(handicap, _)| handicap),
             penalty: self.penalty.0,
         }
     }
@@ -166,6 +174,9 @@ impl fmt::Display for RowDecisions {
             (false, Source::Download) => {}
             (true, source) => write!(f, ", hors concours ({source})")?,
             (false, source) => write!(f, ", not hors concours ({source})")?,
+        }
+        if let Some((handicap, source)) = self.handicap {
+            write!(f, ", handicap {handicap} ({source})")?;
         }
         match self.penalty {
             (0, Source::Download) => {}

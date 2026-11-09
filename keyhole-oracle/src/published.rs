@@ -43,6 +43,8 @@ pub(crate) struct PublishedRow {
     pub rank: String,
     #[serde(rename = "cn")]
     pub competition_id: String,
+    /// The handicap as displayed, on the class's scale.
+    pub handicap: Option<f64>,
     #[serde(rename = "start_time_local", deserialize_with = "optional_time_of_day")]
     pub start_time: Option<Duration>,
     #[serde(

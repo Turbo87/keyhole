@@ -504,14 +504,77 @@ fn invalid_rule_override_is_an_error() {
     );
 }
 
-#[test]
-fn handicapped_class_is_an_error_until_handicaps_are_scored() {
-    let fixture_file = FIXTURE_FILE.replace("handicapped = false", "handicapped = true");
+const HANDICAPPED_FIXTURE_FILE: &str = r#"
+edition = "FAI Annex A 2025a"
+flown_under = "unknown"
 
+[class]
+dm = 120
+d1 = 300
+handicapped = true
+handicap_scale = "100"
+
+[published_day_parameters]
+d1 = 300
+n = 1
+n1 = 1
+n2 = 1
+do = 240.00
+vo = 80.00
+f = 1.000
+fcr = 1.000
+maximum_points = 750
+"#;
+
+const HANDICAPPED_FINISHER: &str =
+    "1,A,Crew A,de,,,Arcus,125,12:00:00,15:00:00,3:00:00,100,300,750,0,,";
+
+#[test]
+fn handicap_column_values_divide_while_rows_compare_unhandicapped_values() {
+    let report = check_day(&[HANDICAPPED_FINISHER], HANDICAPPED_FIXTURE_FILE);
+
+    assert!(report.passes(), "{report}");
     assert_eq!(
-        parse_error(&fixture_file),
-        "handicapped classes are not supported yet"
+        decisions(&report),
+        [(
+            "A",
+            "manual result finished from 12:00:00 to 15:00:00, 300 km (from the download), handicap 125 (from the download)"
+        )]
     );
+}
+
+#[test]
+fn fixture_file_decides_on_a_rows_handicap() {
+    let finisher = HANDICAPPED_FINISHER.replace(",125,", ",120,");
+    let fixture_file = format!("{HANDICAPPED_FIXTURE_FILE}\n[decisions.A]\nhandicap = 125\n");
+
+    let report = check_day(&[&finisher], &fixture_file);
+
+    assert!(report.passes(), "{report}");
+    assert!(
+        decisions(&report)[0]
+            .1
+            .ends_with("handicap 125 (from the fixture file)")
+    );
+}
+
+#[test]
+fn unhandicapped_class_ignores_the_handicap_column() {
+    let finisher = FINISHER.replace(",Arcus,,", ",Arcus,125,");
+
+    let report = check_day(&[&finisher], FIXTURE_FILE);
+
+    assert!(report.passes(), "{report}");
+}
+
+#[test]
+fn handicapped_class_row_without_a_handicap_is_an_error() {
+    let finisher = HANDICAPPED_FINISHER.replace(",125,", ",,");
+    let fixture = Fixture::parse(TASK, &results(&[&finisher]), HANDICAPPED_FIXTURE_FILE).unwrap();
+
+    let error = check(&fixture).unwrap_err();
+
+    assert_eq!(error.to_string(), "no handicap for A");
 }
 
 #[test]
@@ -525,4 +588,14 @@ fn racing_task_finisher_flies_the_task_distance_at_the_elapsed_time() {
     let report = check_task(task, &[finisher], &fixture_file);
 
     assert!(report.passes(), "{report}");
+}
+
+#[test]
+fn handicapped_class_without_a_handicap_scale_is_an_error() {
+    let fixture_file = FIXTURE_FILE.replace("handicapped = false", "handicapped = true");
+
+    assert_eq!(
+        parse_error(&fixture_file),
+        "a handicapped class needs a handicap scale"
+    );
 }
