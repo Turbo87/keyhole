@@ -173,9 +173,16 @@ fn decisions(report: &Report) -> Vec<(&str, &str)> {
 
 #[test]
 fn dnf_rows_did_not_fly_and_dns_rows_count_without_achievements() {
-    let fixture_file = FIXTURE_FILE
-        .replace("n = 1", "n = 2")
-        .replace("f = 1.000", "f = 0.625");
+    let fixture_file = format!(
+        r#"{FIXTURE_FILE}
+[[deviations]]
+competition_id = "B"
+field = "rank"
+explanation = "SoaringSpot leaves DNS rows unranked."
+"#
+    )
+    .replace("n = 1", "n = 2")
+    .replace("f = 1.000", "f = 0.625");
     let rows = [
         FINISHER.replace(",1000,", ",625,").replace("\n", ""),
         "DNS,B,Crew B,de,,,Arcus,,,,,,0,0,0,,".into(),
@@ -310,4 +317,39 @@ fn assigned_area_task_without_a_minimum_task_time_is_an_error() {
         error.to_string(),
         "the assigned area task has no `task_duration`"
     );
+}
+
+#[test]
+fn wrong_published_rank_fails() {
+    let finisher = FINISHER.replacen("1,", "2,", 1);
+
+    let report = check_day(&[&finisher], FIXTURE_FILE);
+
+    assert!(!report.passes());
+    assert_eq!(
+        report.to_string().lines().next(),
+        Some("A rank: published 2, Keyhole 1")
+    );
+}
+
+#[test]
+fn rows_are_paired_by_competition_id_and_tied_rows_compare_ranks_only() {
+    let fixture_file = FIXTURE_FILE.replace("n = 1\nn1 = 1\nn2 = 1", "n = 2\nn1 = 2\nn2 = 2");
+    let rows = [
+        "1,B,Crew B,de,,,Arcus,,12:10:00,15:10:00,3:00:00,99.9967,299.99,1000,0,,",
+        "1,A,Crew A,de,,,Arcus,,12:00:00,15:00:00,3:00:00,100,300,1000,0,,",
+    ];
+
+    let report = check_day(&rows, &fixture_file);
+
+    assert!(report.passes(), "{report}");
+}
+
+#[test]
+fn duplicate_competition_id_is_an_error() {
+    let fixture = Fixture::parse(TASK, &results(&[FINISHER, FINISHER]), FIXTURE_FILE).unwrap();
+
+    let error = check(&fixture).unwrap_err();
+
+    assert_eq!(error.to_string(), "A has more than one row");
 }

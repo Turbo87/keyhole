@@ -1,11 +1,12 @@
 //! Scoring a fixture and comparing Keyhole's values with the published ones
 //! at the published precision.
 
+use std::collections::HashSet;
 use std::fmt;
 
 use anyhow::bail;
 use keyhole_engine::day_scoring::{
-    ClassDay, DayParameters, Row, ScoringParameters, score_class_day,
+    ClassDay, DayParameters, Row, ScoringParameters, Standing, score_class_day,
 };
 use serde::Deserialize;
 
@@ -26,6 +27,7 @@ pub enum Field {
     F,
     Fcr,
     MaximumPoints,
+    Rank,
     Points,
     Penalty,
     Distance,
@@ -46,6 +48,7 @@ impl fmt::Display for Field {
             Self::F => "F",
             Self::Fcr => "FCR",
             Self::MaximumPoints => "maximum points",
+            Self::Rank => "rank",
             Self::Points => "points",
             Self::Penalty => "penalty",
             Self::Distance => "distance",
@@ -133,6 +136,14 @@ impl fmt::Display for Report {
 /// values.
 pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
     let file = &fixture.file;
+    let mut competition_ids = HashSet::new();
+    if let Some(row) = fixture
+        .rows
+        .iter()
+        .find(|row| !competition_ids.insert(&row.competition_id))
+    {
+        bail!("{} has more than one row", row.competition_id);
+    }
     if let Some(competition_id) = file
         .decisions
         .keys()
@@ -178,8 +189,14 @@ pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
         .rows
         .iter()
         .zip(&decisions)
-        .zip(&result.rows)
-        .flat_map(|((published, decisions), row)| row_mismatches(published, decisions, row))
+        .flat_map(|(published, decisions)| {
+            let row = result
+                .rows
+                .iter()
+                .find(|row| row.competition_id == published.competition_id)
+                .expect("the engine returns a row per competitor");
+            row_mismatches(published, decisions, row)
+        })
         .map(&mut explain)
         .collect();
 
@@ -262,6 +279,11 @@ fn row_mismatches(
     };
     [
         (
+            Field::Rank,
+            Some(published.rank.clone()),
+            Some(rank(keyhole.standing)),
+        ),
+        (
             Field::Points,
             Some(decimals(published.points, 0)),
             Some(keyhole.day_score.to_string()),
@@ -297,6 +319,14 @@ fn row_mismatches(
         keyhole: keyhole.unwrap_or_else(|| "nothing".into()),
         explanation: None,
     })
+}
+
+/// Writes a standing the way SoaringSpot's rank column does.
+fn rank(standing: Standing) -> String {
+    match standing {
+        Standing::Ranked(rank) => rank.to_string(),
+        Standing::DidNotFly => "DNF".into(),
+    }
 }
 
 fn decimals(value: f64, decimals: usize) -> String {

@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use keyhole_engine::day_scoring::{
     Achievement, ClassDay, CompetitorResult, DayResult, DayValidity, ResultStatus, ScoringError,
-    ScoringParameters, Task, score_class_day,
+    ScoringParameters, Standing, Task, score_class_day,
 };
 
 fn hours(hours: f64) -> Duration {
@@ -362,4 +362,102 @@ fn assigned_area_finisher_is_raised_to_the_minimum_task_time() {
     assert_eq!(result.rows[0].speed, Some(90.));
     assert_eq!(result.rows[1].speed, Some(80.));
     assert_eq!(result.parameters.t0, Some(hours(3.)));
+}
+
+fn standings(result: &DayResult) -> Vec<(&str, Standing)> {
+    let rows = result.rows.iter();
+    rows.map(|row| (row.competition_id.as_str(), row.standing))
+        .collect()
+}
+
+#[test]
+fn equal_day_scores_share_a_rank_and_skip_the_next() {
+    let day = racing_day(
+        300.,
+        vec![
+            finisher("D", 300., hours(5.)),
+            finisher("B", 300., hours(3.75)),
+            finisher("C", 300., hours(3.75)),
+            finisher("A", 300., hours(3.)),
+        ],
+    );
+
+    let result = score(&day);
+
+    assert_eq!(
+        standings(&result),
+        [
+            ("A", Standing::Ranked(1)),
+            ("B", Standing::Ranked(2)),
+            ("C", Standing::Ranked(2)),
+            ("D", Standing::Ranked(4)),
+        ]
+    );
+}
+
+#[test]
+fn tied_rows_order_by_unrounded_score_then_competition_id() {
+    let day = racing_day(
+        300.,
+        vec![
+            finisher("A", 300., hours(3.)),
+            finisher("Z", 300., hours(3.75)),
+            finisher("Y", 300., hours(3.75)),
+            finisher("X", 300., hours(3.7501)),
+        ],
+    );
+
+    let result = score(&day);
+
+    assert_eq!(result.rows[3].day_score, result.rows[1].day_score);
+    assert_eq!(
+        standings(&result),
+        [
+            ("A", Standing::Ranked(1)),
+            ("Y", Standing::Ranked(2)),
+            ("Z", Standing::Ranked(2)),
+            ("X", Standing::Ranked(2)),
+        ]
+    );
+}
+
+#[test]
+fn did_not_fly_results_are_unranked_below_the_ranked_rows() {
+    let day = racing_day(
+        300.,
+        vec![
+            competitor("B", ResultStatus::DidNotFly),
+            finisher("A", 300., hours(3.)),
+        ],
+    );
+
+    let result = score(&day);
+
+    assert_eq!(
+        standings(&result),
+        [("A", Standing::Ranked(1)), ("B", Standing::DidNotFly),]
+    );
+}
+
+#[test]
+fn launched_competitor_without_a_valid_start_shares_the_last_rank_with_zero_points() {
+    let day = racing_day(
+        300.,
+        vec![
+            landed("C", 0.),
+            finisher("A", 300., hours(3.)),
+            penalised(5000, finisher("B", 300., hours(3.))),
+        ],
+    );
+
+    let result = score(&day);
+
+    assert_eq!(
+        standings(&result),
+        [
+            ("A", Standing::Ranked(1)),
+            ("B", Standing::Ranked(2)),
+            ("C", Standing::Ranked(2)),
+        ]
+    );
 }
