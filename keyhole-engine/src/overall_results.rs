@@ -1,6 +1,6 @@
 //! Adding up a class's day scores into its overall results.
 
-use crate::day_scoring::{Row, Standing};
+use crate::day_scoring::{DayValidity, Row, Standing};
 use crate::rule_sets::RuleSetEdition;
 
 /// A competitor of the class.
@@ -17,7 +17,12 @@ pub struct Competitor {
 /// A class day's day scores, or the reason the class day doesn't count.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ClassDayScores<'a> {
-    Counting(&'a [Row]),
+    /// A counting class day, whose daily places only count toward the podium
+    /// countback when it is valid.
+    Counting {
+        rows: &'a [Row],
+        validity: DayValidity,
+    },
     /// A practice day, which is scored but doesn't count.
     Practice(&'a [Row]),
     Cancelled,
@@ -44,6 +49,13 @@ pub enum OverallStanding {
     CompetitionDisqualified,
 }
 
+/// Day rows that no class day could produce.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum OverallResultsError {
+    #[error("{competition_id} is ranked 0 on a class day")]
+    RankedZero { competition_id: String },
+}
+
 /// Adds up the day scores of the counting class days into one row per
 /// competitor.
 ///
@@ -55,25 +67,35 @@ pub fn overall_results(
     edition: &RuleSetEdition,
     competitors: &[Competitor],
     days: &[ClassDayScores<'_>],
-) -> Vec<OverallRow> {
+) -> Result<Vec<OverallRow>, OverallResultsError> {
+    for day in days {
+        if let ClassDayScores::Counting { rows, .. } = day
+            && let Some(row) = rows.iter().find(|row| row.standing == Standing::Ranked(0))
+        {
+            return Err(OverallResultsError::RankedZero {
+                competition_id: row.competition_id.clone(),
+            });
+        }
+    }
+
     let mut totals: Vec<_> = competitors
         .iter()
         .map(|competitor| {
             let mut total = Total::new(competitor);
             for day in days {
-                if let ClassDayScores::Counting(rows) = day
+                if let ClassDayScores::Counting { rows, validity } = day
                     && let Some(row) = rows
                         .iter()
                         .find(|row| row.competition_id == competitor.competition_id)
                 {
-                    total.add(row);
+                    total.add(row, *validity);
                 }
             }
             total
         })
         .collect();
     rank(&mut totals, edition.constants.podium_countback);
-    totals.into_iter().map(|total| total.row).collect()
+    Ok(totals.into_iter().map(|total| total.row).collect())
 }
 
 /// The last place that a podium countback decides.
@@ -107,10 +129,12 @@ impl Total {
         }
     }
 
-    fn add(&mut self, row: &Row) {
+    fn add(&mut self, row: &Row, validity: DayValidity) {
         self.row.unrounded_total += row.score;
         self.row.total += row.day_score;
-        if let Standing::Ranked(place) = row.standing {
+        if let Standing::Ranked(place) = row.standing
+            && validity == DayValidity::Valid
+        {
             let index = place as usize - 1;
             if self.place_counts.len() <= index {
                 self.place_counts.resize(index + 1, 0);
