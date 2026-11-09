@@ -185,7 +185,7 @@ explanation = "SoaringSpot leaves DNS rows unranked."
     let rows = [
         &*finisher,
         "DNS,B,Crew B,de,,,Arcus,,,,,,0,0,0,,",
-        "DNF,C,Crew C,de,,,Arcus,,,,,,,0,0,,",
+        "DNF,C,Crew C,de,,,Arcus,,,,,,0,0,0,,",
     ];
 
     let report = check_day(&rows, &fixture_file);
