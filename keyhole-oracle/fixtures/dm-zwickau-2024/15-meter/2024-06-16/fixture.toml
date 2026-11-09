@@ -1,0 +1,32 @@
+# SWO racing task where only 3 of 29 competitors who reached Dm finished, so
+# FCR reduces the day's points. One competitor has a penalty and one an
+# official warning.
+
+edition = "DAeC SWO 2026"
+flown_under = "DAeC SWO 2024"
+
+# The task info line says "handicapping enabled", but the class has no
+# Handicap column and the published values reproduce without handicaps, so the
+# class is unhandicapped.
+[class]
+dm = 120
+d1 = 300
+handicapped = false
+
+[class.rule_overrides]
+earth_model = "WGS84"
+
+# Racing Task, Maximum Points: 1000, F = 1,000, Fcr = 0,724, Max speed pts: 65
+# ; Dm = 120km, D1 = 300km, handicapping enabled
+# ; Use PEV disabled,  N: 31, n1: 29, n2: 3, Do: 330,46km, Vo: 104,16km/h
+# ; DAeC-SWO2024 Script V9.06
+[published_day_parameters]
+d1 = 300
+n = 31
+n1 = 29
+n2 = 3
+do = 330.46
+vo = 104.16
+f = 1.000
+fcr = 0.724
+maximum_points = 1000
