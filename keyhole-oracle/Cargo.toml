@@ -8,6 +8,7 @@ publish = false
 anyhow = "1.0.104"
 csv = "1.4.0"
 keyhole-engine = { path = "../keyhole-engine" }
+regex = "1.12.3"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 toml = "1.2.1"

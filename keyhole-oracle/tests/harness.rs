@@ -173,13 +173,20 @@ fn decisions(report: &Report) -> Vec<(&str, &str)> {
 
 #[test]
 fn dnf_rows_did_not_fly_and_dns_rows_count_without_achievements() {
-    let fixture_file = FIXTURE_FILE
-        .replace("n = 1", "n = 2")
-        .replace("f = 1.000", "f = 0.625");
+    let fixture_file = format!(
+        r#"{FIXTURE_FILE}
+[[deviations]]
+competition_id = "B"
+field = "rank"
+explanation = "SoaringSpot leaves DNS rows unranked."
+"#
+    )
+    .replace("n = 1", "n = 2")
+    .replace("f = 1.000", "f = 0.625");
     let rows = [
         FINISHER.replace(",1000,", ",625,").replace("\n", ""),
         "DNS,B,Crew B,de,,,Arcus,,,,,,0,0,0,,".into(),
-        "DNF,C,Crew C,de,,,Arcus,,,,,,,0,0,,".into(),
+        "DNF,C,Crew C,de,,,Arcus,,,,,,0,0,0,,".into(),
     ];
     let rows: Vec<_> = rows.iter().map(String::as_str).collect();
 
@@ -209,7 +216,7 @@ fn penalty_points_become_the_penalty() {
         decisions(&report),
         [(
             "A",
-            "manual result finished from 12:00:00 to 15:00:00, 300 km (from the download), penalty 12 (from the download)"
+            "manual result finished from 12:00:00 to 15:00:00, 300 km (from the download), penalty 12 (from the download), public remark \"Start\" (from the download)"
         )]
     );
 }
@@ -309,5 +316,142 @@ fn assigned_area_task_without_a_minimum_task_time_is_an_error() {
     assert_eq!(
         error.to_string(),
         "the assigned area task has no `task_duration`"
+    );
+}
+
+#[test]
+fn wrong_published_rank_fails() {
+    let finisher = FINISHER.replacen("1,", "2,", 1);
+
+    let report = check_day(&[&finisher], FIXTURE_FILE);
+
+    assert!(!report.passes());
+    assert_eq!(
+        report.to_string().lines().next(),
+        Some("A rank: published 2, Keyhole 1")
+    );
+}
+
+#[test]
+fn rows_are_paired_by_competition_id_and_tied_rows_compare_ranks_only() {
+    let fixture_file = FIXTURE_FILE.replace("n = 1\nn1 = 1\nn2 = 1", "n = 2\nn1 = 2\nn2 = 2");
+    let rows = [
+        "1,B,Crew B,de,,,Arcus,,12:10:00,15:10:00,3:00:00,99.9967,299.99,1000,0,,",
+        "1,A,Crew A,de,,,Arcus,,12:00:00,15:00:00,3:00:00,100,300,1000,0,,",
+    ];
+
+    let report = check_day(&rows, &fixture_file);
+
+    assert!(report.passes(), "{report}");
+}
+
+#[test]
+fn duplicate_competition_id_is_an_error() {
+    let fixture = Fixture::parse(TASK, &results(&[FINISHER, FINISHER]), FIXTURE_FILE).unwrap();
+
+    let error = check(&fixture).unwrap_err();
+
+    assert_eq!(error.to_string(), "A has more than one row");
+}
+
+const GUEST: &str = "HC,G,Crew G,de,,,Arcus,,12:00:00,15:00:00,3:00:00,100,300,1000,0,,";
+
+#[test]
+fn hc_rows_are_hors_concours() {
+    let report = check_day(&[FINISHER, GUEST], FIXTURE_FILE);
+
+    assert!(report.passes(), "{report}");
+    assert_eq!(
+        decisions(&report)[1],
+        (
+            "G",
+            "manual result finished from 12:00:00 to 15:00:00, 300 km (from the download), hors concours (from the download)"
+        )
+    );
+}
+
+#[test]
+fn fixture_file_decides_on_hors_concours() {
+    let fixture_file = format!("{FIXTURE_FILE}\n[decisions.G]\nhors_concours = false\n")
+        .replace("n = 1\nn1 = 1\nn2 = 1", "n = 2\nn1 = 2\nn2 = 2");
+
+    let report = check_day(&[FINISHER, GUEST], &fixture_file);
+
+    assert_eq!(
+        report.to_string().lines().next(),
+        Some("G rank: published HC, Keyhole 1")
+    );
+    assert_eq!(
+        decisions(&report)[1].1,
+        "manual result finished from 12:00:00 to 15:00:00, 300 km (from the download), not hors concours (from the fixture file)"
+    );
+}
+
+fn remark_decision(points: &str, penalty_points: &str, remark: &str) -> String {
+    let finisher = FINISHER.replace(
+        ",1000,0,,",
+        &format!(",{points},0,{penalty_points},\"{remark}\""),
+    );
+    let report = check_day(&[&finisher], FIXTURE_FILE);
+    assert!(report.passes(), "{report}");
+    let (_, decisions) = &report.decisions[0];
+    let (_, remark) = decisions.split_once("(from the download), ").unwrap();
+    remark.into()
+}
+
+#[test]
+fn bare_penalty_points_leave_no_public_remark() {
+    assert_eq!(
+        remark_decision("988", "12", "12 penalty points"),
+        "penalty 12 (from the download)"
+    );
+}
+
+#[test]
+fn penalty_points_with_a_thousands_separator_are_stripped_from_the_public_remark() {
+    assert_eq!(
+        remark_decision("0", "1000", "Gefährliches Verhalten (1,000 penalty points)"),
+        "penalty 1000 (from the download), public remark \"Gefährliches Verhalten\" (from the download)"
+    );
+}
+
+#[test]
+fn official_warning_group_remarks_become_official_warnings() {
+    for remark in [
+        "Verwarnung: Überfliegen abgestellter Flugzeuge",
+        "First offence, warning",
+        "1st offence",
+        "W - Start",
+    ] {
+        assert_eq!(
+            remark_decision("1000", "", remark),
+            format!("official warning \"{remark}\" (from the download)")
+        );
+    }
+}
+
+#[test]
+fn warning_remarks_with_a_penalty_become_the_public_remark() {
+    assert_eq!(
+        remark_decision("975", "25", "2nd warning (25 penalty points)"),
+        "penalty 25 (from the download), public remark \"2nd warning\" (from the download)"
+    );
+}
+
+#[test]
+fn earlier_remark_groups_take_precedence_over_official_warnings() {
+    for remark in ["Disqualified after a warning", "Withdrawn after warning"] {
+        assert_eq!(
+            remark_decision("1000", "", remark),
+            format!("remark \"{remark}\" (not applied)")
+        );
+    }
+}
+
+#[test]
+fn other_remarks_are_reported_but_not_applied() {
+    assert_eq!(
+        remark_decision("1000", "", "Loggerintervall"),
+        "remark \"Loggerintervall\" (not applied)"
     );
 }

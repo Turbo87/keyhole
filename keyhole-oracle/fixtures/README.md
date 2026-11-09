@@ -38,13 +38,14 @@ result = "did_not_fly"
 # result = { finished = { start_time = "13:31:11", finish_time = "17:01:24", distance = 421.39 } }
 # result = { landed = { start_time = "13:31:11", distance = 120.5 } }
 penalty = 50
+hors_concours = true
 
 # Known deviations from the published values. Leave out `competition_id` for a
 # day parameter. A recorded deviation that no longer occurs fails the test.
 [[deviations]]
 competition_id = "AB"
-field = "points"    # d1 n n1 n2 do vo f fcr maximum_points points penalty distance speed start_time finish_time
+field = "points"    # d1 n n1 n2 do vo f fcr maximum_points rank points penalty distance speed start_time finish_time
 explanation = "Why Keyhole and SeeYou differ."
 ```
 
-The harness derives each row's decisions from `results.csv`: `DNF` did not fly, `DNS` a manual result landed without starting at 0 km, `penalty_points` the penalty rounded to whole points, and every other row a manual result from its start and finish times and distance. Values are compared at the precision SoaringSpot displays: points, `D1` and maximum points as whole numbers, a penalty from the download as published against the whole points Keyhole deducts, distances, speeds, `Do` and `Vo` to 0.01, `F` and `FCR` to 0.001, and times to the second.
+The harness derives each row's decisions from `results.csv`: `DNF` did not fly, `HC` hors concours, `DNS` a manual result landed without starting at 0 km, `penalty_points` the penalty rounded to whole points, and every other row a manual result from its start and finish times and distance. A remark minus its trailing penalty points becomes the penalty's public remark when the row has a penalty, otherwise an official warning when it is in the official warning group, and is only reported when neither applies. Remarks are never compared. Rows are paired by competition ID, so the order of tied rows is never compared. Values are compared at the precision SoaringSpot displays: ranks as written, points, `D1` and maximum points as whole numbers, a penalty from the download as published against the whole points Keyhole deducts, distances, speeds, `Do` and `Vo` to 0.01 with a row without a counting result at 0 km as SoaringSpot shows it, `F` and `FCR` to 0.001, and times to the second.
