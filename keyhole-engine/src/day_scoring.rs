@@ -1,0 +1,233 @@
+//! Scoring one class day with the 1000-point formula shared by the DAeC SWO
+//! and IGC Annex A.
+//!
+//! Distances are in km and speeds in km/h. Every distance must be finite, `Dm`
+//! and `D1` must be above 0 and every finisher's time must be above 0. Scoring
+//! does not check these and its results are meaningless when they are
+//! violated.
+
+use std::time::Duration;
+
+/// A class day's scoring parameters and each competitor's result.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClassDay {
+    pub parameters: ScoringParameters,
+    pub competitors: Vec<CompetitorResult>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ScoringParameters {
+    /// The minimum distance `Dm` that a day needs enough competitors to reach.
+    pub dm: f64,
+    /// The distance `D1` a winner needs for 1000 points.
+    pub d1: f64,
+}
+
+/// One competitor's input to scoring a class day.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CompetitorResult {
+    pub competition_id: String,
+    pub result: ResultStatus,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ResultStatus {
+    DidNotFly,
+    /// The achievement analysed from a scored file or entered as a manual
+    /// result.
+    Flown(Achievement),
+}
+
+/// What a competitor achieved on the class day's task.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Achievement {
+    /// The credited distance, which is the task distance for a racing task
+    /// finisher.
+    pub distance: f64,
+    /// The time from the start to the finish, or `None` without a finish.
+    pub time: Option<Duration>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DayResult {
+    pub parameters: DayParameters,
+    pub rows: Vec<Row>,
+}
+
+/// The day parameters of the 1000-point formula, all unrounded.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DayParameters {
+    /// The number of competitors who flew.
+    pub n: u32,
+    /// The number of competitors who reached `Dm`.
+    pub n1: u32,
+    /// The number of finishers faster than two thirds of `V0`.
+    pub n2: u32,
+    /// The minimum distance `Dm`.
+    pub dm: f64,
+    /// The distance `D1` a winner needs for 1000 points.
+    pub d1: f64,
+    /// The best distance.
+    pub d0: f64,
+    /// The best speed, or 0 without finishers.
+    pub v0: f64,
+    /// The time the finisher with `V0` is scored over, the lower one on a tie.
+    pub t0: Option<Duration>,
+    /// The maximum available points.
+    pub pm: f64,
+    /// The maximum available speed points.
+    pub pvm: f64,
+    /// The maximum available distance points.
+    pub pdm: f64,
+    /// The day factor.
+    pub f: f64,
+    /// The completion ratio factor.
+    pub fcr: f64,
+}
+
+/// One competitor's day score.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Row {
+    pub competition_id: String,
+    /// The distance `D`, or `None` without a counting result.
+    pub distance: Option<f64>,
+    /// The speed `V`, or `None` without a finish.
+    pub speed: Option<f64>,
+    /// The day score before rounding.
+    pub raw_score: f64,
+    /// The day score, rounded half away from zero.
+    pub score: u32,
+}
+
+/// A counting competitor's achievement with its speed.
+struct CountingAchievement {
+    distance: f64,
+    finish: Option<Finish>,
+}
+
+struct Finish {
+    speed: f64,
+    time: Duration,
+}
+
+impl CountingAchievement {
+    fn new(achievement: &Achievement) -> Self {
+        let distance = achievement.distance;
+        let finish = achievement.time.map(|time| Finish {
+            speed: distance / hours(time),
+            time,
+        });
+        Self { distance, finish }
+    }
+}
+
+fn hours(duration: Duration) -> f64 {
+    duration.as_secs_f64() / 3600.
+}
+
+/// Scores a class day, returning its day parameters and a row per competitor in
+/// competitor order.
+pub fn score_class_day(day: &ClassDay) -> DayResult {
+    let achievements: Vec<_> = day
+        .competitors
+        .iter()
+        .map(|competitor| match &competitor.result {
+            ResultStatus::DidNotFly => None,
+            ResultStatus::Flown(achievement) => Some(CountingAchievement::new(achievement)),
+        })
+        .collect();
+
+    let counting: Vec<_> = achievements.iter().flatten().collect();
+    let parameters = day_parameters(&day.parameters, &counting);
+
+    let rows = day
+        .competitors
+        .iter()
+        .zip(&achievements)
+        .map(|(competitor, achievement)| {
+            let achievement = achievement.as_ref();
+            let raw_score = achievement.map_or(0., |a| points(&parameters, a));
+            let finish = achievement.and_then(|a| a.finish.as_ref());
+            Row {
+                competition_id: competitor.competition_id.clone(),
+                distance: achievement.map(|a| a.distance),
+                speed: finish.map(|finish| finish.speed),
+                raw_score,
+                score: raw_score.round() as u32,
+            }
+        })
+        .collect();
+
+    DayResult { parameters, rows }
+}
+
+fn day_parameters(
+    scoring: &ScoringParameters,
+    achievements: &[&CountingAchievement],
+) -> DayParameters {
+    let ScoringParameters { dm, d1 } = *scoring;
+
+    let finishes = || achievements.iter().filter_map(|a| a.finish.as_ref());
+    // A slower finisher on an assigned area task or a non-finisher can fly
+    // further than the winner, so `D0` is the best distance of everyone.
+    let d0 = achievements
+        .iter()
+        .map(|a| a.distance)
+        .max_by(f64::total_cmp)
+        .unwrap_or(0.);
+    let winner = finishes().max_by(|a, b| a.speed.total_cmp(&b.speed).then(b.time.cmp(&a.time)));
+    let v0 = winner.map_or(0., |winner| winner.speed);
+    let t0 = winner.map(|winner| winner.time);
+
+    let n = achievements.len() as u32;
+    let n1 = achievements.iter().filter(|a| a.distance >= dm).count() as u32;
+    let n2 = finishes()
+        .filter(|finish| finish.speed > 2. / 3. * v0)
+        .count() as u32;
+
+    let pm = 1000_f64.min(1250. * d0 / d1 - 250.);
+    let pm = t0.map_or(pm, |t0| pm.min(400. * hours(t0) - 200.));
+    let pvm = 2. / 3. * ratio(n2, n) * pm;
+    let pdm = pm - pvm;
+    let f = 1_f64.min(1.25 * ratio(n1, n));
+    let fcr = 1_f64.min(1.2 * ratio(n2, n1) + 0.6);
+
+    DayParameters {
+        n,
+        n1,
+        n2,
+        dm,
+        d1,
+        d0,
+        v0,
+        t0,
+        pm,
+        pvm,
+        pdm,
+        f,
+        fcr,
+    }
+}
+
+/// Divides two competitor counts, taking 0 for an empty divisor so that a day
+/// without counting competitors yields finite day parameters.
+fn ratio(numerator: u32, denominator: u32) -> f64 {
+    if denominator == 0 {
+        0.
+    } else {
+        f64::from(numerator) / f64::from(denominator)
+    }
+}
+
+fn points(day: &DayParameters, achievement: &CountingAchievement) -> f64 {
+    let speed_threshold = 2. / 3. * day.v0;
+    let (pv, pd) = match &achievement.finish {
+        Some(finish) if finish.speed > speed_threshold => {
+            let pv = day.pvm * (finish.speed - speed_threshold) / (day.v0 / 3.);
+            (pv, day.pdm)
+        }
+        Some(_) => (0., day.pdm),
+        None => (0., day.pdm * achievement.distance / day.d0),
+    };
+    day.f * day.fcr * (pv + pd)
+}

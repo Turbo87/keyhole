@@ -1,6 +1,8 @@
 //! Keyhole's scoring engine: pure functions from competition inputs to results,
 //! with no I/O, clock, network or randomness.
 
+pub mod day_scoring;
+
 /// The version of the engine's algorithms, published with every result.
 ///
 /// It is independent of the crate's semantic version and changes whenever the
