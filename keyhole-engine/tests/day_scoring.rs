@@ -11,9 +11,19 @@ fn hours(hours: f64) -> Duration {
 
 fn class_day(competitors: Vec<CompetitorResult>) -> ClassDay {
     ClassDay {
-        parameters: ScoringParameters { dm: 100., d1: 250. },
+        parameters: ScoringParameters {
+            dm: 100.,
+            d1: 250.,
+            minimum_task_time: None,
+        },
         competitors,
     }
+}
+
+fn assigned_area_day(minimum_task_time: Duration, competitors: Vec<CompetitorResult>) -> ClassDay {
+    let mut day = class_day(competitors);
+    day.parameters.minimum_task_time = Some(minimum_task_time);
+    day
 }
 
 fn competitor(competition_id: &str, result: ResultStatus) -> CompetitorResult {
@@ -262,4 +272,22 @@ fn penalty_larger_than_the_score_floors_the_day_score_at_zero() {
 
     assert_eq!(result.rows[1].raw_score, 0.);
     assert_eq!(day_scores(&result), [("A", 1000), ("B", 0)]);
+}
+
+#[test]
+fn assigned_area_finisher_is_raised_to_the_minimum_task_time() {
+    let day = assigned_area_day(
+        hours(3.),
+        vec![
+            finisher("A", 270., hours(2.5)),
+            finisher("B", 280., hours(3.5)),
+        ],
+    );
+
+    let result = score_class_day(&day);
+
+    assert_eq!(result.rows[0].distance, Some(270.));
+    assert_eq!(result.rows[0].speed, Some(90.));
+    assert_eq!(result.rows[1].speed, Some(80.));
+    assert_eq!(result.parameters.t0, Some(hours(3.)));
 }

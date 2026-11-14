@@ -21,6 +21,9 @@ pub struct ScoringParameters {
     pub dm: f64,
     /// The distance `D1` a winner needs for 1000 points.
     pub d1: f64,
+    /// The minimum task time of an assigned area task, or `None` on a racing
+    /// task.
+    pub minimum_task_time: Option<Duration>,
 }
 
 /// One competitor's input to scoring a class day.
@@ -122,11 +125,12 @@ struct Finish {
 }
 
 impl CountingAchievement {
-    fn new(achievement: &Achievement) -> Self {
+    fn new(achievement: &Achievement, scoring: &ScoringParameters) -> Self {
         let distance = achievement.distance;
-        let finish = achievement.time.map(|time| Finish {
-            speed: distance / hours(time),
-            time,
+        let finish = achievement.time.map(|time| {
+            let time = time.max(scoring.minimum_task_time.unwrap_or_default());
+            let speed = distance / hours(time);
+            Finish { speed, time }
         });
         Self { distance, finish }
     }
@@ -144,7 +148,9 @@ pub fn score_class_day(day: &ClassDay) -> DayResult {
         .iter()
         .map(|competitor| match &competitor.result {
             ResultStatus::DidNotFly => None,
-            ResultStatus::Flown(achievement) => Some(CountingAchievement::new(achievement)),
+            ResultStatus::Flown(achievement) => {
+                Some(CountingAchievement::new(achievement, &day.parameters))
+            }
         })
         .collect();
 
@@ -192,7 +198,7 @@ fn day_parameters(
     scoring: &ScoringParameters,
     achievements: &[&CountingAchievement],
 ) -> DayParameters {
-    let ScoringParameters { dm, d1 } = *scoring;
+    let ScoringParameters { dm, d1, .. } = *scoring;
 
     let finishes = || achievements.iter().filter_map(|a| a.finish.as_ref());
     // A slower finisher on an assigned area task or a non-finisher can fly
