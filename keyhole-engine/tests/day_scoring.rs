@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use keyhole_engine::day_scoring::{
-    Achievement, ClassDay, CompetitorResult, DayResult, ResultStatus, ScoringParameters,
-    score_class_day,
+    Achievement, ClassDay, CompetitorResult, DayResult, DayValidity, ResultStatus,
+    ScoringParameters, score_class_day,
 };
 
 fn hours(hours: f64) -> Duration {
@@ -153,6 +153,7 @@ fn day_without_anyone_flying_has_finite_day_parameters() {
 
     let result = score_class_day(&day);
 
+    assert_eq!(result.validity, DayValidity::Invalid);
     assert_eq!(result.parameters.n, 0);
     assert_eq!(result.parameters.pvm, 0.);
     assert_eq!(result.parameters.f, 0.);
@@ -185,4 +186,39 @@ fn only_the_day_score_is_rounded_with_halves_away_from_zero() {
     assert_eq!(result.rows[0].raw_score, 302.5);
     assert_eq!(result.rows[0].score, 303);
     assert_eq!(result.rows[1].distance, Some(100.123_456));
+}
+
+#[test]
+fn day_where_a_quarter_reached_dm_fails_the_validity_rule() {
+    let day = class_day(vec![
+        finisher("A", 300., hours(3.)),
+        landed("B", 99.),
+        landed("C", 50.),
+        landed("D", 20.),
+    ]);
+
+    let result = score_class_day(&day);
+
+    assert_eq!(result.validity, DayValidity::Invalid);
+    assert_eq!(
+        day_scores(&result),
+        [("A", 0), ("B", 0), ("C", 0), ("D", 0)]
+    );
+    assert!(result.rows.iter().all(|row| row.raw_score == 0.));
+}
+
+#[test]
+fn day_where_more_than_a_quarter_reached_dm_is_valid() {
+    let day = class_day(vec![
+        finisher("A", 300., hours(3.)),
+        landed("B", 100.),
+        landed("C", 50.),
+        landed("D", 20.),
+    ]);
+
+    let result = score_class_day(&day);
+
+    assert_eq!(result.validity, DayValidity::Valid);
+    assert_eq!(result.parameters.f, 0.625);
+    assert_eq!(result.rows[0].score, 625);
 }

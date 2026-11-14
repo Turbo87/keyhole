@@ -51,7 +51,16 @@ pub struct Achievement {
 #[derive(Debug, Clone, PartialEq)]
 pub struct DayResult {
     pub parameters: DayParameters,
+    pub validity: DayValidity,
     pub rows: Vec<Row>,
+}
+
+/// Whether a class day passes the day validity rule.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DayValidity {
+    Valid,
+    /// No more than 25% of `N` reached `Dm`, so every day score is 0.
+    Invalid,
 }
 
 /// The day parameters of the 1000-point formula, all unrounded.
@@ -140,13 +149,24 @@ pub fn score_class_day(day: &ClassDay) -> DayResult {
     let counting: Vec<_> = achievements.iter().flatten().collect();
     let parameters = day_parameters(&day.parameters, &counting);
 
+    let validity = if 4 * parameters.n1 > parameters.n {
+        DayValidity::Valid
+    } else {
+        DayValidity::Invalid
+    };
+
     let rows = day
         .competitors
         .iter()
         .zip(&achievements)
         .map(|(competitor, achievement)| {
             let achievement = achievement.as_ref();
-            let raw_score = achievement.map_or(0., |a| points(&parameters, a));
+            let raw_score = match achievement {
+                Some(achievement) if validity == DayValidity::Valid => {
+                    points(&parameters, achievement)
+                }
+                _ => 0.,
+            };
             let finish = achievement.and_then(|a| a.finish.as_ref());
             Row {
                 competition_id: competitor.competition_id.clone(),
@@ -158,7 +178,11 @@ pub fn score_class_day(day: &ClassDay) -> DayResult {
         })
         .collect();
 
-    DayResult { parameters, rows }
+    DayResult {
+        parameters,
+        validity,
+        rows,
+    }
 }
 
 fn day_parameters(
