@@ -20,6 +20,7 @@ fn competitor(competition_id: &str, result: ResultStatus) -> CompetitorResult {
     CompetitorResult {
         competition_id: competition_id.into(),
         result,
+        penalty: 0,
     }
 }
 
@@ -37,6 +38,13 @@ fn landed(competition_id: &str, distance: f64) -> CompetitorResult {
         time: None,
     };
     competitor(competition_id, ResultStatus::Flown(achievement))
+}
+
+fn penalised(penalty: u32, competitor: CompetitorResult) -> CompetitorResult {
+    CompetitorResult {
+        penalty,
+        ..competitor
+    }
 }
 
 fn day_scores(result: &DayResult) -> Vec<(&str, u32)> {
@@ -221,4 +229,37 @@ fn day_where_more_than_a_quarter_reached_dm_is_valid() {
     assert_eq!(result.validity, DayValidity::Valid);
     assert_eq!(result.parameters.f, 0.625);
     assert_eq!(result.rows[0].score, 625);
+}
+
+#[test]
+fn penalty_is_deducted_after_the_formula_without_changing_day_parameters() {
+    let competitors = vec![
+        finisher("A", 300., hours(3.)),
+        finisher("B", 300., hours(3.75)),
+    ];
+    let unpenalised = score_class_day(&class_day(competitors.clone()));
+    let mut penalised_competitors = competitors;
+    penalised_competitors[0].penalty = 100;
+
+    let result = score_class_day(&class_day(penalised_competitors));
+
+    assert_eq!(result.parameters, unpenalised.parameters);
+    assert_eq!(
+        result.rows[0].raw_score,
+        unpenalised.rows[0].raw_score - 100.
+    );
+    assert_eq!(result.rows[1], unpenalised.rows[1]);
+}
+
+#[test]
+fn penalty_larger_than_the_score_floors_the_day_score_at_zero() {
+    let day = class_day(vec![
+        finisher("A", 300., hours(3.)),
+        penalised(5000, finisher("B", 300., hours(3.75))),
+    ]);
+
+    let result = score_class_day(&day);
+
+    assert_eq!(result.rows[1].raw_score, 0.);
+    assert_eq!(day_scores(&result), [("A", 1000), ("B", 0)]);
 }

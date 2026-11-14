@@ -28,6 +28,8 @@ pub struct ScoringParameters {
 pub struct CompetitorResult {
     pub competition_id: String,
     pub result: ResultStatus,
+    /// Points deducted from the day score after the formula.
+    pub penalty: u32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -102,7 +104,7 @@ pub struct Row {
     pub distance: Option<f64>,
     /// The speed `V`, or `None` without a finish.
     pub speed: Option<f64>,
-    /// The day score before rounding.
+    /// The day score after the penalty and the floor at 0, before rounding.
     pub raw_score: f64,
     /// The day score, rounded half away from zero.
     pub score: u32,
@@ -161,12 +163,13 @@ pub fn score_class_day(day: &ClassDay) -> DayResult {
         .zip(&achievements)
         .map(|(competitor, achievement)| {
             let achievement = achievement.as_ref();
-            let raw_score = match achievement {
+            let points = match achievement {
                 Some(achievement) if validity == DayValidity::Valid => {
                     points(&parameters, achievement)
                 }
                 _ => 0.,
             };
+            let raw_score = (points - f64::from(competitor.penalty)).max(0.);
             let finish = achievement.and_then(|a| a.finish.as_ref());
             Row {
                 competition_id: competitor.competition_id.clone(),
