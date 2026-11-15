@@ -44,6 +44,9 @@ pub struct CompetitorResult {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ResultStatus {
+    /// Not known yet, so scoring assumes a placeholder result, which feeds the
+    /// day parameters unless the competitor is hors concours.
+    Unknown,
     DidNotFly,
     /// The achievement analysed from a scored file or entered as a manual
     /// result.
@@ -132,6 +135,8 @@ pub enum Rank {
     Disqualified,
     /// Shown as "DNF".
     DidNotFly,
+    /// A placeholder result, shown as "No result yet".
+    NoResultYet,
 }
 
 /// A counting competitor's achievement with its speed.
@@ -164,13 +169,14 @@ fn hours(duration: Duration) -> f64 {
 /// Scores a class day, returning its day parameters and a row per competitor.
 ///
 /// Rows are ordered by unrounded score, then competition ID, with hors concours
-/// rows among the ranked ones, then disqualified rows, then did-not-fly rows.
+/// rows among the ranked ones, then placeholder rows, then disqualified rows,
+/// then did-not-fly rows.
 pub fn score_class_day(day: &ClassDay) -> DayResult {
     let achievements: Vec<_> = day
         .competitors
         .iter()
         .map(|competitor| match &competitor.result {
-            ResultStatus::DidNotFly => None,
+            ResultStatus::Unknown | ResultStatus::DidNotFly => None,
             ResultStatus::Flown(achievement) => {
                 Some(CountingAchievement::new(achievement, &day.parameters))
             }
@@ -184,7 +190,13 @@ pub fn score_class_day(day: &ClassDay) -> DayResult {
         .filter(|(competitor, _)| !competitor.hors_concours)
         .filter_map(|(_, achievement)| achievement.as_ref())
         .collect();
-    let parameters = day_parameters(&day.parameters, &counting);
+    let placeholder_count = day
+        .competitors
+        .iter()
+        .filter(|competitor| !competitor.hors_concours)
+        .filter(|competitor| competitor.result == ResultStatus::Unknown)
+        .count() as u32;
+    let parameters = day_parameters(&day.parameters, &counting, placeholder_count);
 
     let validity = if 4 * parameters.n1 > parameters.n {
         DayValidity::Valid
@@ -209,6 +221,7 @@ pub fn score_class_day(day: &ClassDay) -> DayResult {
             let finish = achievement.and_then(|a| a.finish.as_ref());
             let rank = match competitor.result {
                 _ if competitor.disqualified => Rank::Disqualified,
+                ResultStatus::Unknown => Rank::NoResultYet,
                 _ if competitor.hors_concours => Rank::HorsConcours,
                 ResultStatus::DidNotFly => Rank::DidNotFly,
                 ResultStatus::Flown(_) => Rank::Ranked(0),
@@ -232,13 +245,14 @@ pub fn score_class_day(day: &ClassDay) -> DayResult {
     }
 }
 
-/// Orders the rows and numbers the ranked ones, which carry a placeholder rank.
+/// Orders the rows and numbers the ranked ones, which carry a temporary rank.
 fn rank(rows: &mut [Row]) {
     rows.sort_by(|a, b| {
         let group = |row: &Row| match row.rank {
             Rank::Ranked(_) | Rank::HorsConcours => 0,
-            Rank::Disqualified => 1,
-            Rank::DidNotFly => 2,
+            Rank::NoResultYet => 1,
+            Rank::Disqualified => 2,
+            Rank::DidNotFly => 3,
         };
         group(a)
             .cmp(&group(b))
@@ -259,9 +273,13 @@ fn rank(rows: &mut [Row]) {
     }
 }
 
+/// Computes the day parameters from the counting achievements and the number
+/// of placeholder results, which feed `N`, `n1` and `n2` but never `D0`, `V0`
+/// or `T0`.
 fn day_parameters(
     scoring: &ScoringParameters,
     achievements: &[&CountingAchievement],
+    placeholder_count: u32,
 ) -> DayParameters {
     let ScoringParameters { dm, d1, .. } = *scoring;
 
@@ -277,11 +295,16 @@ fn day_parameters(
     let v0 = winner.map_or(0., |winner| winner.speed);
     let t0 = winner.map(|winner| winner.time);
 
-    let n = achievements.len() as u32;
+    // A placeholder is a finisher at `V0`, or a non-finisher at `D0` without
+    // finishers.
+    let counted_placeholders = |counted: bool| if counted { placeholder_count } else { 0 };
+    let n = achievements.len() as u32 + placeholder_count;
     let n1 = achievements.iter().filter(|a| a.distance >= dm).count() as u32;
+    let n1 = n1 + counted_placeholders(winner.is_some() || d0 >= dm);
     let n2 = finishes()
         .filter(|finish| finish.speed > 2. / 3. * v0)
         .count() as u32;
+    let n2 = n2 + counted_placeholders(winner.is_some());
 
     let pm = 1000_f64.min(1250. * d0 / d1 - 250.);
     let pm = t0.map_or(pm, |t0| pm.min(400. * hours(t0) - 200.));
