@@ -99,6 +99,7 @@ impl From<&RuleOverrides> for rule_sets::RuleOverrides {
             earth_model: overrides.earth_model.map(Into::into),
             dm: overrides.dm,
             d1: overrides.d1,
+            ..Default::default()
         }
     }
 }

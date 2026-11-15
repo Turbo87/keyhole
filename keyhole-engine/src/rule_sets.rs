@@ -34,6 +34,13 @@ pub static DAEC_SWO_2026: RuleSetEdition = RuleSetEdition {
     defaults: Rules {
         analysis: AnalysisParameters {
             earth_model: EarthModel::Wgs84,
+            start_opening_time: None,
+            start_closing_time: None,
+            maximum_start_altitude: None,
+            maximum_start_ground_speed: None,
+            pev_start: false,
+            pev_wait_time: 10,
+            pev_start_window: 7,
         },
         scoring: ScoringParameters { dm: 100., d1: 250. },
     },
@@ -54,6 +61,13 @@ pub static FAI_ANNEX_A_2025A: RuleSetEdition = RuleSetEdition {
     defaults: Rules {
         analysis: AnalysisParameters {
             earth_model: EarthModel::Wgs84,
+            start_opening_time: None,
+            start_closing_time: None,
+            maximum_start_altitude: None,
+            maximum_start_ground_speed: None,
+            pev_start: false,
+            pev_wait_time: 10,
+            pev_start_window: 10,
         },
         scoring: ScoringParameters { dm: 100., d1: 250. },
     },
@@ -115,6 +129,13 @@ pub struct RuleOverrides {
     pub earth_model: Option<EarthModel>,
     pub dm: Option<f64>,
     pub d1: Option<f64>,
+    pub start_opening_time: Option<UtcTime>,
+    pub start_closing_time: Option<UtcTime>,
+    pub maximum_start_altitude: Option<f64>,
+    pub maximum_start_ground_speed: Option<f64>,
+    pub pev_start: Option<bool>,
+    pub pev_wait_time: Option<u32>,
+    pub pev_start_window: Option<u32>,
 }
 
 /// The effective parameters a class day is analysed and scored with, split so
@@ -125,10 +146,28 @@ pub struct Rules {
     pub scoring: ScoringParameters,
 }
 
+/// The parameters that flight analysis takes, where an empty limit isn't
+/// checked.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnalysisParameters {
     pub earth_model: EarthModel,
+    pub start_opening_time: Option<UtcTime>,
+    pub start_closing_time: Option<UtcTime>,
+    /// In m MSL.
+    pub maximum_start_altitude: Option<f64>,
+    /// In km/h.
+    pub maximum_start_ground_speed: Option<f64>,
+    /// Whether a start is timed from a PEV.
+    pub pev_start: bool,
+    /// In whole minutes.
+    pub pev_wait_time: u32,
+    /// In whole minutes.
+    pub pev_start_window: u32,
 }
+
+/// A point in time, in seconds since the Unix epoch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct UtcTime(pub i64);
 
 impl RuleSetEdition {
     /// Looks up a built-in edition by its ID.
@@ -149,10 +188,26 @@ impl RuleSetEdition {
                 earth_model,
                 dm,
                 d1,
+                start_opening_time,
+                start_closing_time,
+                maximum_start_altitude,
+                maximum_start_ground_speed,
+                pev_start,
+                pev_wait_time,
+                pev_start_window,
             } = overrides;
             analysis.earth_model = earth_model.unwrap_or(analysis.earth_model);
             scoring.dm = dm.unwrap_or(scoring.dm);
             scoring.d1 = d1.unwrap_or(scoring.d1);
+            analysis.start_opening_time = start_opening_time.or(analysis.start_opening_time);
+            analysis.start_closing_time = start_closing_time.or(analysis.start_closing_time);
+            analysis.maximum_start_altitude =
+                maximum_start_altitude.or(analysis.maximum_start_altitude);
+            analysis.maximum_start_ground_speed =
+                maximum_start_ground_speed.or(analysis.maximum_start_ground_speed);
+            analysis.pev_start = pev_start.unwrap_or(analysis.pev_start);
+            analysis.pev_wait_time = pev_wait_time.unwrap_or(analysis.pev_wait_time);
+            analysis.pev_start_window = pev_start_window.unwrap_or(analysis.pev_start_window);
         }
 
         rules

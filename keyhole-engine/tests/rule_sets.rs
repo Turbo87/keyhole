@@ -1,6 +1,7 @@
 use keyhole_engine::day_scoring::ScoringParameters;
 use keyhole_engine::rule_sets::{
-    DAEC_SWO_2026, EarthModel, FAI_ANNEX_A_2025A, RuleOverrides, RuleSetEdition,
+    AnalysisParameters, DAEC_SWO_2026, EarthModel, FAI_ANNEX_A_2025A, RuleOverrides,
+    RuleSetEdition, UtcTime,
 };
 
 fn standard_class() -> RuleOverrides {
@@ -42,6 +43,7 @@ fn later_layers_win_over_earlier_layers_and_edition_defaults() {
         earth_model: Some(EarthModel::Wgs84),
         dm: Some(50.),
         d1: Some(250.),
+        ..Default::default()
     };
     let from_class_day = resolve(&[class, class_day]);
     assert_eq!(from_class_day.analysis.earth_model, EarthModel::Wgs84);
@@ -49,6 +51,34 @@ fn later_layers_win_over_earlier_layers_and_edition_defaults() {
         from_class_day.scoring,
         ScoringParameters { dm: 50., d1: 250. }
     );
+}
+
+#[test]
+fn start_procedure_overrides_apply() {
+    let start = RuleOverrides {
+        start_opening_time: Some(UtcTime(1_659_348_000)),
+        start_closing_time: Some(UtcTime(1_659_355_200)),
+        maximum_start_altitude: Some(1500.),
+        maximum_start_ground_speed: Some(170.),
+        pev_start: Some(true),
+        pev_wait_time: Some(5),
+        pev_start_window: Some(8),
+        ..Default::default()
+    };
+
+    let analysis = FAI_ANNEX_A_2025A.resolve(&[start]).analysis;
+
+    let expected = AnalysisParameters {
+        earth_model: EarthModel::Wgs84,
+        start_opening_time: Some(UtcTime(1_659_348_000)),
+        start_closing_time: Some(UtcTime(1_659_355_200)),
+        maximum_start_altitude: Some(1500.),
+        maximum_start_ground_speed: Some(170.),
+        pev_start: true,
+        pev_wait_time: 5,
+        pev_start_window: 8,
+    };
+    assert_eq!(analysis, expected);
 }
 
 #[test]
