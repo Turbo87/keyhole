@@ -95,6 +95,7 @@ fn rank(rank: Rank) -> String {
         Rank::HorsConcours => "HC".into(),
         Rank::Disqualified => "DSQ".into(),
         Rank::DidNotFly => "DNF".into(),
+        Rank::NoResultYet => "?".into(),
     }
 }
 
@@ -637,5 +638,151 @@ fn penalty_leaves_a_disqualified_row_at_zero() {
     rank  cn    distance       speed   raw score  score
     1     A          300         100        1000   1000
     DSQ   B          300         100           0      0
+    ");
+}
+
+fn unknown(competition_id: &str) -> CompetitorResult {
+    competitor(competition_id, ResultStatus::Unknown)
+}
+
+#[test]
+fn placeholder_counts_as_a_finisher_at_the_best_speed_without_points_or_rank() {
+    let day = class_day(vec![
+        finisher("A", 300., hours(3.)),
+        finisher("B", 300., hours(5.)),
+        landed("C", 150.),
+        unknown("U"),
+    ]);
+
+    let result = score_class_day(&day);
+
+    assert_snapshot!(table(&result), @"
+    Valid  N=4 n1=4 n2=2  Dm=100 D1=250 D0=300 V0=100 T0=3:00:00
+    Pm=1000 Pvm=333.333333 Pdm=666.666667 F=1 FCR=1
+
+    rank  cn    distance       speed   raw score  score
+    1     A          300         100        1000   1000
+    2     B          300          60  666.666667    667
+    3     C          150           -  333.333333    333
+    ?     U            -           -           0      0
+    ");
+}
+
+#[test]
+fn placeholder_without_finishers_counts_as_a_non_finisher_at_the_best_distance() {
+    let day = class_day(vec![landed("A", 200.), landed("B", 50.), unknown("U")]);
+
+    let result = score_class_day(&day);
+
+    assert_snapshot!(table(&result), @"
+    Valid  N=3 n1=2 n2=0  Dm=100 D1=250 D0=200 V0=0 T0=-
+    Pm=750 Pvm=0 Pdm=750 F=0.833333 FCR=0.6
+
+    rank  cn    distance       speed   raw score  score
+    1     A          200           -         375    375
+    2     B           50           -       93.75     94
+    ?     U            -           -           0      0
+    ");
+}
+
+#[test]
+fn placeholder_without_finishers_stays_out_of_n1_when_the_best_distance_is_below_dm() {
+    let day = class_day(vec![landed("A", 80.), landed("B", 50.), unknown("U")]);
+
+    let result = score_class_day(&day);
+
+    assert_snapshot!(table(&result), @"
+    Invalid  N=3 n1=0 n2=0  Dm=100 D1=250 D0=80 V0=0 T0=-
+    Pm=150 Pvm=0 Pdm=150 F=0 FCR=0.6
+
+    rank  cn    distance       speed   raw score  score
+    1     A           80           -           0      0
+    1     B           50           -           0      0
+    ?     U            -           -           0      0
+    ");
+}
+
+#[test]
+fn hors_concours_placeholder_is_marked_without_feeding_the_day_parameters() {
+    let competitors = vec![finisher("A", 300., hours(3.75)), landed("B", 150.)];
+    let without_guest = score_class_day(&class_day(competitors.clone()));
+    let mut with_guest_competitors = competitors;
+    with_guest_competitors.push(hors_concours(unknown("G")));
+
+    let result = score_class_day(&class_day(with_guest_competitors));
+
+    assert_eq!(result.parameters, without_guest.parameters);
+    assert_eq!(result.rows[..2], without_guest.rows[..]);
+    assert_snapshot!(table(&result), @"
+    Valid  N=2 n1=2 n2=1  Dm=100 D1=250 D0=300 V0=80 T0=3:45:00
+    Pm=1000 Pvm=333.333333 Pdm=666.666667 F=1 FCR=1
+
+    rank  cn    distance       speed   raw score  score
+    1     A          300          80        1000   1000
+    2     B          150           -  333.333333    333
+    ?     G            -           -           0      0
+    ");
+}
+
+#[test]
+fn disqualified_competitor_with_an_unknown_result_still_feeds_a_placeholder() {
+    let day = class_day(vec![
+        finisher("A", 300., hours(3.)),
+        disqualified(unknown("U")),
+    ]);
+
+    let result = score_class_day(&day);
+
+    assert_snapshot!(table(&result), @"
+    Valid  N=2 n1=2 n2=2  Dm=100 D1=250 D0=300 V0=100 T0=3:00:00
+    Pm=1000 Pvm=666.666667 Pdm=333.333333 F=1 FCR=1
+
+    rank  cn    distance       speed   raw score  score
+    1     A          300         100        1000   1000
+    DSQ   U            -           -           0      0
+    ");
+}
+
+#[test]
+fn day_without_a_real_achievement_fails_the_validity_rule() {
+    let day = class_day(vec![
+        unknown("U"),
+        competitor("B", ResultStatus::DidNotFly),
+        hors_concours(finisher("G", 300., hours(3.))),
+    ]);
+
+    let result = score_class_day(&day);
+
+    assert_snapshot!(table(&result), @"
+    Invalid  N=1 n1=0 n2=0  Dm=100 D1=250 D0=0 V0=0 T0=-
+    Pm=-250 Pvm=-0 Pdm=-250 F=0 FCR=0.6
+
+    rank  cn    distance       speed   raw score  score
+    HC    G          300         100           0      0
+    ?     U            -           -           0      0
+    DNF   B            -           -           0      0
+    ");
+}
+
+#[test]
+fn placeholder_rows_are_listed_below_ranked_rows_and_above_disqualified_rows() {
+    let day = class_day(vec![
+        competitor("A", ResultStatus::DidNotFly),
+        disqualified(finisher("B", 300., hours(3.))),
+        unknown("C"),
+        finisher("D", 300., hours(3.)),
+    ]);
+
+    let result = score_class_day(&day);
+
+    assert_snapshot!(table(&result), @"
+    Valid  N=3 n1=3 n2=3  Dm=100 D1=250 D0=300 V0=100 T0=3:00:00
+    Pm=1000 Pvm=666.666667 Pdm=333.333333 F=1 FCR=1
+
+    rank  cn    distance       speed   raw score  score
+    1     D          300         100        1000   1000
+    ?     C            -           -           0      0
+    DSQ   B          300         100           0      0
+    DNF   A            -           -           0      0
     ");
 }
