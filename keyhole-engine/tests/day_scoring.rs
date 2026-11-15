@@ -12,18 +12,15 @@ fn hours(hours: f64) -> Duration {
 
 fn class_day(competitors: Vec<CompetitorResult>) -> ClassDay {
     ClassDay {
-        parameters: ScoringParameters {
-            dm: 100.,
-            d1: 250.,
-            minimum_task_time: None,
-        },
+        parameters: ScoringParameters { dm: 100., d1: 250. },
+        minimum_task_time: None,
         competitors,
     }
 }
 
 fn assigned_area_day(minimum_task_time: Duration, competitors: Vec<CompetitorResult>) -> ClassDay {
     let mut day = class_day(competitors);
-    day.parameters.minimum_task_time = Some(minimum_task_time);
+    day.minimum_task_time = Some(minimum_task_time);
     day
 }
 

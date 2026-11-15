@@ -157,8 +157,8 @@ pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
         parameters: ScoringParameters {
             dm: file.scoring_parameters.dm,
             d1: file.scoring_parameters.d1,
-            minimum_task_time: fixture.minimum_task_time,
         },
+        minimum_task_time: fixture.minimum_task_time,
         competitors: fixture
             .rows
             .iter()
