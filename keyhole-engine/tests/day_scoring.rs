@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use keyhole_engine::day_scoring::{
-    Achievement, ClassDay, CompetitorResult, DayResult, DayValidity, ResultStatus,
+    Achievement, ClassDay, CompetitorResult, DayResult, DayValidity, Rank, ResultStatus,
     ScoringParameters, score_class_day,
 };
 
@@ -30,6 +30,8 @@ fn competitor(competition_id: &str, result: ResultStatus) -> CompetitorResult {
     CompetitorResult {
         competition_id: competition_id.into(),
         result,
+        hors_concours: false,
+        disqualified: false,
         penalty: 0,
     }
 }
@@ -290,4 +292,229 @@ fn assigned_area_finisher_is_raised_to_the_minimum_task_time() {
     assert_eq!(result.rows[0].speed, Some(90.));
     assert_eq!(result.rows[1].speed, Some(80.));
     assert_eq!(result.parameters.t0, Some(hours(3.)));
+}
+
+fn ranks(result: &DayResult) -> Vec<(&str, Rank)> {
+    let rows = result.rows.iter();
+    rows.map(|row| (row.competition_id.as_str(), row.rank))
+        .collect()
+}
+
+#[test]
+fn equal_day_scores_share_a_rank_and_skip_the_next() {
+    let day = class_day(vec![
+        finisher("D", 300., hours(5.)),
+        finisher("B", 300., hours(3.75)),
+        finisher("C", 300., hours(3.75)),
+        finisher("A", 300., hours(3.)),
+    ]);
+
+    let result = score_class_day(&day);
+
+    assert_eq!(
+        ranks(&result),
+        [
+            ("A", Rank::Ranked(1)),
+            ("B", Rank::Ranked(2)),
+            ("C", Rank::Ranked(2)),
+            ("D", Rank::Ranked(4)),
+        ]
+    );
+}
+
+#[test]
+fn tied_rows_order_by_unrounded_score_then_competition_id() {
+    let day = class_day(vec![
+        finisher("A", 300., hours(3.)),
+        finisher("Z", 300., hours(3.75)),
+        finisher("Y", 300., hours(3.75)),
+        finisher("X", 300., hours(3.7501)),
+    ]);
+
+    let result = score_class_day(&day);
+
+    assert_eq!(result.rows[3].score, result.rows[1].score);
+    assert_eq!(
+        ranks(&result),
+        [
+            ("A", Rank::Ranked(1)),
+            ("Y", Rank::Ranked(2)),
+            ("Z", Rank::Ranked(2)),
+            ("X", Rank::Ranked(2)),
+        ]
+    );
+}
+
+#[test]
+fn did_not_fly_results_are_unranked_below_the_ranked_rows() {
+    let day = class_day(vec![
+        competitor("B", ResultStatus::DidNotFly),
+        finisher("A", 300., hours(3.)),
+    ]);
+
+    let result = score_class_day(&day);
+
+    assert_eq!(
+        ranks(&result),
+        [("A", Rank::Ranked(1)), ("B", Rank::DidNotFly),]
+    );
+}
+
+#[test]
+fn launched_competitor_without_a_valid_start_shares_the_last_rank_with_zero_points() {
+    let day = class_day(vec![
+        landed("C", 0.),
+        finisher("A", 300., hours(3.)),
+        penalised(5000, finisher("B", 300., hours(3.))),
+    ]);
+
+    let result = score_class_day(&day);
+
+    assert_eq!(
+        ranks(&result),
+        [
+            ("A", Rank::Ranked(1)),
+            ("B", Rank::Ranked(2)),
+            ("C", Rank::Ranked(2)),
+        ]
+    );
+}
+
+fn hors_concours(competitor: CompetitorResult) -> CompetitorResult {
+    CompetitorResult {
+        hors_concours: true,
+        ..competitor
+    }
+}
+
+#[test]
+fn hors_concours_rows_are_listed_by_score_without_a_rank_and_never_change_other_points() {
+    let competitors = vec![finisher("A", 300., hours(3.75)), landed("B", 150.)];
+    let without_guest = score_class_day(&class_day(competitors.clone()));
+    let mut with_guest_competitors = competitors;
+    with_guest_competitors.push(hors_concours(finisher("G", 300., hours(3.))));
+
+    let result = score_class_day(&class_day(with_guest_competitors));
+
+    assert_eq!(result.parameters, without_guest.parameters);
+    assert_eq!(result.rows[1..], without_guest.rows[..]);
+    assert_eq!(
+        ranks(&result),
+        [
+            ("G", Rank::HorsConcours),
+            ("A", Rank::Ranked(1)),
+            ("B", Rank::Ranked(2)),
+        ]
+    );
+    assert_eq!(result.rows[0].speed, Some(100.));
+    assert_eq!(result.rows[0].score, 1250);
+}
+
+#[test]
+fn hors_concours_marker_takes_precedence_over_did_not_fly() {
+    let day = class_day(vec![
+        finisher("A", 300., hours(3.)),
+        hors_concours(competitor("G", ResultStatus::DidNotFly)),
+    ]);
+
+    let result = score_class_day(&day);
+
+    assert_eq!(
+        ranks(&result),
+        [("A", Rank::Ranked(1)), ("G", Rank::HorsConcours)]
+    );
+}
+
+#[test]
+fn day_without_competitors_who_are_not_hors_concours_is_invalid() {
+    let day = class_day(vec![hors_concours(finisher("G", 300., hours(3.)))]);
+
+    let result = score_class_day(&day);
+
+    assert_eq!(result.parameters.n, 0);
+    assert_eq!(result.validity, DayValidity::Invalid);
+    assert_eq!(day_scores(&result), [("G", 0)]);
+}
+
+#[test]
+fn disqualified_row_scores_zero_unranked_and_still_feeds_the_day_parameters() {
+    let competitors = vec![
+        finisher("A", 300., hours(3.)),
+        finisher("B", 300., hours(3.75)),
+    ];
+    let undisqualified = score_class_day(&class_day(competitors.clone()));
+    let mut disqualified_competitors = competitors;
+    disqualified_competitors[0].disqualified = true;
+
+    let result = score_class_day(&class_day(disqualified_competitors));
+
+    assert_eq!(result.parameters, undisqualified.parameters);
+    assert_eq!(
+        ranks(&result),
+        [("B", Rank::Ranked(1)), ("A", Rank::Disqualified),]
+    );
+    assert_eq!(result.rows[0].raw_score, undisqualified.rows[1].raw_score);
+    assert_eq!((result.rows[1].raw_score, result.rows[1].score), (0., 0));
+    assert_eq!(result.rows[1].speed, Some(100.));
+}
+
+fn disqualified(competitor: CompetitorResult) -> CompetitorResult {
+    CompetitorResult {
+        disqualified: true,
+        ..competitor
+    }
+}
+
+#[test]
+fn disqualified_rows_are_listed_below_ranked_rows_and_above_did_not_fly_rows() {
+    let day = class_day(vec![
+        competitor("A", ResultStatus::DidNotFly),
+        disqualified(finisher("B", 300., hours(3.))),
+        landed("C", 0.),
+        finisher("D", 300., hours(3.)),
+    ]);
+
+    let result = score_class_day(&day);
+
+    assert_eq!(
+        ranks(&result),
+        [
+            ("D", Rank::Ranked(1)),
+            ("C", Rank::Ranked(2)),
+            ("B", Rank::Disqualified),
+            ("A", Rank::DidNotFly),
+        ]
+    );
+}
+
+#[test]
+fn disqualified_marker_takes_precedence_over_hors_concours_and_did_not_fly() {
+    let day = class_day(vec![
+        finisher("A", 300., hours(3.)),
+        disqualified(hors_concours(finisher("B", 300., hours(3.)))),
+        disqualified(competitor("C", ResultStatus::DidNotFly)),
+    ]);
+
+    let result = score_class_day(&day);
+
+    assert_eq!(
+        ranks(&result),
+        [
+            ("A", Rank::Ranked(1)),
+            ("B", Rank::Disqualified),
+            ("C", Rank::Disqualified),
+        ]
+    );
+}
+
+#[test]
+fn penalty_leaves_a_disqualified_row_at_zero() {
+    let day = class_day(vec![
+        finisher("A", 300., hours(3.)),
+        penalised(50, disqualified(finisher("B", 300., hours(3.)))),
+    ]);
+
+    let result = score_class_day(&day);
+
+    assert_eq!(day_scores(&result), [("A", 1000), ("B", 0)]);
 }

@@ -1,0 +1,37 @@
+# SWO assigned area task with a minimum task time of 4:00, no handicaps, two
+# hors concours competitors and twelve penalties. Everyone finished.
+
+edition = "DAeC SWO 2026"
+flown_under = "unknown"
+earth_model = "WGS84"
+
+[scoring_parameters]
+dm = 140
+d1 = 350
+
+# Assigned Area Task, Maximum Points: 1000, F = 1,000, Fcr = 1,000, Max speed pts: 667
+# ; Dm = 140km, D1 = 350km, no handicaps
+# ; Use PEV disabled,  N: 30, n1: 30, n2: 30, Do: 646,34km, Vo: 149,94km/h
+# ; DAeC-SWO2024 Script V9.07
+[published_day_parameters]
+d1 = 350
+n = 30
+n1 = 30
+n2 = 30
+do = 646.34
+vo = 149.94
+f = 1.000
+fcr = 1.000
+maximum_points = 1000
+
+# VFR's published distance of 452.7 km was entered by hand in SeeYou, which
+# then divided it by the 3:55:13 flown instead of the 4:00 minimum task time.
+[[deviations]]
+competition_id = "VFR"
+field = "speed"
+explanation = "SeeYou didn't raise the hand-entered result to the minimum task time."
+
+[[deviations]]
+competition_id = "VFR"
+field = "points"
+explanation = "Follows from the speed SeeYou didn't raise to the minimum task time."

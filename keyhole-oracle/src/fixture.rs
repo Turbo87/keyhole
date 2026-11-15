@@ -92,6 +92,7 @@ pub struct PublishedDayParameters {
 pub struct FixtureDecisions {
     pub result: Option<ResultDecision>,
     pub penalty: Option<u32>,
+    pub hors_concours: Option<bool>,
 }
 
 /// A mismatch with SoaringSpot that the fixture explains.
