@@ -1,6 +1,6 @@
 use keyhole_engine::day_scoring::ScoringParameters;
 use keyhole_engine::rule_sets::{
-    AnalysisParameters, DAEC_SWO_2026, EarthModel, FAI_ANNEX_A_2025A, RuleOverrides,
+    Altitude, AnalysisParameters, DAEC_SWO_2026, EarthModel, FAI_ANNEX_A_2025A, RuleOverrides,
     RuleSetEdition, UtcTime,
 };
 
@@ -77,6 +77,31 @@ fn start_procedure_overrides_apply() {
         pev_start: true,
         pev_wait_time: 5,
         pev_start_window: 8,
+        ..FAI_ANNEX_A_2025A.defaults.analysis.clone()
+    };
+    assert_eq!(analysis, expected);
+}
+
+#[test]
+fn finish_altitude_and_scoring_end_overrides_apply() {
+    let overrides = RuleOverrides {
+        subtract_finish_ring_radius: Some(false),
+        delivery_period: Some(30),
+        tow_altitude: Some(600.),
+        maximum_altitude: Some(Altitude::FlightLevel(95)),
+        scoring_end_time: Some(UtcTime(1_659_376_800)),
+        ..Default::default()
+    };
+
+    let analysis = DAEC_SWO_2026.resolve(&[overrides]).analysis;
+
+    let expected = AnalysisParameters {
+        subtract_finish_ring_radius: false,
+        delivery_period: Some(30),
+        tow_altitude: Some(600.),
+        maximum_altitude: Some(Altitude::FlightLevel(95)),
+        scoring_end_time: Some(UtcTime(1_659_376_800)),
+        ..DAEC_SWO_2026.defaults.analysis.clone()
     };
     assert_eq!(analysis, expected);
 }

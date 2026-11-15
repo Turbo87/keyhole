@@ -41,6 +41,11 @@ pub static DAEC_SWO_2026: RuleSetEdition = RuleSetEdition {
             pev_start: false,
             pev_wait_time: 10,
             pev_start_window: 7,
+            subtract_finish_ring_radius: true,
+            delivery_period: Some(45),
+            tow_altitude: None,
+            maximum_altitude: None,
+            scoring_end_time: None,
         },
         scoring: ScoringParameters { dm: 100., d1: 250. },
     },
@@ -68,6 +73,11 @@ pub static FAI_ANNEX_A_2025A: RuleSetEdition = RuleSetEdition {
             pev_start: false,
             pev_wait_time: 10,
             pev_start_window: 10,
+            subtract_finish_ring_radius: true,
+            delivery_period: None,
+            tow_altitude: None,
+            maximum_altitude: None,
+            scoring_end_time: None,
         },
         scoring: ScoringParameters { dm: 100., d1: 250. },
     },
@@ -136,6 +146,11 @@ pub struct RuleOverrides {
     pub pev_start: Option<bool>,
     pub pev_wait_time: Option<u32>,
     pub pev_start_window: Option<u32>,
+    pub subtract_finish_ring_radius: Option<bool>,
+    pub delivery_period: Option<u32>,
+    pub tow_altitude: Option<f64>,
+    pub maximum_altitude: Option<Altitude>,
+    pub scoring_end_time: Option<UtcTime>,
 }
 
 /// The effective parameters a class day is analysed and scored with, split so
@@ -163,6 +178,22 @@ pub struct AnalysisParameters {
     pub pev_wait_time: u32,
     /// In whole minutes.
     pub pev_start_window: u32,
+    /// Whether the finish ring radius is subtracted from the task distance.
+    pub subtract_finish_ring_radius: bool,
+    /// The time after landing within which a flight must be delivered, in
+    /// whole minutes.
+    pub delivery_period: Option<u32>,
+    /// In m MSL.
+    pub tow_altitude: Option<f64>,
+    pub maximum_altitude: Option<Altitude>,
+    pub scoring_end_time: Option<UtcTime>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Altitude {
+    /// In m MSL.
+    Msl(f64),
+    FlightLevel(u16),
 }
 
 /// A point in time, in seconds since the Unix epoch.
@@ -195,6 +226,11 @@ impl RuleSetEdition {
                 pev_start,
                 pev_wait_time,
                 pev_start_window,
+                subtract_finish_ring_radius,
+                delivery_period,
+                tow_altitude,
+                maximum_altitude,
+                scoring_end_time,
             } = overrides;
             analysis.earth_model = earth_model.unwrap_or(analysis.earth_model);
             scoring.dm = dm.unwrap_or(scoring.dm);
@@ -208,6 +244,12 @@ impl RuleSetEdition {
             analysis.pev_start = pev_start.unwrap_or(analysis.pev_start);
             analysis.pev_wait_time = pev_wait_time.unwrap_or(analysis.pev_wait_time);
             analysis.pev_start_window = pev_start_window.unwrap_or(analysis.pev_start_window);
+            analysis.subtract_finish_ring_radius =
+                subtract_finish_ring_radius.unwrap_or(analysis.subtract_finish_ring_radius);
+            analysis.delivery_period = delivery_period.or(analysis.delivery_period);
+            analysis.tow_altitude = tow_altitude.or(analysis.tow_altitude);
+            analysis.maximum_altitude = maximum_altitude.or(analysis.maximum_altitude);
+            analysis.scoring_end_time = scoring_end_time.or(analysis.scoring_end_time);
         }
 
         rules
