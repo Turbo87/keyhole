@@ -78,3 +78,17 @@ fn earth_models_the_edition_does_not_allow_still_apply() {
     assert!(!DAEC_SWO_2026.earth_models.contains(&EarthModel::FaiSphere));
     assert_eq!(parameters.analysis.earth_model, EarthModel::FaiSphere);
 }
+
+#[test]
+fn dm_and_d1_default_to_the_lowest_class_template() {
+    for edition in [&DAEC_SWO_2026, &FAI_ANNEX_A_2025A] {
+        let lowest = edition
+            .class_templates
+            .iter()
+            .min_by(|a, b| a.dm.total_cmp(&b.dm));
+        let lowest = lowest.map(|template| (template.dm, template.d1));
+
+        let scoring = &edition.defaults.scoring;
+        assert_eq!(lowest, Some((scoring.dm, scoring.d1)), "{}", edition.id);
+    }
+}
