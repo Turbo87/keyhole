@@ -1,3 +1,4 @@
+use insta::assert_snapshot;
 use keyhole_oracle::{Fixture, Report, check};
 
 const HEADER: &str = "rank,cn,contestant,countries,club,team,glider,handicap,start_time_local,finish_time_local,duration,speed_kmh,distance_km,points,points_sort_key,penalty_points,remarks";
@@ -36,13 +37,6 @@ fn check_day(rows: &[&str], fixture_file: &str) -> Report {
     check(&fixture).unwrap()
 }
 
-fn decisions(report: &Report) -> Vec<(&str, &str)> {
-    let decisions = report.decisions.iter();
-    decisions
-        .map(|(id, decisions)| (id.as_str(), decisions.as_str()))
-        .collect()
-}
-
 #[test]
 fn matching_day_passes() {
     let report = check_day(&[FINISHER], FIXTURE_FILE);
@@ -57,10 +51,11 @@ fn wrong_published_day_parameter_fails() {
     let report = check_day(&[FINISHER], &fixture_file);
 
     assert!(!report.passes());
-    assert_eq!(
-        report.to_string().lines().next(),
-        Some("Do: published 299.99, Keyhole 300.00")
-    );
+    assert_snapshot!(report, @"
+    Do: published 299.99, Keyhole 300.00
+    Decisions:
+      A: finished 300 km in 3:00:00 (from the download)
+    ");
 }
 
 #[test]
@@ -70,19 +65,12 @@ fn wrong_published_row_value_fails() {
     let report = check_day(&[&finisher], FIXTURE_FILE);
 
     assert!(!report.passes());
-    let lines: Vec<_> = report
-        .to_string()
-        .lines()
-        .take(2)
-        .map(String::from)
-        .collect();
-    assert_eq!(
-        lines,
-        [
-            "A points: published 999, Keyhole 1000",
-            "A speed: published 100.01, Keyhole 100.00",
-        ]
-    );
+    assert_snapshot!(report, @"
+    A points: published 999, Keyhole 1000
+    A speed: published 100.01, Keyhole 100.00
+    Decisions:
+      A: finished 300 km in 3:00:00 (from the download)
+    ");
 }
 
 #[test]
@@ -108,12 +96,11 @@ fn recorded_deviation_explains_a_mismatch() {
     let report = check_day(&[&finisher], &format!("{FIXTURE_FILE}{POINTS_DEVIATION}"));
 
     assert!(report.passes(), "{report}");
-    assert_eq!(
-        report.to_string().lines().next(),
-        Some(
-            "A points: published 999, Keyhole 1000 (recorded deviation: SeeYou scored a different value.)"
-        )
-    );
+    assert_snapshot!(report, @"
+    A points: published 999, Keyhole 1000 (recorded deviation: SeeYou scored a different value.)
+    Decisions:
+      A: finished 300 km in 3:00:00 (from the download)
+    ");
 }
 
 #[test]
@@ -121,10 +108,11 @@ fn stale_recorded_deviation_fails() {
     let report = check_day(&[FINISHER], &format!("{FIXTURE_FILE}{POINTS_DEVIATION}"));
 
     assert!(!report.passes());
-    assert_eq!(
-        report.to_string().lines().next(),
-        Some("A points: recorded deviation no longer occurs: SeeYou scored a different value.")
-    );
+    assert_snapshot!(report, @"
+    A points: recorded deviation no longer occurs: SeeYou scored a different value.
+    Decisions:
+      A: finished 300 km in 3:00:00 (from the download)
+    ");
 }
 
 #[test]
@@ -134,30 +122,22 @@ fn report_lists_day_parameter_mismatches_before_row_mismatches() {
 
     let report = check_day(&[&finisher], &fixture_file);
 
-    let lines: Vec<_> = report
-        .to_string()
-        .lines()
-        .take(2)
-        .map(String::from)
-        .collect();
-    assert_eq!(
-        lines,
-        [
-            "n2: published 0, Keyhole 1",
-            "A points: published 999, Keyhole 1000",
-        ]
-    );
+    assert_snapshot!(report, @"
+    n2: published 0, Keyhole 1
+    A points: published 999, Keyhole 1000
+    Decisions:
+      A: finished 300 km in 3:00:00 (from the download)
+    ");
 }
 
 #[test]
 fn report_names_the_decisions_applied_to_each_row() {
     let report = check_day(&[FINISHER], FIXTURE_FILE);
 
-    assert!(
-        report
-            .to_string()
-            .ends_with("Decisions:\n  A: finished 300 km in 3:00:00 (from the download)\n")
-    );
+    assert_snapshot!(report, @"
+    Decisions:
+      A: finished 300 km in 3:00:00 (from the download)
+    ");
 }
 
 #[test]
@@ -191,13 +171,13 @@ explanation = "SoaringSpot leaves DNS rows unranked."
     let report = check_day(&rows, &fixture_file);
 
     assert!(report.passes(), "{report}");
-    assert_eq!(
-        decisions(&report)[1..],
-        [
-            ("B", "landed after 0 km (from the download)"),
-            ("C", "did not fly (from the download)"),
-        ]
-    );
+    assert_snapshot!(report, @"
+    B rank: published DNS, Keyhole 2 (recorded deviation: SoaringSpot leaves DNS rows unranked.)
+    Decisions:
+      A: finished 300 km in 3:00:00 (from the download)
+      B: landed after 0 km (from the download)
+      C: did not fly (from the download)
+    ");
 }
 
 #[test]
@@ -207,13 +187,10 @@ fn penalty_points_become_the_penalty() {
     let report = check_day(&[&finisher], FIXTURE_FILE);
 
     assert!(report.passes(), "{report}");
-    assert_eq!(
-        decisions(&report),
-        [(
-            "A",
-            "finished 300 km in 3:00:00 (from the download), penalty 12 (from the download), public remark \"Start\" (from the download)"
-        )]
-    );
+    assert_snapshot!(report, @r#"
+    Decisions:
+      A: finished 300 km in 3:00:00 (from the download), penalty 12 (from the download), public remark "Start" (from the download)
+    "#);
 }
 
 #[test]
@@ -223,18 +200,11 @@ fn fractional_penalty_points_are_rounded_and_compared() {
     let report = check_day(&[&finisher], FIXTURE_FILE);
 
     assert!(!report.passes());
-    assert_eq!(
-        report.to_string().lines().next(),
-        Some("A penalty: published 5.164, Keyhole 5")
-    );
-    assert_eq!(report.row_mismatches.len(), 1);
-    assert_eq!(
-        decisions(&report),
-        [(
-            "A",
-            "finished 300 km in 3:00:00 (from the download), penalty 5 (from the download)"
-        )]
-    );
+    assert_snapshot!(report, @"
+    A penalty: published 5.164, Keyhole 5
+    Decisions:
+      A: finished 300 km in 3:00:00 (from the download), penalty 5 (from the download)
+    ");
 }
 
 #[test]
@@ -274,19 +244,11 @@ penalty = 1000
     .replace("fcr = 1.000", "fcr = 0.600");
     let report = check_day(&[&finisher], &fixture_file);
 
-    assert_eq!(
-        decisions(&report),
-        [(
-            "A",
-            "landed after 300 km (from the fixture file), penalty 1000 (from the fixture file)"
-        )]
-    );
-    let mismatches: Vec<_> = report
-        .row_mismatches
-        .iter()
-        .map(|m| m.field.to_string())
-        .collect();
-    assert_eq!(mismatches, ["speed"]);
+    assert_snapshot!(report, @"
+    A speed: published 100.00, Keyhole nothing
+    Decisions:
+      A: landed after 300 km (from the fixture file), penalty 1000 (from the fixture file)
+    ");
 }
 
 #[test]
@@ -302,10 +264,10 @@ result = {{ flown = {{ distance = 300.0, time = "3:00:00" }} }}
     let report = check_day(&[&finisher], &fixture_file);
 
     assert!(report.passes(), "{report}");
-    assert_eq!(
-        decisions(&report),
-        [("A", "finished 300 km in 3:00:00 (from the fixture file)")]
-    );
+    assert_snapshot!(report, @"
+    Decisions:
+      A: finished 300 km in 3:00:00 (from the fixture file)
+    ");
 }
 
 #[test]
@@ -367,10 +329,11 @@ fn wrong_published_rank_fails() {
     let report = check_day(&[&finisher], FIXTURE_FILE);
 
     assert!(!report.passes());
-    assert_eq!(
-        report.to_string().lines().next(),
-        Some("A rank: published 2, Keyhole 1")
-    );
+    assert_snapshot!(report, @"
+    A rank: published 2, Keyhole 1
+    Decisions:
+      A: finished 300 km in 3:00:00 (from the download)
+    ");
 }
 
 #[test]
@@ -402,13 +365,11 @@ fn hc_rows_are_hors_concours() {
     let report = check_day(&[FINISHER, GUEST], FIXTURE_FILE);
 
     assert!(report.passes(), "{report}");
-    assert_eq!(
-        decisions(&report)[1],
-        (
-            "G",
-            "finished 300 km in 3:00:00 (from the download), hors concours (from the download)"
-        )
-    );
+    assert_snapshot!(report, @"
+    Decisions:
+      A: finished 300 km in 3:00:00 (from the download)
+      G: finished 300 km in 3:00:00 (from the download), hors concours (from the download)
+    ");
 }
 
 #[test]
@@ -418,14 +379,12 @@ fn fixture_file_decides_on_hors_concours() {
 
     let report = check_day(&[FINISHER, GUEST], &fixture_file);
 
-    assert_eq!(
-        report.to_string().lines().next(),
-        Some("G rank: published HC, Keyhole 1")
-    );
-    assert_eq!(
-        decisions(&report)[1].1,
-        "finished 300 km in 3:00:00 (from the download), not hors concours (from the fixture file)"
-    );
+    assert_snapshot!(report, @"
+    G rank: published HC, Keyhole 1
+    Decisions:
+      A: finished 300 km in 3:00:00 (from the download)
+      G: finished 300 km in 3:00:00 (from the download), not hors concours (from the fixture file)
+    ");
 }
 
 fn remark_decision(points: &str, penalty_points: &str, remark: &str) -> String {
