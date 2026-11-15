@@ -14,6 +14,7 @@ pub struct RuleSetEdition {
     /// earth model too, since a competition may depart from its edition.
     pub earth_models: &'static [EarthModel],
     pub class_templates: &'static [ClassTemplate],
+    pub default_zones: DefaultZones,
     /// The effective parameters without any rule overrides. `Dm` and `D1`
     /// default to the lowest class's values, since the edition has no
     /// default of its own for them.
@@ -31,6 +32,16 @@ pub static DAEC_SWO_2026: RuleSetEdition = RuleSetEdition {
         ClassTemplate::new("Offene", 140., 350., false, Some(DAEC_OPEN)),
         ClassTemplate::new("Standard", 120., 300., false, Some(DAEC_STANDARD)),
     ],
+    default_zones: DefaultZones {
+        start: Some(ObservationZone::Line { length: 20. }),
+        turnpoint: Some(ObservationZone::Keyhole {
+            sector_radius: 10.,
+            sector_angle: 90.,
+            cylinder_radius: 0.5,
+        }),
+        assigned_area: Some(ObservationZone::Cylinder { radius: 20. }),
+        finish: Some(ObservationZone::Cylinder { radius: 5. }),
+    },
     defaults: Rules {
         analysis: AnalysisParameters {
             earth_model: EarthModel::Wgs84,
@@ -63,6 +74,12 @@ pub static FAI_ANNEX_A_2025A: RuleSetEdition = RuleSetEdition {
         ClassTemplate::new("Open", 140., 350., false, None),
         ClassTemplate::new("Standard", 120., 300., false, None),
     ],
+    default_zones: DefaultZones {
+        start: None,
+        turnpoint: Some(ObservationZone::Cylinder { radius: 0.5 }),
+        assigned_area: Some(ObservationZone::Cylinder { radius: 20. }),
+        finish: Some(ObservationZone::Cylinder { radius: 3. }),
+    },
     defaults: Rules {
         analysis: AnalysisParameters {
             earth_model: EarthModel::Wgs84,
@@ -159,6 +176,35 @@ pub struct RuleOverrides {
 pub struct Rules {
     pub analysis: AnalysisParameters,
     pub scoring: ScoringParameters,
+}
+
+/// The observation zone that task entry prefills for each task point role,
+/// each empty for no default.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DefaultZones {
+    pub start: Option<ObservationZone>,
+    pub turnpoint: Option<ObservationZone>,
+    pub assigned_area: Option<ObservationZone>,
+    pub finish: Option<ObservationZone>,
+}
+
+/// The area or line around a reference point that a flight has to reach or
+/// cross, with every distance in km.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ObservationZone {
+    Line {
+        length: f64,
+    },
+    Cylinder {
+        radius: f64,
+    },
+    /// A sector facing away from the course, with its full opening angle in
+    /// degrees, joined with a cylinder.
+    Keyhole {
+        sector_radius: f64,
+        sector_angle: f64,
+        cylinder_radius: f64,
+    },
 }
 
 /// The parameters that flight analysis takes, where an empty limit isn't
