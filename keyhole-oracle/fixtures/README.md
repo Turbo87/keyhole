@@ -11,7 +11,17 @@ Each directory `<competition>/<class>/<date>/` holds one SoaringSpot class day a
 ## `fixture.toml`
 
 ```toml
-[scoring_parameters]
+# The built-in rule set edition that the harness scores the fixture under. It
+# stays fixed when a newer edition ships.
+rule_set = "FAI Annex A 2025a"
+# The edition that the competition was actually scored under, when known. The
+# harness never reads it, and Keyhole may not ship it.
+original_rule_set = "FAI Annex A 2022"
+
+# The class's Dm and D1 and the local procedures as rule overrides, applied to
+# the edition's defaults. Dm and D1 default to the lowest class's 100 and 250.
+[rule_overrides]
+earth_model = "fai_sphere"    # wgs84 fai_sphere
 dm = 120
 d1 = 300
 

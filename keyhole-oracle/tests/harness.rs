@@ -6,7 +6,9 @@ const HEADER: &str = "rank,cn,contestant,countries,club,team,glider,handicap,sta
 const TASK: &str = r#"{"task_type": "assigned_area", "task_duration": 10800}"#;
 
 const FIXTURE_FILE: &str = r#"
-[scoring_parameters]
+rule_set = "FAI Annex A 2025a"
+
+[rule_overrides]
 dm = 120
 d1 = 300
 
@@ -55,6 +57,48 @@ fn wrong_published_day_parameter_fails() {
     Do: published 299.99, Keyhole 300.00
     Decisions:
       A: finished 300 km in 3:00:00 (from the download)
+    ");
+}
+
+#[test]
+fn values_without_rule_overrides_keep_the_edition_defaults() {
+    let fixture_file = FIXTURE_FILE.replace("dm = 120\nd1 = 300\n", "dm = 120\n");
+
+    let report = check_day(&[FINISHER], &fixture_file);
+
+    assert!(!report.passes());
+    assert_snapshot!(report, @"
+    D1: published 300, Keyhole 250
+    Decisions:
+      A: finished 300 km in 3:00:00 (from the download)
+    ");
+}
+
+#[test]
+fn unknown_edition_is_an_error() {
+    let fixture_file = FIXTURE_FILE.replace("FAI Annex A 2025a", "DAeC SWO 2025");
+    let fixture = Fixture::parse(TASK, &results(&[FINISHER]), &fixture_file).unwrap();
+
+    let error = check(&fixture).unwrap_err();
+
+    assert_eq!(
+        error.to_string(),
+        r#"unknown rule set edition "DAeC SWO 2025""#
+    );
+}
+
+#[test]
+fn unknown_fixture_file_keys_are_an_error() {
+    let fixture_file = format!("scoring_parameters = {{}}\n{FIXTURE_FILE}");
+
+    let error = Fixture::parse(TASK, &results(&[FINISHER]), &fixture_file).unwrap_err();
+
+    assert_snapshot!(format!("{:#}", error), @"
+    parsing fixture.toml: TOML parse error at line 1, column 1
+      |
+    1 | scoring_parameters = {}
+      | ^^^^^^^^^^^^^^^^^^
+    unknown field `scoring_parameters`, expected one of `rule_set`, `original_rule_set`, `rule_overrides`, `published_day_parameters`, `decisions`, `deviations`
     ");
 }
 

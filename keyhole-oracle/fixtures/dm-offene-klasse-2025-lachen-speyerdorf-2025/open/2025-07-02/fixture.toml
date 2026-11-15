@@ -1,11 +1,9 @@
 # SWO assigned area task with a minimum task time of 4:00, no handicaps, two
 # hors concours competitors and twelve penalties. Everyone finished.
 
-edition = "DAeC SWO 2026"
-flown_under = "unknown"
-earth_model = "WGS84"
+rule_set = "DAeC SWO 2026"
 
-[scoring_parameters]
+[rule_overrides]
 dm = 140
 d1 = 350
 
