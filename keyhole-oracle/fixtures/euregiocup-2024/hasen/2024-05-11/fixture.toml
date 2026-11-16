@@ -1,0 +1,30 @@
+# SWO racing task in the local Hasen class with a local Dm of 50 km, three
+# finish height penalties and handicaps on the 100 scale.
+
+rule_set = "DAeC SWO 2026"
+original_rule_set = "DAeC SWO 2024"
+handicapped = true
+
+[rule_overrides]
+dm = 50
+d1 = 250
+
+# Racing Task, Maximum Points: 907, F = 0,919, Fcr = 1,000, Max speed pts: 374
+# ; Dm = 50km, D1 = 250km, handicapping enabled
+# ; Use PEV disabled, N: 34, n1: 25, n2: 21, Do: 266,00km, Vo: 84,99km/h
+# ; DAeC-SWO2024 Script V9.06
+[published_day_parameters]
+d1 = 250
+n = 34
+n1 = 25
+n2 = 21
+do = 266.00
+vo = 84.99
+f = 0.919
+fcr = 1.000
+maximum_points = 907
+
+[[deviations]]
+competition_id = "NW2"
+field = "rank"
+explanation = "SoaringSpot leaves DNS rows unranked, while Keyhole ranks a launch without a start with its 0 points."

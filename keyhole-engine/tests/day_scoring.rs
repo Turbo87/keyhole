@@ -30,6 +30,7 @@ fn competitor(competition_id: &str, result: ResultStatus) -> CompetitorResult {
         result,
         hors_concours: false,
         disqualified: false,
+        handicap: None,
         penalty: 0,
     }
 }
@@ -781,5 +782,57 @@ fn placeholder_rows_are_listed_below_ranked_rows_and_above_disqualified_rows() {
     ?     C            -           -           0      0
     DSQ   B          300         100           0      0
     DNF   A            -           -           0      0
+    ");
+}
+
+fn with_handicap(handicap: f64, competitor: CompetitorResult) -> CompetitorResult {
+    CompetitorResult {
+        handicap: Some(handicap),
+        ..competitor
+    }
+}
+
+#[test]
+fn distances_and_speeds_divide_by_the_handicap() {
+    let day = class_day(vec![
+        finisher("A", 300., hours(3.)),
+        with_handicap(1.25, finisher("B", 300., hours(2.5))),
+        with_handicap(1.25, landed("C", 250.)),
+    ]);
+
+    let result = score_class_day(&day);
+
+    // B flies fastest, but A's handicapped speed of 100 beats B's 96, so A
+    // sets V0 and T0. Rows show the distances and speeds as flown.
+    assert_snapshot!(table(&result), @"
+    Valid  N=3 n1=3 n2=2  Dm=100 D1=250 D0=300 V0=100 T0=3:00:00
+    Pm=1000 Pvm=444.444444 Pdm=555.555556 F=1 FCR=1
+
+    rank  cn    distance       speed   raw score  score
+    1     A          300         100        1000   1000
+    2     B          300         120  946.666667    947
+    3     C          250           -   370.37037    370
+    ");
+}
+
+#[test]
+fn n1_counts_handicapped_distances_of_at_least_dm() {
+    let day = class_day(vec![
+        finisher("A", 300., hours(3.)),
+        with_handicap(1.2, landed("B", 120.)),
+        with_handicap(1.2, landed("C", 110.)),
+    ]);
+
+    let result = score_class_day(&day);
+
+    // C's 110 km divide to 91.67 km, below Dm.
+    assert_snapshot!(table(&result), @"
+    Valid  N=3 n1=2 n2=1  Dm=100 D1=250 D0=300 V0=100 T0=3:00:00
+    Pm=1000 Pvm=222.222222 Pdm=777.777778 F=0.833333 FCR=1
+
+    rank  cn    distance       speed   raw score  score
+    1     A          300         100  833.333333    833
+    2     B          120           -  216.049383    216
+    3     C          110           -  198.045267    198
     ");
 }

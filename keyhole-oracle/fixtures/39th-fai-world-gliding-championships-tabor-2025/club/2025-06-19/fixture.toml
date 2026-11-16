@@ -1,0 +1,23 @@
+# Annex A racing task in the Club class with handicaps on the 1.000 scale, PEV
+# starts, four penalties and one competitor who did not fly.
+
+rule_set = "FAI Annex A 2025a"
+handicapped = true
+
+[rule_overrides]
+earth_model = "fai_sphere"
+
+# Racing Task, Maximum Points: 1000, F = 1.000, Fcr = 1.000, Max speed pts: 455
+# ; Dm = 100km, D1 = 250km, handicapping enabled
+# ; PEVWaitTime: 10min, PEVStartWindow: 5min, PreStart Alt = 1800m, N: 41,
+# n1: 39, n2: 28, Do: 421.94km, Vo: 94.78km/h
+[published_day_parameters]
+d1 = 250
+n = 41
+n1 = 39
+n2 = 28
+do = 421.94
+vo = 94.78
+f = 1.000
+fcr = 1.000
+maximum_points = 1000
