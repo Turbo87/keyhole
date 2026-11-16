@@ -105,6 +105,7 @@ impl RowDecisions {
             result: self.result.0.status(),
             hors_concours: self.hors_concours.0,
             disqualified: false,
+            handicap: None,
             penalty: self.penalty.0,
         }
     }

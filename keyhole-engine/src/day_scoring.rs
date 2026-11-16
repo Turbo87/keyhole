@@ -2,9 +2,9 @@
 //! and IGC Annex A.
 //!
 //! Distances are in km and speeds in km/h. Every distance must be finite, `Dm`
-//! and `D1` must be above 0 and every finisher's time must be above 0. Scoring
-//! does not check these and its results are meaningless when they are
-//! violated.
+//! and `D1` must be above 0, and every finisher's time and every handicap must
+//! be above 0. Scoring does not check these and its results are meaningless
+//! when they are violated.
 
 use std::time::Duration;
 
@@ -38,6 +38,9 @@ pub struct CompetitorResult {
     /// makes every day score 0 while the achievement still feeds the day
     /// parameters.
     pub disqualified: bool,
+    /// The handicap on the 1.000 scale that distances and speeds divide by,
+    /// or `None` in a class without handicaps.
+    pub handicap: Option<f64>,
     /// Points deducted from the day score after the formula.
     pub penalty: u32,
 }
@@ -74,7 +77,8 @@ pub struct DayResult {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DayValidity {
     Valid,
-    /// No more than 25% of `N` reached `Dm`, so every day score is 0.
+    /// No more than 25% of `N` reached `Dm` with their handicapped distance,
+    /// so every day score is 0.
     Invalid,
 }
 
@@ -83,17 +87,18 @@ pub enum DayValidity {
 pub struct DayParameters {
     /// The number of competitors who flew.
     pub n: u32,
-    /// The number of competitors who reached `Dm`.
+    /// The number of competitors whose handicapped distance reached `Dm`.
     pub n1: u32,
-    /// The number of finishers faster than two thirds of `V0`.
+    /// The number of finishers with a handicapped speed above two thirds of
+    /// `V0`.
     pub n2: u32,
     /// The minimum distance `Dm`.
     pub dm: f64,
     /// The distance `D1` a winner needs for 1000 points.
     pub d1: f64,
-    /// The best distance.
+    /// The best handicapped distance.
     pub d0: f64,
-    /// The best speed, or 0 without finishers.
+    /// The best handicapped speed, or 0 without finishers.
     pub v0: f64,
     /// The time the finisher with `V0` is scored over, the lower one on a tie.
     pub t0: Option<Duration>,
@@ -139,26 +144,40 @@ pub enum Rank {
     NoResultYet,
 }
 
-/// A counting competitor's achievement with its speed.
+/// A counting competitor's achievement with its speed, as flown and
+/// handicapped.
 struct CountingAchievement {
     distance: f64,
+    /// The handicapped distance `Dh`.
+    handicapped_distance: f64,
     finish: Option<Finish>,
 }
 
 struct Finish {
     speed: f64,
+    /// The handicapped speed `Vh`.
+    handicapped_speed: f64,
     time: Duration,
 }
 
 impl CountingAchievement {
-    fn new(achievement: &Achievement, minimum_task_time: Option<Duration>) -> Self {
+    fn new(achievement: &Achievement, handicap: f64, minimum_task_time: Option<Duration>) -> Self {
         let distance = achievement.distance;
         let finish = achievement.time.map(|time| {
             let time = time.max(minimum_task_time.unwrap_or_default());
             let speed = distance / hours(time);
-            Finish { speed, time }
+            let handicapped_speed = speed / handicap;
+            Finish {
+                speed,
+                handicapped_speed,
+                time,
+            }
         });
-        Self { distance, finish }
+        Self {
+            distance,
+            handicapped_distance: distance / handicap,
+            finish,
+        }
     }
 }
 
@@ -177,9 +196,11 @@ pub fn score_class_day(day: &ClassDay) -> DayResult {
         .iter()
         .map(|competitor| match &competitor.result {
             ResultStatus::Unknown | ResultStatus::DidNotFly => None,
-            ResultStatus::Flown(achievement) => {
-                Some(CountingAchievement::new(achievement, day.minimum_task_time))
-            }
+            ResultStatus::Flown(achievement) => Some(CountingAchievement::new(
+                achievement,
+                competitor.handicap.unwrap_or(1.),
+                day.minimum_task_time,
+            )),
         })
         .collect();
 
@@ -288,21 +309,27 @@ fn day_parameters(
     // further than the winner, so `D0` is the best distance of everyone.
     let d0 = achievements
         .iter()
-        .map(|a| a.distance)
+        .map(|a| a.handicapped_distance)
         .max_by(f64::total_cmp)
         .unwrap_or(0.);
-    let winner = finishes().max_by(|a, b| a.speed.total_cmp(&b.speed).then(b.time.cmp(&a.time)));
-    let v0 = winner.map_or(0., |winner| winner.speed);
+    let winner = finishes().max_by(|a, b| {
+        let speed = a.handicapped_speed.total_cmp(&b.handicapped_speed);
+        speed.then(b.time.cmp(&a.time))
+    });
+    let v0 = winner.map_or(0., |winner| winner.handicapped_speed);
     let t0 = winner.map(|winner| winner.time);
 
     // A placeholder is a finisher at `V0`, or a non-finisher at `D0` without
     // finishers.
     let counted_placeholders = |counted: bool| if counted { placeholder_count } else { 0 };
     let n = achievements.len() as u32 + placeholder_count;
-    let n1 = achievements.iter().filter(|a| a.distance >= dm).count() as u32;
+    let n1 = achievements
+        .iter()
+        .filter(|a| a.handicapped_distance >= dm)
+        .count() as u32;
     let n1 = n1 + counted_placeholders(winner.is_some() || d0 >= dm);
     let n2 = finishes()
-        .filter(|finish| finish.speed > 2. / 3. * v0)
+        .filter(|finish| finish.handicapped_speed > 2. / 3. * v0)
         .count() as u32;
     let n2 = n2 + counted_placeholders(winner.is_some());
 
@@ -343,12 +370,12 @@ fn ratio(numerator: u32, denominator: u32) -> f64 {
 fn points(day: &DayParameters, achievement: &CountingAchievement) -> f64 {
     let speed_threshold = 2. / 3. * day.v0;
     let (pv, pd) = match &achievement.finish {
-        Some(finish) if finish.speed > speed_threshold => {
-            let pv = day.pvm * (finish.speed - speed_threshold) / (day.v0 / 3.);
+        Some(finish) if finish.handicapped_speed > speed_threshold => {
+            let pv = day.pvm * (finish.handicapped_speed - speed_threshold) / (day.v0 / 3.);
             (pv, day.pdm)
         }
         Some(_) => (0., day.pdm),
-        None => (0., day.pdm * achievement.distance / day.d0),
+        None => (0., day.pdm * achievement.handicapped_distance / day.d0),
     };
     day.f * day.fcr * (pv + pd)
 }
