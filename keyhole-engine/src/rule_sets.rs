@@ -18,6 +18,7 @@ pub struct RuleSetEdition {
     pub class_templates: &'static [ClassTemplate],
     pub pev: PevRules,
     pub default_zones: DefaultZones,
+    pub task_design_limits: TaskDesignLimits,
     /// Whether ties for the podium places of the overall results are broken
     /// by counting daily first places, then second places and so on.
     pub podium_countback: bool,
@@ -59,6 +60,10 @@ pub static DAEC_SWO_2026: RuleSetEdition = RuleSetEdition {
         }),
         assigned_area: Some(ObservationZone::Cylinder { radius: 20. }),
         finish: Some(ObservationZone::Cylinder { radius: 5. }),
+    },
+    task_design_limits: TaskDesignLimits {
+        minimum_turnpoints: 2,
+        minimum_assigned_area_separation: 1.,
     },
     podium_countback: false,
     complaint_period: 14,
@@ -108,6 +113,10 @@ pub static FAI_ANNEX_A_2025A: RuleSetEdition = RuleSetEdition {
         turnpoint: Some(ObservationZone::Cylinder { radius: 0.5 }),
         assigned_area: Some(ObservationZone::Cylinder { radius: 20. }),
         finish: Some(ObservationZone::Cylinder { radius: 3. }),
+    },
+    task_design_limits: TaskDesignLimits {
+        minimum_turnpoints: 2,
+        minimum_assigned_area_separation: 1.,
     },
     podium_countback: true,
     complaint_period: 14,
@@ -246,6 +255,16 @@ pub struct DefaultZones {
     pub turnpoint: Option<ObservationZone>,
     pub assigned_area: Option<ObservationZone>,
     pub finish: Option<ObservationZone>,
+}
+
+/// The limits a task has to keep, which publishing asks to confirm when a task
+/// departs from them.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TaskDesignLimits {
+    /// The fewest turnpoints or assigned areas a task has.
+    pub minimum_turnpoints: u32,
+    /// The shortest distance between consecutive assigned areas, in km.
+    pub minimum_assigned_area_separation: f64,
 }
 
 /// The area or line around a reference point that a flight has to reach or
