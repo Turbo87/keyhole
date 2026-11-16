@@ -1,6 +1,8 @@
 //! The built-in rule set editions and the resolution of a class day's
 //! effective parameters from its edition and rule overrides.
 
+use std::ops::RangeInclusive;
+
 use crate::day_scoring::ScoringParameters;
 
 /// One dated version of a rule set, shipped as immutable data.
@@ -14,6 +16,7 @@ pub struct RuleSetEdition {
     /// earth model too, since a competition may depart from its edition.
     pub earth_models: &'static [EarthModel],
     pub class_templates: &'static [ClassTemplate],
+    pub pev: PevRules,
     pub default_zones: DefaultZones,
     /// The effective parameters without any rule overrides. `Dm` and `D1`
     /// default to the lowest class's values, since the edition has no
@@ -32,6 +35,15 @@ pub static DAEC_SWO_2026: RuleSetEdition = RuleSetEdition {
         ClassTemplate::new("Offene", 140., 350., false, Some(DAEC_OPEN)),
         ClassTemplate::new("Standard", 120., 300., false, Some(DAEC_STANDARD)),
     ],
+    pev: PevRules {
+        wait_times: 10..=10,
+        start_windows: 7..=7,
+        limit: 3,
+        limit_scope: PevLimitScope::Day,
+        clustering_time: 30,
+        penalty_per_second: 1,
+        maximum_penalty: 60,
+    },
     default_zones: DefaultZones {
         start: Some(ObservationZone::Line { length: 20. }),
         turnpoint: Some(ObservationZone::Keyhole {
@@ -74,6 +86,15 @@ pub static FAI_ANNEX_A_2025A: RuleSetEdition = RuleSetEdition {
         ClassTemplate::new("Open", 140., 350., false, None),
         ClassTemplate::new("Standard", 120., 300., false, None),
     ],
+    pev: PevRules {
+        wait_times: 5..=10,
+        start_windows: 5..=10,
+        limit: 3,
+        limit_scope: PevLimitScope::Launch,
+        clustering_time: 30,
+        penalty_per_second: 1,
+        maximum_penalty: 60,
+    },
     default_zones: DefaultZones {
         start: None,
         turnpoint: Some(ObservationZone::Cylinder { radius: 0.5 }),
@@ -138,6 +159,35 @@ impl ClassTemplate {
             handicap_list,
         }
     }
+}
+
+/// The PEV times an edition allows, how PEVs are counted and how a start
+/// outside the PEV start window is penalised.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PevRules {
+    /// The PEV wait times the edition allows, in whole minutes.
+    pub wait_times: RangeInclusive<u32>,
+    /// The PEV start windows the edition allows, in whole minutes.
+    pub start_windows: RangeInclusive<u32>,
+    /// The number of PEVs that count, after which further PEVs are ignored.
+    pub limit: u32,
+    pub limit_scope: PevLimitScope,
+    /// The time within which several PEVs count as one at the time of the
+    /// first, in seconds.
+    pub clustering_time: u32,
+    /// The penalty points per second that a start lies outside the PEV start
+    /// window.
+    pub penalty_per_second: u32,
+    /// The most penalty points for a start outside the PEV start window or
+    /// without a PEV.
+    pub maximum_penalty: u32,
+}
+
+/// What the PEV limit counts PEVs over.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PevLimitScope {
+    Day,
+    Launch,
 }
 
 /// The shape of the Earth that distances and observation zones are calculated
