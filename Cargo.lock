@@ -139,6 +139,15 @@ name = "keyhole-engine"
 version = "0.0.0"
 dependencies = [
  "insta",
+ "keyhole-handicaps",
+]
+
+[[package]]
+name = "keyhole-handicaps"
+version = "0.0.0"
+dependencies = [
+ "csv",
+ "serde",
 ]
 
 [[package]]

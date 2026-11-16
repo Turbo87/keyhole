@@ -39,7 +39,7 @@ pub static DAEC_SWO_2026: RuleSetEdition = RuleSetEdition {
         ClassTemplate::new("18m", 140., 350., false, Some(DAEC_18M)),
         ClassTemplate::new("Club", 100., 250., true, Some(IGC_CLUB)),
         ClassTemplate::new("Doppelsitzer", 120., 300., true, Some(IGC_20M)),
-        ClassTemplate::new("Offene", 140., 350., false, Some(DAEC_OPEN)),
+        ClassTemplate::new("Offene", 140., 350., false, Some(DAEC_OFFENE)),
         ClassTemplate::new("Standard", 120., 300., false, Some(DAEC_STANDARD)),
     ],
     pev: PevRules {
@@ -140,7 +140,7 @@ pub static FAI_ANNEX_A_2025A: RuleSetEdition = RuleSetEdition {
     },
 };
 
-const DAEC_OPEN: &str = "daec-open-2026";
+const DAEC_OFFENE: &str = "daec-offene-2026";
 const DAEC_18M: &str = "daec-18m-2026";
 const DAEC_15M: &str = "daec-15m-2026";
 const DAEC_STANDARD: &str = "daec-standard-2026";

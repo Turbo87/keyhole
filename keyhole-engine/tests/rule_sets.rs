@@ -3,6 +3,7 @@ use keyhole_engine::rule_sets::{
     Altitude, AnalysisParameters, DAEC_SWO_2026, EarthModel, FAI_ANNEX_A_2025A, RuleOverrides,
     RuleSetEdition, UtcTime,
 };
+use keyhole_handicaps::HandicapList;
 
 fn standard_class() -> RuleOverrides {
     RuleOverrides {
@@ -145,5 +146,16 @@ fn dm_and_d1_default_to_the_lowest_class_template() {
 
         let scoring = &edition.defaults.scoring;
         assert_eq!(lowest, Some((scoring.dm, scoring.d1)), "{}", edition.id);
+    }
+}
+
+#[test]
+fn every_class_template_handicap_list_exists() {
+    for edition in [&DAEC_SWO_2026, &FAI_ANNEX_A_2025A] {
+        for template in edition.class_templates {
+            if let Some(id) = template.handicap_list {
+                assert!(HandicapList::find(id).is_some(), "{}: {id}", edition.id);
+            }
+        }
     }
 }

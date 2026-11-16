@@ -1,0 +1,9 @@
+[package]
+name = "keyhole-handicaps"
+version = "0.0.0"
+edition.workspace = true
+publish = false
+
+[dependencies]
+csv = "1.4.0"
+serde = { version = "1.0.229", features = ["derive"] }
