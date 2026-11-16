@@ -6,3 +6,4 @@ publish = false
 
 [dev-dependencies]
 insta = "1.49.0"
+keyhole-handicaps = { path = "../keyhole-handicaps" }
