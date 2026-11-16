@@ -4,7 +4,9 @@
 //! its ID, with a `glider_type` and a `handicap` column, so that other tools
 //! can read the lists directly.
 //!
-//! The `igc-*-2024a` lists are Appendices 1 and 2 of the IGC Procedures for
+//! The `daec-*-2026` lists are the cross-class list and the class sheets of
+//! the DAeC Indexliste Wettbewerb 2026 as revised in February 2026. The
+//! `igc-*-2024a` lists are Appendices 1 and 2 of the IGC Procedures for
 //! Handicapped Classes valid from 15 April 2026.
 
 use std::sync::LazyLock;
@@ -16,6 +18,12 @@ macro_rules! source {
 }
 
 const SOURCES: &[(&str, &str)] = &[
+    source!("daec-2026"),
+    source!("daec-offene-2026"),
+    source!("daec-18m-2026"),
+    source!("daec-15m-2026"),
+    source!("daec-standard-2026"),
+    source!("daec-standard-junioren-2026"),
     source!("igc-club-2024a"),
     source!("igc-20m-multi-seat-2024a"),
 ];
