@@ -150,11 +150,39 @@ pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
         bail!("the fixture file decides on {competition_id}, which has no row");
     }
 
+    let handicapped = file.handicapped;
     let decisions = fixture
         .rows
         .iter()
-        .map(|row| RowDecisions::decide(row, file.decisions.get(&row.competition_id)))
+        .map(|row| {
+            let fixture_decisions = file.decisions.get(&row.competition_id);
+            RowDecisions::decide(row, fixture_decisions, handicapped)
+        })
         .collect::<anyhow::Result<Vec<_>>>()?;
+    if handicapped {
+        let missing: Vec<_> = fixture
+            .rows
+            .iter()
+            .zip(&decisions)
+            .filter(|(_, decisions)| decisions.handicap.is_none())
+            .map(|(row, _)| row.competition_id.as_str())
+            .collect();
+        if !missing.is_empty() {
+            bail!("no handicap for {}", missing.join(", "));
+        }
+    }
+    // Handicaps on the 100 scale range from about 60 to 130 and those on the
+    // 1.000 scale from about 0.8 to 1.3, so any value of 10 or more marks the
+    // 100 scale.
+    let handicap_scale = if decisions
+        .iter()
+        .filter_map(|decisions| decisions.handicap)
+        .any(|(handicap, _)| handicap >= 10.)
+    {
+        100.
+    } else {
+        1.
+    };
     let rules = edition.resolve(&[(&file.rule_overrides).into()]);
     let day = ClassDay {
         parameters: rules.scoring,
@@ -163,7 +191,9 @@ pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
             .rows
             .iter()
             .zip(&decisions)
-            .map(|(row, decisions)| decisions.competitor_result(&row.competition_id))
+            .map(|(row, decisions)| {
+                decisions.competitor_result(&row.competition_id, handicap_scale)
+            })
             .collect(),
     };
     let result = score_class_day(&day);

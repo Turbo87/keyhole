@@ -98,7 +98,7 @@ fn unknown_fixture_file_keys_are_an_error() {
       |
     1 | scoring_parameters = {}
       | ^^^^^^^^^^^^^^^^^^
-    unknown field `scoring_parameters`, expected one of `rule_set`, `original_rule_set`, `rule_overrides`, `published_day_parameters`, `decisions`, `deviations`
+    unknown field `scoring_parameters`, expected one of `rule_set`, `original_rule_set`, `handicapped`, `rule_overrides`, `published_day_parameters`, `decisions`, `deviations`
     ");
 }
 
@@ -498,4 +498,87 @@ fn other_remarks_are_reported_but_not_applied() {
         remark_decision("1000", "", "Loggerintervall"),
         "remark \"Loggerintervall\" (not applied)"
     );
+}
+
+/// Marks the class as handicapped with the day parameters of [`FINISHER`]
+/// flying with a handicap of 1.25, whose 300 km divide to 240 km.
+fn handicapped_fixture_file() -> String {
+    format!("handicapped = true\n{FIXTURE_FILE}")
+        .replace("do = 300.00", "do = 240.00")
+        .replace("vo = 100.00", "vo = 80.00")
+        .replace("maximum_points = 1000", "maximum_points = 750")
+}
+
+fn finisher_with_handicap(handicap: &str) -> String {
+    FINISHER
+        .replace(",Arcus,,", &format!(",Arcus,{handicap},"))
+        .replace(",1000,0,", ",750,0,")
+}
+
+#[test]
+fn handicap_column_divides_by_handicaps_on_the_100_scale() {
+    let report = check_day(
+        &[&finisher_with_handicap("125")],
+        &handicapped_fixture_file(),
+    );
+
+    assert!(report.passes(), "{report}");
+    assert_snapshot!(report, @"
+    Decisions:
+      A: finished 300 km in 3:00:00 (from the download), handicap 125 (from the download)
+    ");
+}
+
+#[test]
+fn handicap_column_divides_by_handicaps_on_the_1_000_scale() {
+    let report = check_day(
+        &[&finisher_with_handicap("1.25")],
+        &handicapped_fixture_file(),
+    );
+
+    assert!(report.passes(), "{report}");
+}
+
+#[test]
+fn class_without_handicaps_ignores_the_handicap_column() {
+    let finisher = FINISHER.replace(",Arcus,,", ",Arcus,125,");
+
+    let report = check_day(&[&finisher], FIXTURE_FILE);
+
+    assert!(report.passes(), "{report}");
+    assert_snapshot!(report, @"
+    Decisions:
+      A: finished 300 km in 3:00:00 (from the download)
+    ");
+}
+
+#[test]
+fn fixture_file_decides_on_the_handicap() {
+    let fixture_file = format!(
+        "{}\n[decisions.A]\nhandicap = 125\n",
+        handicapped_fixture_file()
+    );
+
+    let report = check_day(&[&finisher_with_handicap("100")], &fixture_file);
+
+    assert!(report.passes(), "{report}");
+    assert_snapshot!(report, @"
+    Decisions:
+      A: finished 300 km in 3:00:00 (from the download), handicap 125 (from the fixture file)
+    ");
+}
+
+#[test]
+fn missing_handicaps_in_a_handicapped_class_are_an_error() {
+    let other = finisher_with_handicap("125").replace(",A,Crew A,", ",B,Crew B,");
+    let fixture = Fixture::parse(
+        TASK,
+        &results(&[FINISHER, &other, GUEST]),
+        &handicapped_fixture_file(),
+    )
+    .unwrap();
+
+    let error = check(&fixture).unwrap_err();
+
+    assert_eq!(error.to_string(), "no handicap for A, G");
 }

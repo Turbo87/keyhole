@@ -34,6 +34,8 @@ pub struct PublishedRow {
     pub rank: String,
     #[serde(rename = "cn")]
     pub competition_id: String,
+    /// The handicap on the class's scale.
+    pub handicap: Option<f64>,
     #[serde(rename = "start_time_local", deserialize_with = "optional_time")]
     pub start_time: Option<Duration>,
     #[serde(rename = "finish_time_local", deserialize_with = "optional_time")]

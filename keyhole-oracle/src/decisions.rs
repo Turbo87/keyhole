@@ -64,6 +64,9 @@ pub struct RowDecisions {
     pub result: (ResultDecision, Source),
     pub penalty: (u32, Source),
     pub hors_concours: (bool, Source),
+    /// The handicap on the class's scale, or `None` in a class without
+    /// handicaps or when it is missing.
+    pub handicap: Option<(f64, Source)>,
     pub remark: Option<RemarkDecision>,
 }
 
@@ -78,7 +81,11 @@ pub enum RemarkDecision {
 }
 
 impl RowDecisions {
-    pub fn decide(row: &PublishedRow, fixture: Option<&FixtureDecisions>) -> anyhow::Result<Self> {
+    pub fn decide(
+        row: &PublishedRow,
+        fixture: Option<&FixtureDecisions>,
+        handicapped: bool,
+    ) -> anyhow::Result<Self> {
         let result = match fixture.and_then(|fixture| fixture.result) {
             Some(result) => (result, Source::FixtureFile),
             None => (result_from_published(row)?, Source::Download),
@@ -91,21 +98,28 @@ impl RowDecisions {
             Some(hors_concours) => (hors_concours, Source::FixtureFile),
             None => (row.rank == "HC", Source::Download),
         };
+        let handicap = match fixture.and_then(|fixture| fixture.handicap) {
+            Some(handicap) => Some((handicap, Source::FixtureFile)),
+            None => row.handicap.map(|handicap| (handicap, Source::Download)),
+        };
         Ok(Self {
             result,
             penalty,
             hors_concours,
+            handicap: handicap.filter(|_| handicapped),
             remark: remark_from_published(row),
         })
     }
 
-    pub fn competitor_result(&self, competition_id: &str) -> CompetitorResult {
+    /// Builds the row's scoring input, converting its handicap from the
+    /// class's handicap scale, 1 or 100, to the 1.000 scale.
+    pub fn competitor_result(&self, competition_id: &str, handicap_scale: f64) -> CompetitorResult {
         CompetitorResult {
             competition_id: competition_id.into(),
             result: self.result.0.status(),
             hors_concours: self.hors_concours.0,
             disqualified: false,
-            handicap: None,
+            handicap: self.handicap.map(|(handicap, _)| handicap / handicap_scale),
             penalty: self.penalty.0,
         }
     }
@@ -123,6 +137,9 @@ impl fmt::Display for RowDecisions {
         match self.penalty {
             (0, Source::Download) => {}
             (penalty, source) => write!(f, ", penalty {penalty} ({source})")?,
+        }
+        if let Some((handicap, source)) = self.handicap {
+            write!(f, ", handicap {handicap} ({source})")?;
         }
         match &self.remark {
             None => Ok(()),

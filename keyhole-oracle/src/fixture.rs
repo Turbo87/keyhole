@@ -64,6 +64,9 @@ pub struct FixtureFile {
     /// never reads it. It explains why the published results can differ from
     /// scoring under `rule_set`.
     pub original_rule_set: Option<String>,
+    /// Whether the task info line says "handicapping enabled".
+    #[serde(default)]
+    pub handicapped: bool,
     /// The class's `Dm` and `D1` and the local procedures, applied to the
     /// edition's defaults.
     #[serde(default)]
@@ -135,6 +138,8 @@ pub struct FixtureDecisions {
     pub result: Option<ResultDecision>,
     pub penalty: Option<u32>,
     pub hors_concours: Option<bool>,
+    /// The handicap on the class's scale.
+    pub handicap: Option<f64>,
 }
 
 /// A mismatch with SoaringSpot that the fixture explains.
