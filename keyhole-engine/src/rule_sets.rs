@@ -18,6 +18,12 @@ pub struct RuleSetEdition {
     pub class_templates: &'static [ClassTemplate],
     pub pev: PevRules,
     pub default_zones: DefaultZones,
+    /// Whether ties for the podium places of the overall results are broken
+    /// by counting daily first places, then second places and so on.
+    pub podium_countback: bool,
+    /// The time after a publication within which it can be challenged, in
+    /// whole hours, which the suggested complaint deadline is based on.
+    pub complaint_period: u32,
     /// The effective parameters without any rule overrides. `Dm` and `D1`
     /// default to the lowest class's values, since the edition has no
     /// default of its own for them.
@@ -54,6 +60,8 @@ pub static DAEC_SWO_2026: RuleSetEdition = RuleSetEdition {
         assigned_area: Some(ObservationZone::Cylinder { radius: 20. }),
         finish: Some(ObservationZone::Cylinder { radius: 5. }),
     },
+    podium_countback: false,
+    complaint_period: 14,
     defaults: Rules {
         analysis: AnalysisParameters {
             earth_model: EarthModel::Wgs84,
@@ -101,6 +109,8 @@ pub static FAI_ANNEX_A_2025A: RuleSetEdition = RuleSetEdition {
         assigned_area: Some(ObservationZone::Cylinder { radius: 20. }),
         finish: Some(ObservationZone::Cylinder { radius: 3. }),
     },
+    podium_countback: true,
+    complaint_period: 14,
     defaults: Rules {
         analysis: AnalysisParameters {
             earth_model: EarthModel::Wgs84,
