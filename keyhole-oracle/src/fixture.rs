@@ -7,6 +7,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use anyhow::Context;
+use keyhole_engine::rule_sets;
 use serde::Deserialize;
 
 use crate::comparison::Field;
@@ -52,8 +53,21 @@ impl Fixture {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct FixtureFile {
-    pub scoring_parameters: ScoringParameters,
+    /// The ID of the built-in rule set edition that the harness scores the
+    /// fixture under. It stays fixed when a newer edition ships, so a fixture
+    /// never changes its rules without an edit.
+    pub rule_set: String,
+    /// The ID of the rule set edition that the competition was actually scored
+    /// under, when known. Keyhole may not ship that edition, so the harness
+    /// never reads it. It explains why the published results can differ from
+    /// scoring under `rule_set`.
+    pub original_rule_set: Option<String>,
+    /// The class's `Dm` and `D1` and the local procedures, applied to the
+    /// edition's defaults.
+    #[serde(default)]
+    pub rule_overrides: RuleOverrides,
     /// The day parameters transcribed from the task info line of
     /// `results.html`.
     pub published_day_parameters: PublishedDayParameters,
@@ -64,11 +78,39 @@ pub struct FixtureFile {
     pub deviations: Vec<Deviation>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ScoringParameters {
-    pub dm: f64,
-    pub d1: f64,
+pub struct RuleOverrides {
+    pub earth_model: Option<EarthModel>,
+    pub dm: Option<f64>,
+    pub d1: Option<f64>,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EarthModel {
+    Wgs84,
+    FaiSphere,
+}
+
+impl From<&RuleOverrides> for rule_sets::RuleOverrides {
+    fn from(overrides: &RuleOverrides) -> Self {
+        Self {
+            earth_model: overrides.earth_model.map(Into::into),
+            dm: overrides.dm,
+            d1: overrides.d1,
+            ..Default::default()
+        }
+    }
+}
+
+impl From<EarthModel> for rule_sets::EarthModel {
+    fn from(earth_model: EarthModel) -> Self {
+        match earth_model {
+            EarthModel::Wgs84 => Self::Wgs84,
+            EarthModel::FaiSphere => Self::FaiSphere,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]

@@ -12,6 +12,9 @@ use std::time::Duration;
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClassDay {
     pub parameters: ScoringParameters,
+    /// The minimum task time of an assigned area task, or `None` on a racing
+    /// task.
+    pub minimum_task_time: Option<Duration>,
     pub competitors: Vec<CompetitorResult>,
 }
 
@@ -21,9 +24,6 @@ pub struct ScoringParameters {
     pub dm: f64,
     /// The distance `D1` a winner needs for 1000 points.
     pub d1: f64,
-    /// The minimum task time of an assigned area task, or `None` on a racing
-    /// task.
-    pub minimum_task_time: Option<Duration>,
 }
 
 /// One competitor's input to scoring a class day.
@@ -151,10 +151,10 @@ struct Finish {
 }
 
 impl CountingAchievement {
-    fn new(achievement: &Achievement, scoring: &ScoringParameters) -> Self {
+    fn new(achievement: &Achievement, minimum_task_time: Option<Duration>) -> Self {
         let distance = achievement.distance;
         let finish = achievement.time.map(|time| {
-            let time = time.max(scoring.minimum_task_time.unwrap_or_default());
+            let time = time.max(minimum_task_time.unwrap_or_default());
             let speed = distance / hours(time);
             Finish { speed, time }
         });
@@ -178,7 +178,7 @@ pub fn score_class_day(day: &ClassDay) -> DayResult {
         .map(|competitor| match &competitor.result {
             ResultStatus::Unknown | ResultStatus::DidNotFly => None,
             ResultStatus::Flown(achievement) => {
-                Some(CountingAchievement::new(achievement, &day.parameters))
+                Some(CountingAchievement::new(achievement, day.minimum_task_time))
             }
         })
         .collect();
@@ -281,7 +281,7 @@ fn day_parameters(
     achievements: &[&CountingAchievement],
     placeholder_count: u32,
 ) -> DayParameters {
-    let ScoringParameters { dm, d1, .. } = *scoring;
+    let ScoringParameters { dm, d1 } = *scoring;
 
     let finishes = || achievements.iter().filter_map(|a| a.finish.as_ref());
     // A slower finisher on an assigned area task or a non-finisher can fly

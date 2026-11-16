@@ -5,9 +5,8 @@ use std::collections::HashSet;
 use std::fmt;
 
 use anyhow::bail;
-use keyhole_engine::day_scoring::{
-    ClassDay, DayParameters, Rank, Row, ScoringParameters, score_class_day,
-};
+use keyhole_engine::day_scoring::{ClassDay, DayParameters, Rank, Row, score_class_day};
+use keyhole_engine::rule_sets::RuleSetEdition;
 use serde::Deserialize;
 
 use crate::decisions::{RowDecisions, Source};
@@ -132,6 +131,9 @@ impl fmt::Display for Report {
 /// values.
 pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
     let file = &fixture.file;
+    let Some(edition) = RuleSetEdition::find(&file.rule_set) else {
+        bail!("unknown rule set edition {:?}", file.rule_set);
+    };
     let mut competition_ids = HashSet::new();
     if let Some(row) = fixture
         .rows
@@ -153,12 +155,10 @@ pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
         .iter()
         .map(|row| RowDecisions::decide(row, file.decisions.get(&row.competition_id)))
         .collect::<anyhow::Result<Vec<_>>>()?;
+    let rules = edition.resolve(&[(&file.rule_overrides).into()]);
     let day = ClassDay {
-        parameters: ScoringParameters {
-            dm: file.scoring_parameters.dm,
-            d1: file.scoring_parameters.d1,
-            minimum_task_time: fixture.minimum_task_time,
-        },
+        parameters: rules.scoring,
+        minimum_task_time: fixture.minimum_task_time,
         competitors: fixture
             .rows
             .iter()

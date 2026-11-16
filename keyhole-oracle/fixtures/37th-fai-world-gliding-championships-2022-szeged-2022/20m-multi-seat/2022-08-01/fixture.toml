@@ -3,7 +3,10 @@
 # but the class has no Handicap column and Do and Vo equal the unhandicapped
 # maxima, so every competitor is scored without a handicap.
 
-[scoring_parameters]
+rule_set = "FAI Annex A 2025a"
+
+[rule_overrides]
+earth_model = "fai_sphere"
 dm = 120
 d1 = 300
 
