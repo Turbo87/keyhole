@@ -28,7 +28,10 @@ dm = 120
 d1 = 300
 
 # Transcribed from the task info line of results.html, with decimal points.
+# The line of a class day failing the day validity rule says "Day not valid"
+# and leaves out F, FCR and the maximum points, which are then left out here.
 [published_day_parameters]
+valid = false    # only when the class day fails the day validity rule
 d1 = 300
 n = 19
 n1 = 19
@@ -53,8 +56,8 @@ handicap = 1.08    # on the class's handicap scale
 # day parameter. A recorded deviation that no longer occurs fails the test.
 [[deviations]]
 competition_id = "AB"
-field = "points"    # d1 n n1 n2 do vo f fcr maximum_points rank points penalty distance speed
+field = "points"    # validity d1 n n1 n2 do vo f fcr maximum_points rank points penalty distance speed
 explanation = "Why Keyhole and SeeYou differ."
 ```
 
-The harness derives each row's decisions from `results.csv`: `DNF` did not fly, `HC` hors concours, `DNS` landed at 0 km, `penalty_points` the penalty rounded to whole points, `handicap` the handicap in a handicapped class, where every row needs one and any value of 10 or more puts every handicap on the 100 scale instead of the 1.000 scale, and every other row flew its published distance, in the time from its start to its finish if it has one. A remark minus its trailing penalty points becomes the penalty's public remark when the row has a penalty, otherwise an official warning when it is in the official warning group, and is only reported when neither applies. Remarks are never compared. Rows are paired by competition ID, so the order of tied rows is never compared. Values are compared at the precision SoaringSpot displays: ranks as written, points, `D1` and maximum points as whole numbers, a penalty from the download as published against the whole points Keyhole deducts, distances and speeds, `Do` and `Vo` to 0.01 with a row without a counting result at 0 km as SoaringSpot shows it, and `F` and `FCR` to 0.001.
+The harness derives each row's decisions from `results.csv`: `DNF` did not fly, `HC` hors concours, `DNS` landed at 0 km, `penalty_points` the penalty rounded to whole points, `handicap` the handicap in a handicapped class, where every row needs one and any value of 10 or more puts every handicap on the 100 scale instead of the 1.000 scale, and every other row flew its published distance, in the time from its start to its finish if it has one. A remark minus its trailing penalty points becomes the penalty's public remark when the row has a penalty, otherwise an official warning when it is in the official warning group, and is only reported when neither applies. Remarks are never compared. Rows are paired by competition ID, so the order of tied rows is never compared. Values are compared at the precision SoaringSpot displays: the day validity verdict and ranks as written, points, `D1` and maximum points as whole numbers, a penalty from the download as published against the whole points Keyhole deducts, distances and speeds, `Do` and `Vo` to 0.01 with a row without a counting result at 0 km as SoaringSpot shows it, and `F` and `FCR` to 0.001.

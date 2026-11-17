@@ -119,6 +119,10 @@ impl From<EarthModel> for rule_sets::EarthModel {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PublishedDayParameters {
+    /// Whether the class day passes the day validity rule, which the task
+    /// info line only states when it fails.
+    #[serde(default = "default_valid")]
+    pub valid: bool,
     pub d1: f64,
     pub n: u32,
     pub n1: u32,
@@ -127,9 +131,15 @@ pub struct PublishedDayParameters {
     pub d0: f64,
     #[serde(rename = "vo")]
     pub v0: f64,
-    pub f: f64,
-    pub fcr: f64,
-    pub maximum_points: f64,
+    // The task info line of an invalid class day leaves out `F`, `FCR` and the
+    // maximum points.
+    pub f: Option<f64>,
+    pub fcr: Option<f64>,
+    pub maximum_points: Option<f64>,
+}
+
+fn default_valid() -> bool {
+    true
 }
 
 #[derive(Debug, Default, Deserialize)]

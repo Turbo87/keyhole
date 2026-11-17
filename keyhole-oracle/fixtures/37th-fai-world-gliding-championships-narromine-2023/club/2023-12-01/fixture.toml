@@ -1,0 +1,30 @@
+# Annex A racing task in the Club class with handicaps on the 1.000 scale and
+# one finish height penalty, where the distance term sets the maximum points.
+
+rule_set = "FAI Annex A 2025a"
+handicapped = true
+
+[rule_overrides]
+earth_model = "fai_sphere"
+
+# Racing Task, Maximum Points: 633, F = 1.000, Fcr = 1.000, Max speed pts: 407
+# ; Dm = 100km, D1 = 250km, handicapping enabled
+# ; PEVWaitTime: 5min, PEVStartWindow: 8min, PreStart Alt = 2591m,
+# Minimum Alt = 335m, N: 29, n1: 29, n2: 28, Do: 249.44km, Vo: 116.21km/h
+[published_day_parameters]
+d1 = 250
+n = 29
+n1 = 29
+n2 = 28
+do = 249.44
+vo = 116.21
+f = 1.000
+fcr = 1.000
+maximum_points = 633
+
+# IV flew at 1.059 on the first five days and at 1.000 afterwards, while
+# SoaringSpot shows the final 1.000 on every day. 1.059 is the only value to
+# 0.001 that reproduces IV's points on days 2 to 5. With 1.000, IV's 255.67 km
+# would set Do, Vo and the maximum points.
+[decisions.IV]
+handicap = 1.059

@@ -1,0 +1,21 @@
+# Annex A assigned area task in the Club class with handicaps on the 1.000
+# scale, where only 3 of 42 competitors flew a handicapped distance of at least
+# Dm. The class day fails the day validity rule and every day score is 0.
+
+rule_set = "FAI Annex A 2025a"
+handicapped = true
+
+[rule_overrides]
+earth_model = "fai_sphere"
+
+# Day not valid - rule 8.2.1b; Dm = 100km, D1 = 250km, handicapping enabled
+# ; PEVWaitTime: 8min, PEVStartWindow: 5min,  N: 42, n1: 3, n2: 0,
+# Do: 112.29km, Vo: 0.00km/h
+[published_day_parameters]
+valid = false
+d1 = 250
+n = 42
+n1 = 3
+n2 = 0
+do = 112.29
+vo = 0.00
