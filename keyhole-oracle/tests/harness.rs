@@ -61,6 +61,48 @@ fn wrong_published_day_parameter_fails() {
 }
 
 #[test]
+fn wrong_published_day_validity_fails() {
+    let fixture_file = FIXTURE_FILE.replace(
+        "maximum_points = 1000",
+        "maximum_points = 1000\nvalid = false",
+    );
+
+    let report = check_day(&[FINISHER], &fixture_file);
+
+    assert!(!report.passes());
+    assert_snapshot!(report, @"
+    day validity: published invalid, Keyhole valid
+    Decisions:
+      A: finished 300 km in 3:00:00 (from the download)
+    ");
+}
+
+#[test]
+fn invalid_day_passes_without_the_values_its_task_info_line_omits() {
+    let landed = "1,A,Crew A,de,,,Arcus,,12:00:00,,,,100,0,0,,";
+    let fixture_file = r#"
+rule_set = "FAI Annex A 2025a"
+
+[rule_overrides]
+dm = 120
+d1 = 300
+
+[published_day_parameters]
+valid = false
+d1 = 300
+n = 1
+n1 = 0
+n2 = 0
+do = 100.00
+vo = 0.00
+"#;
+
+    let report = check_day(&[landed], fixture_file);
+
+    assert!(report.passes(), "{report}");
+}
+
+#[test]
 fn values_without_rule_overrides_keep_the_edition_defaults() {
     let fixture_file = FIXTURE_FILE.replace("dm = 120\nd1 = 300\n", "dm = 120\n");
 
@@ -72,6 +114,19 @@ fn values_without_rule_overrides_keep_the_edition_defaults() {
     Decisions:
       A: finished 300 km in 3:00:00 (from the download)
     ");
+}
+
+#[test]
+fn valid_day_without_a_published_maximum_points_is_an_error() {
+    let fixture_file = FIXTURE_FILE.replace("maximum_points = 1000\n", "");
+    let fixture = Fixture::parse(TASK, &results(&[FINISHER]), &fixture_file).unwrap();
+
+    let error = check(&fixture).unwrap_err();
+
+    assert_eq!(
+        error.to_string(),
+        "a valid class day needs the published F, FCR and maximum points"
+    );
 }
 
 #[test]

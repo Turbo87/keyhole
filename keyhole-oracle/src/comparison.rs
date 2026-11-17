@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use std::fmt;
 
 use anyhow::bail;
-use keyhole_engine::day_scoring::{ClassDay, DayParameters, Rank, Row, score_class_day};
+use keyhole_engine::day_scoring::{ClassDay, DayResult, DayValidity, Rank, Row, score_class_day};
 use keyhole_engine::rule_sets::RuleSetEdition;
 use serde::Deserialize;
 
@@ -17,6 +17,7 @@ use crate::published::PublishedRow;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Field {
+    Validity,
     D1,
     N,
     N1,
@@ -36,6 +37,7 @@ pub enum Field {
 impl fmt::Display for Field {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
+            Self::Validity => "day validity",
             Self::D1 => "D1",
             Self::N => "N",
             Self::N1 => "n1",
@@ -134,6 +136,15 @@ pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
     let Some(edition) = RuleSetEdition::find(&file.rule_set) else {
         bail!("unknown rule set edition {:?}", file.rule_set);
     };
+    let day_parameters = &file.published_day_parameters;
+    let formula_values = [
+        day_parameters.f,
+        day_parameters.fcr,
+        day_parameters.maximum_points,
+    ];
+    if day_parameters.valid && formula_values.iter().any(Option::is_none) {
+        bail!("a valid class day needs the published F, FCR and maximum points");
+    }
     let mut competition_ids = HashSet::new();
     if let Some(row) = fixture
         .rows
@@ -207,10 +218,9 @@ pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
         mismatch
     };
 
-    let day_parameter_mismatches =
-        day_parameter_mismatches(&file.published_day_parameters, &result.parameters)
-            .map(&mut explain)
-            .collect();
+    let day_parameter_mismatches = day_parameter_mismatches(day_parameters, &result)
+        .map(&mut explain)
+        .collect();
     let row_mismatches = fixture
         .rows
         .iter()
@@ -241,41 +251,54 @@ pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
 
 fn day_parameter_mismatches(
     published: &PublishedDayParameters,
-    keyhole: &DayParameters,
+    keyhole: &DayResult,
 ) -> impl Iterator<Item = Mismatch> {
+    let validity = |valid: bool| if valid { "valid" } else { "invalid" }.to_string();
     let count = |value: u32| value.to_string();
+    let parameters = &keyhole.parameters;
     [
         (
-            Field::D1,
-            decimals(published.d1, 0),
-            decimals(keyhole.d1, 0),
+            Field::Validity,
+            Some(validity(published.valid)),
+            validity(keyhole.validity == DayValidity::Valid),
         ),
-        (Field::N, count(published.n), count(keyhole.n)),
-        (Field::N1, count(published.n1), count(keyhole.n1)),
-        (Field::N2, count(published.n2), count(keyhole.n2)),
+        (
+            Field::D1,
+            Some(decimals(published.d1, 0)),
+            decimals(parameters.d1, 0),
+        ),
+        (Field::N, Some(count(published.n)), count(parameters.n)),
+        (Field::N1, Some(count(published.n1)), count(parameters.n1)),
+        (Field::N2, Some(count(published.n2)), count(parameters.n2)),
         (
             Field::Do,
-            decimals(published.d0, 2),
-            decimals(keyhole.d0, 2),
+            Some(decimals(published.d0, 2)),
+            decimals(parameters.d0, 2),
         ),
         (
             Field::Vo,
-            decimals(published.v0, 2),
-            decimals(keyhole.v0, 2),
+            Some(decimals(published.v0, 2)),
+            decimals(parameters.v0, 2),
         ),
-        (Field::F, decimals(published.f, 3), decimals(keyhole.f, 3)),
+        (
+            Field::F,
+            published.f.map(|f| decimals(f, 3)),
+            decimals(parameters.f, 3),
+        ),
         (
             Field::Fcr,
-            decimals(published.fcr, 3),
-            decimals(keyhole.fcr, 3),
+            published.fcr.map(|fcr| decimals(fcr, 3)),
+            decimals(parameters.fcr, 3),
         ),
         (
             Field::MaximumPoints,
-            decimals(published.maximum_points, 0),
-            decimals(keyhole.pm.round(), 0),
+            published.maximum_points.map(|points| decimals(points, 0)),
+            decimals(parameters.pm.round(), 0),
         ),
     ]
     .into_iter()
+    // A value the task info line leaves out isn't compared.
+    .filter_map(|(field, published, keyhole)| Some((field, published?, keyhole)))
     .filter(|(_, published, keyhole)| published != keyhole)
     .map(|(field, published, keyhole)| Mismatch {
         competition_id: None,
