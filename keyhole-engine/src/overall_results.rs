@@ -64,9 +64,12 @@ pub fn overall_results(counting_days: &[DayResult]) -> Vec<OverallRow> {
             .then(b.raw_total.total_cmp(&a.raw_total))
             .then_with(|| a.competition_id.cmp(&b.competition_id))
     });
-    share_ranks(rows.iter_mut().filter_map(|row| match &mut row.rank {
-        OverallRank::Ranked(rank) => Some((row.total, rank)),
-        _ => None,
-    }));
+    share_ranks(
+        rows.iter_mut().filter_map(|row| match &mut row.rank {
+            OverallRank::Ranked(rank) => Some((row.total, rank)),
+            _ => None,
+        }),
+        |previous, _, score| previous == score,
+    );
     rows
 }

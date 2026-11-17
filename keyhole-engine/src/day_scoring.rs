@@ -282,10 +282,13 @@ fn rank(rows: &mut [Row]) {
             .then(b.raw_score.total_cmp(&a.raw_score))
             .then_with(|| a.competition_id.cmp(&b.competition_id))
     });
-    share_ranks(rows.iter_mut().filter_map(|row| match &mut row.rank {
-        Rank::Ranked(rank) => Some((row.score, rank)),
-        _ => None,
-    }));
+    share_ranks(
+        rows.iter_mut().filter_map(|row| match &mut row.rank {
+            Rank::Ranked(rank) => Some((row.score, rank)),
+            _ => None,
+        }),
+        |previous, _, score| previous == score,
+    );
 }
 
 /// Computes the day parameters from the counting achievements and the number
