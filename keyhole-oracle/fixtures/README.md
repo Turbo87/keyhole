@@ -30,6 +30,8 @@ d1 = 300
 # Transcribed from the task info line of results.html, with decimal points.
 # The line of a class day failing the day validity rule says "Day not valid"
 # and leaves out F, FCR and the maximum points, which are then left out here.
+# A class day whose line states no day parameters leaves out this section and
+# compares its rows only.
 [published_day_parameters]
 valid = false    # only when the class day fails the day validity rule
 d1 = 300

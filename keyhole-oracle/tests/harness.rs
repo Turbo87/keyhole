@@ -103,6 +103,22 @@ vo = 0.00
 }
 
 #[test]
+fn day_without_published_day_parameters_compares_rows_only() {
+    let finisher = FINISHER.replace(",1000,0,", ",999,0,");
+    let fixture_file = r#"
+rule_set = "FAI Annex A 2025a"
+"#;
+
+    let report = check_day(&[&finisher], fixture_file);
+
+    assert_snapshot!(report, @"
+    A points: published 999, Keyhole 1000
+    Decisions:
+      A: finished 300 km in 3:00:00 (from the download)
+    ");
+}
+
+#[test]
 fn values_without_rule_overrides_keep_the_edition_defaults() {
     let fixture_file = FIXTURE_FILE.replace("dm = 120\nd1 = 300\n", "dm = 120\n");
 

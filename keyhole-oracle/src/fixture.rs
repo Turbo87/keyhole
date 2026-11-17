@@ -72,8 +72,8 @@ pub struct FixtureFile {
     #[serde(default)]
     pub rule_overrides: RuleOverrides,
     /// The day parameters transcribed from the task info line of
-    /// `results.html`.
-    pub published_day_parameters: PublishedDayParameters,
+    /// `results.html`, or `None` when the line states none.
+    pub published_day_parameters: Option<PublishedDayParameters>,
     /// Scorer decisions by competition ID, winning over derived ones.
     #[serde(default)]
     pub decisions: BTreeMap<String, FixtureDecisions>,

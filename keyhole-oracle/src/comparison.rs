@@ -136,13 +136,15 @@ pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
     let Some(edition) = RuleSetEdition::find(&file.rule_set) else {
         bail!("unknown rule set edition {:?}", file.rule_set);
     };
-    let day_parameters = &file.published_day_parameters;
-    let formula_values = [
-        day_parameters.f,
-        day_parameters.fcr,
-        day_parameters.maximum_points,
-    ];
-    if day_parameters.valid && formula_values.iter().any(Option::is_none) {
+    if let Some(day_parameters) = &file.published_day_parameters
+        && day_parameters.valid
+        && [
+            day_parameters.f,
+            day_parameters.fcr,
+            day_parameters.maximum_points,
+        ]
+        .contains(&None)
+    {
         bail!("a valid class day needs the published F, FCR and maximum points");
     }
     let mut competition_ids = HashSet::new();
@@ -218,7 +220,10 @@ pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
         mismatch
     };
 
-    let day_parameter_mismatches = day_parameter_mismatches(day_parameters, &result)
+    let day_parameter_mismatches = file
+        .published_day_parameters
+        .iter()
+        .flat_map(|day_parameters| day_parameter_mismatches(day_parameters, &result))
         .map(&mut explain)
         .collect();
     let row_mismatches = fixture
