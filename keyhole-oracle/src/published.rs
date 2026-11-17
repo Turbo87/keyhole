@@ -16,6 +16,17 @@ pub enum PublishedTask {
     },
     #[serde(rename = "polygon")]
     Racing,
+    /// A task SoaringSpot names by the shape of its course, which is a racing
+    /// task unless its task duration sets a minimum task time.
+    #[serde(
+        rename = "broken_leg",
+        alias = "fai_triangle",
+        alias = "unknown_triangle"
+    )]
+    CourseShape {
+        #[serde(default)]
+        task_duration: u64,
+    },
 }
 
 impl PublishedTask {
@@ -23,6 +34,8 @@ impl PublishedTask {
         match *self {
             Self::AssignedArea { task_duration } => Some(Duration::from_secs(task_duration)),
             Self::Racing => None,
+            Self::CourseShape { task_duration: 0 } => None,
+            Self::CourseShape { task_duration } => Some(Duration::from_secs(task_duration)),
         }
     }
 }

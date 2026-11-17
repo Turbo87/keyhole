@@ -103,6 +103,22 @@ vo = 0.00
 }
 
 #[test]
+fn day_without_published_day_parameters_compares_rows_only() {
+    let finisher = FINISHER.replace(",1000,0,", ",999,0,");
+    let fixture_file = r#"
+rule_set = "FAI Annex A 2025a"
+"#;
+
+    let report = check_day(&[&finisher], fixture_file);
+
+    assert_snapshot!(report, @"
+    A points: published 999, Keyhole 1000
+    Decisions:
+      A: finished 300 km in 3:00:00 (from the download)
+    ");
+}
+
+#[test]
 fn values_without_rule_overrides_keep_the_edition_defaults() {
     let fixture_file = FIXTURE_FILE.replace("dm = 120\nd1 = 300\n", "dm = 120\n");
 
@@ -410,6 +426,39 @@ fn racing_task_finisher_is_not_raised_to_a_minimum_task_time() {
 }
 
 #[test]
+fn course_shape_task_without_a_task_duration_is_a_racing_task() {
+    let finisher = FINISHER.replace(
+        "15:00:00,3:00:00,100,300,1000,",
+        "14:30:00,2:30:00,120,300,800,",
+    );
+    let fixture_file = FIXTURE_FILE
+        .replace("vo = 100.00", "vo = 120.00")
+        .replace("maximum_points = 1000", "maximum_points = 800");
+    for task_type in ["broken_leg", "fai_triangle", "unknown_triangle"] {
+        let task = format!(r#"{{"task_type": "{task_type}", "task_duration": 0}}"#);
+        let fixture = Fixture::parse(&task, &results(&[&finisher]), &fixture_file).unwrap();
+        let report = check(&fixture).unwrap();
+        assert!(report.passes(), "{task_type}: {report}");
+    }
+}
+
+#[test]
+fn course_shape_task_duration_is_a_minimum_task_time() {
+    let task = r#"{"task_type": "broken_leg", "task_duration": 10800}"#;
+    let finisher = FINISHER.replace("15:00:00,3:00:00,", "14:30:00,2:30:00,");
+    let fixture = Fixture::parse(task, &results(&[&finisher]), FIXTURE_FILE).unwrap();
+    let report = check(&fixture).unwrap();
+    assert!(report.passes(), "{report}");
+}
+
+#[test]
+fn unknown_task_type_is_an_error() {
+    let task = r#"{"task_type": "unknown"}"#;
+    let error = Fixture::parse(task, &results(&[FINISHER]), FIXTURE_FILE).unwrap_err();
+    assert_snapshot!(format!("{error:#}"), @"parsing task.json: unknown variant `unknown`, expected one of `assigned_area`, `polygon`, `broken_leg`, `fai_triangle`, `unknown_triangle` at line 1 column 23");
+}
+
+#[test]
 fn assigned_area_task_without_a_minimum_task_time_is_an_error() {
     let task = r#"{"task_type": "assigned_area"}"#;
 
@@ -548,11 +597,35 @@ fn earlier_remark_groups_take_precedence_over_official_warnings() {
 }
 
 #[test]
-fn other_remarks_are_reported_but_not_applied() {
-    assert_eq!(
-        remark_decision("1000", "", "Loggerintervall"),
-        "remark \"Loggerintervall\" (not applied)"
-    );
+fn remarks_of_known_effect_are_reported_but_not_applied() {
+    for remark in [
+        "Loggerintervall",
+        "Virtuelle Außenlandung",
+        "Secondary FR used",
+        "Start 13:05",
+        "Zielhöhe unterschritten",
+        "L/O",
+    ] {
+        assert_eq!(
+            remark_decision("1000", "", remark),
+            format!("remark \"{remark}\" (not applied)")
+        );
+    }
+}
+
+#[test]
+fn other_remarks_are_reported_as_of_unknown_effect() {
+    for remark in [
+        "Airspace infringement",
+        "Turnpoint 3 not rounded OK",
+        "SC3A 1.4.5.3",
+        "Start altitude",
+    ] {
+        assert_eq!(
+            remark_decision("1000", "", remark),
+            format!("remark \"{remark}\" (unknown effect)")
+        );
+    }
 }
 
 /// Marks the class as handicapped with the day parameters of [`FINISHER`]
@@ -588,6 +661,16 @@ fn handicap_column_divides_by_handicaps_on_the_100_scale() {
 fn handicap_column_divides_by_handicaps_on_the_1_000_scale() {
     let report = check_day(
         &[&finisher_with_handicap("1.25")],
+        &handicapped_fixture_file(),
+    );
+
+    assert!(report.passes(), "{report}");
+}
+
+#[test]
+fn handicap_column_divides_by_handicaps_on_the_1000_scale() {
+    let report = check_day(
+        &[&finisher_with_handicap("1250")],
         &handicapped_fixture_file(),
     );
 

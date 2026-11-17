@@ -7,14 +7,15 @@ use std::fmt;
 use anyhow::bail;
 use keyhole_engine::day_scoring::{ClassDay, DayResult, DayValidity, Rank, Row, score_class_day};
 use keyhole_engine::rule_sets::RuleSetEdition;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-use crate::decisions::{RowDecisions, Source};
+use crate::decisions::{Cause, RemarkDecision, RowDecisions, Source};
 use crate::fixture::{Deviation, Fixture, PublishedDayParameters};
 use crate::published::PublishedRow;
 
-/// A compared value: a day parameter or a field of a row.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+/// A compared value: a day parameter or a field of a row. The order of the
+/// variants lists day parameters before rows in the full-data report.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Field {
     Validity,
@@ -64,6 +65,8 @@ pub struct Mismatch {
     pub field: Field,
     pub published: String,
     pub keyhole: String,
+    /// The cause of a row's mismatch, or `None` for a day parameter.
+    pub cause: Option<Cause>,
     /// The fixture file's explanation of a recorded deviation.
     pub explanation: Option<String>,
 }
@@ -77,6 +80,8 @@ pub struct Report {
     pub stale_deviations: Vec<Deviation>,
     /// The decisions applied to each row by competition ID, in row order.
     pub decisions: Vec<(String, String)>,
+    /// The competition IDs of rows with a remark of unknown effect.
+    pub unknown_effect_rows: Vec<String>,
 }
 
 impl Report {
@@ -136,13 +141,15 @@ pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
     let Some(edition) = RuleSetEdition::find(&file.rule_set) else {
         bail!("unknown rule set edition {:?}", file.rule_set);
     };
-    let day_parameters = &file.published_day_parameters;
-    let formula_values = [
-        day_parameters.f,
-        day_parameters.fcr,
-        day_parameters.maximum_points,
-    ];
-    if day_parameters.valid && formula_values.iter().any(Option::is_none) {
+    if let Some(day_parameters) = &file.published_day_parameters
+        && day_parameters.valid
+        && [
+            day_parameters.f,
+            day_parameters.fcr,
+            day_parameters.maximum_points,
+        ]
+        .contains(&None)
+    {
         bail!("a valid class day needs the published F, FCR and maximum points");
     }
     let mut competition_ids = HashSet::new();
@@ -182,14 +189,16 @@ pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
             bail!("no handicap for {}", missing.join(", "));
         }
     }
-    // Handicaps on the 100 scale range from about 60 to 130 and those on the
-    // 1.000 scale from about 0.8 to 1.3, so any value of 10 or more marks the
-    // 100 scale.
-    let handicap_scale = if decisions
+    // Handicaps on the 1.000 scale range from about 0.8 to 1.3, those on the
+    // 100 scale from about 60 to 130 and those on the 1000 scale from about
+    // 800 to 1150, so the largest handicap marks the scale.
+    let largest_handicap = decisions
         .iter()
         .filter_map(|decisions| decisions.handicap)
-        .any(|(handicap, _)| handicap >= 10.)
-    {
+        .fold(0., |largest, (handicap, _)| f64::max(largest, handicap));
+    let handicap_scale = if largest_handicap >= 500. {
+        1000.
+    } else if largest_handicap >= 10. {
         100.
     } else {
         1.
@@ -218,7 +227,10 @@ pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
         mismatch
     };
 
-    let day_parameter_mismatches = day_parameter_mismatches(day_parameters, &result)
+    let day_parameter_mismatches = file
+        .published_day_parameters
+        .iter()
+        .flat_map(|day_parameters| day_parameter_mismatches(day_parameters, &result))
         .map(&mut explain)
         .collect();
     let row_mismatches = fixture
@@ -245,6 +257,15 @@ pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
             .iter()
             .zip(&decisions)
             .map(|(row, decisions)| (row.competition_id.clone(), decisions.to_string()))
+            .collect(),
+        unknown_effect_rows: fixture
+            .rows
+            .iter()
+            .zip(&decisions)
+            .filter(|(_, decisions)| {
+                matches!(decisions.remark, Some(RemarkDecision::UnknownEffect(_)))
+            })
+            .map(|(row, _)| row.competition_id.clone())
             .collect(),
     })
 }
@@ -305,6 +326,7 @@ fn day_parameter_mismatches(
         field,
         published,
         keyhole,
+        cause: None,
         explanation: None,
     })
 }
@@ -315,6 +337,7 @@ fn row_mismatches(
     keyhole: &Row,
 ) -> impl Iterator<Item = Mismatch> {
     let competition_id = &published.competition_id;
+    let cause = decisions.cause(&published.rank);
     let hundredths = |value: Option<f64>| value.map(|value| decimals(value, 2));
     let (published_penalty, keyhole_penalty) = match decisions.penalty {
         // A penalty from the fixture file fills in what the download lacks.
@@ -350,11 +373,12 @@ fn row_mismatches(
     ]
     .into_iter()
     .filter(|(_, published, keyhole)| published != keyhole)
-    .map(|(field, published, keyhole)| Mismatch {
+    .map(move |(field, published, keyhole)| Mismatch {
         competition_id: Some(competition_id.clone()),
         field,
         published: published.unwrap_or_else(|| "nothing".into()),
         keyhole: keyhole.unwrap_or_else(|| "nothing".into()),
+        cause: Some(cause),
         explanation: None,
     })
 }

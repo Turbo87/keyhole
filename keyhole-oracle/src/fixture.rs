@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use keyhole_engine::rule_sets;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::comparison::Field;
 use crate::decisions::ResultDecision;
@@ -39,11 +39,20 @@ impl Fixture {
     }
 
     pub fn parse(task_json: &str, results_csv: &str, fixture_file: &str) -> anyhow::Result<Self> {
+        let file = toml::from_str(fixture_file).context("parsing fixture.toml")?;
+        Self::with_file(task_json, results_csv, file)
+    }
+
+    /// Combines a downloaded class day with a fixture file built in code.
+    pub fn with_file(
+        task_json: &str,
+        results_csv: &str,
+        file: FixtureFile,
+    ) -> anyhow::Result<Self> {
         let minimum_task_time = serde_json::from_str::<PublishedTask>(task_json)
             .context("parsing task.json")?
             .minimum_task_time();
         let rows = parse_results(results_csv).context("parsing results.csv")?;
-        let file = toml::from_str(fixture_file).context("parsing fixture.toml")?;
         Ok(Self {
             minimum_task_time,
             rows,
@@ -72,8 +81,8 @@ pub struct FixtureFile {
     #[serde(default)]
     pub rule_overrides: RuleOverrides,
     /// The day parameters transcribed from the task info line of
-    /// `results.html`.
-    pub published_day_parameters: PublishedDayParameters,
+    /// `results.html`, or `None` when the line states none.
+    pub published_day_parameters: Option<PublishedDayParameters>,
     /// Scorer decisions by competition ID, winning over derived ones.
     #[serde(default)]
     pub decisions: BTreeMap<String, FixtureDecisions>,
@@ -153,7 +162,7 @@ pub struct FixtureDecisions {
 }
 
 /// A mismatch with SoaringSpot that the fixture explains.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Deviation {
     /// The row's competition ID, or `None` for a day parameter.

@@ -76,8 +76,43 @@ pub enum RemarkDecision {
     /// The public remark of the row's penalty.
     PublicRemark(String),
     OfficialWarning(String),
-    /// A remark without an effect on scoring, which only the report shows.
+    /// A remark whose effect on scoring is known but not applied, or which has
+    /// none, and which only the report shows.
     NotApplied(String),
+    /// A remark whose effect on scoring is unknown, such as an airspace or
+    /// turnpoint remark without a penalty, which only the report shows.
+    UnknownEffect(String),
+}
+
+/// What sets a row apart, which groups its mismatches in the full-data report.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Cause {
+    Finished,
+    LandedOut,
+    DidNotFly,
+    /// SoaringSpot's `DNS`, a launch without a valid start.
+    NoValidStart,
+    HorsConcours,
+    Penalty,
+    OfficialWarning,
+    RemarkNotApplied,
+    RemarkOfUnknownEffect,
+}
+
+impl fmt::Display for Cause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Finished => "finished",
+            Self::LandedOut => "landed out",
+            Self::DidNotFly => "did not fly",
+            Self::NoValidStart => "no valid start",
+            Self::HorsConcours => "hors concours",
+            Self::Penalty => "penalty",
+            Self::OfficialWarning => "official warning",
+            Self::RemarkNotApplied => "remark not applied",
+            Self::RemarkOfUnknownEffect => "remark of unknown effect",
+        })
+    }
 }
 
 impl RowDecisions {
@@ -111,8 +146,24 @@ impl RowDecisions {
         })
     }
 
+    /// The row's cause, which a remark of unknown effect sets before the
+    /// result status, hors concours, a penalty and other remarks.
+    pub fn cause(&self, published_rank: &str) -> Cause {
+        match (&self.remark, self.result.0) {
+            (Some(RemarkDecision::UnknownEffect(_)), _) => Cause::RemarkOfUnknownEffect,
+            (_, ResultDecision::DidNotFly) => Cause::DidNotFly,
+            _ if published_rank == "DNS" => Cause::NoValidStart,
+            _ if self.hors_concours.0 => Cause::HorsConcours,
+            _ if self.penalty.0 > 0 => Cause::Penalty,
+            (Some(RemarkDecision::OfficialWarning(_)), _) => Cause::OfficialWarning,
+            (Some(RemarkDecision::NotApplied(_)), _) => Cause::RemarkNotApplied,
+            (_, ResultDecision::Flown { time: Some(_), .. }) => Cause::Finished,
+            (_, ResultDecision::Flown { time: None, .. }) => Cause::LandedOut,
+        }
+    }
+
     /// Builds the row's scoring input, converting its handicap from the
-    /// class's handicap scale, 1 or 100, to the 1.000 scale.
+    /// class's handicap scale, 1, 100 or 1000, to the 1.000 scale.
     pub fn competitor_result(&self, competition_id: &str, handicap_scale: f64) -> CompetitorResult {
         CompetitorResult {
             competition_id: competition_id.into(),
@@ -151,6 +202,9 @@ impl fmt::Display for RowDecisions {
             }
             Some(RemarkDecision::NotApplied(remark)) => {
                 write!(f, ", remark \"{remark}\" (not applied)")
+            }
+            Some(RemarkDecision::UnknownEffect(remark)) => {
+                write!(f, ", remark \"{remark}\" (unknown effect)")
             }
         }
     }
@@ -210,7 +264,8 @@ fn penalty_from_published(row: &PublishedRow) -> anyhow::Result<u32> {
 }
 
 /// Turns a published remark minus its trailing penalty points into a public
-/// remark, an official warning or a remark without effect.
+/// remark, an official warning, a remark that isn't applied or a remark of
+/// unknown effect.
 fn remark_from_published(row: &PublishedRow) -> Option<RemarkDecision> {
     static PENALTY_POINTS: LazyLock<Regex> =
         LazyLock::new(|| Regex::new(r"\s*\(?[\d,.]+ penalty points\)?\s*$").unwrap());
@@ -224,6 +279,14 @@ fn remark_from_published(row: &PublishedRow) -> Option<RemarkDecision> {
     });
     static OFFICIAL_WARNING: LazyLock<Regex> =
         LazyLock::new(|| Regex::new(r"(?i)warn|first offen|1st offen|^w ?-").unwrap());
+    // Remarks in these groups name a flight end, a start time, a scored file,
+    // a logger check, a finish height or an outlanding.
+    static KNOWN_EFFECT: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(
+            r"(?i)engine|virtu|^start \d|\d ?min penalty|went early|pev.*from pri|secondary|sekundär|resubmission|file from primary|logger ?interval|fix ?rate|gps pr|logger gps|validierung|logger failure|loggerausfall|zielh|zielkreis|zu tief|finish(ing)? (alt|below)|^(ps, )?l/o$|landed out",
+        )
+        .unwrap()
+    });
 
     let remark = PENALTY_POINTS.replace(&row.remarks, "").into_owned();
     if remark.is_empty() {
@@ -232,7 +295,9 @@ fn remark_from_published(row: &PublishedRow) -> Option<RemarkDecision> {
         Some(RemarkDecision::PublicRemark(remark))
     } else if OFFICIAL_WARNING.is_match(&remark) && !EARLIER_GROUPS.is_match(&remark) {
         Some(RemarkDecision::OfficialWarning(remark))
-    } else {
+    } else if EARLIER_GROUPS.is_match(&remark) || KNOWN_EFFECT.is_match(&remark) {
         Some(RemarkDecision::NotApplied(remark))
+    } else {
+        Some(RemarkDecision::UnknownEffect(remark))
     }
 }
