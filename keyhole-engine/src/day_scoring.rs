@@ -8,6 +8,8 @@
 
 use std::time::Duration;
 
+use crate::ranking::share_ranks;
+
 /// A class day's scoring parameters and each competitor's result.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClassDay {
@@ -280,18 +282,10 @@ fn rank(rows: &mut [Row]) {
             .then(b.raw_score.total_cmp(&a.raw_score))
             .then_with(|| a.competition_id.cmp(&b.competition_id))
     });
-    let ranked = rows.iter_mut().filter_map(|row| match &mut row.rank {
+    share_ranks(rows.iter_mut().filter_map(|row| match &mut row.rank {
         Rank::Ranked(rank) => Some((row.score, rank)),
         _ => None,
-    });
-    let mut previous = None;
-    for (index, (score, rank)) in ranked.enumerate() {
-        *rank = match previous {
-            Some((previous_score, previous_rank)) if previous_score == score => previous_rank,
-            _ => index as u32 + 1,
-        };
-        previous = Some((score, *rank));
-    }
+    }));
 }
 
 /// Computes the day parameters from the counting achievements and the number
