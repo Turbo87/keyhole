@@ -426,6 +426,39 @@ fn racing_task_finisher_is_not_raised_to_a_minimum_task_time() {
 }
 
 #[test]
+fn course_shape_task_without_a_task_duration_is_a_racing_task() {
+    let finisher = FINISHER.replace(
+        "15:00:00,3:00:00,100,300,1000,",
+        "14:30:00,2:30:00,120,300,800,",
+    );
+    let fixture_file = FIXTURE_FILE
+        .replace("vo = 100.00", "vo = 120.00")
+        .replace("maximum_points = 1000", "maximum_points = 800");
+    for task_type in ["broken_leg", "fai_triangle", "unknown_triangle"] {
+        let task = format!(r#"{{"task_type": "{task_type}", "task_duration": 0}}"#);
+        let fixture = Fixture::parse(&task, &results(&[&finisher]), &fixture_file).unwrap();
+        let report = check(&fixture).unwrap();
+        assert!(report.passes(), "{task_type}: {report}");
+    }
+}
+
+#[test]
+fn course_shape_task_duration_is_a_minimum_task_time() {
+    let task = r#"{"task_type": "broken_leg", "task_duration": 10800}"#;
+    let finisher = FINISHER.replace("15:00:00,3:00:00,", "14:30:00,2:30:00,");
+    let fixture = Fixture::parse(task, &results(&[&finisher]), FIXTURE_FILE).unwrap();
+    let report = check(&fixture).unwrap();
+    assert!(report.passes(), "{report}");
+}
+
+#[test]
+fn unknown_task_type_is_an_error() {
+    let task = r#"{"task_type": "unknown"}"#;
+    let error = Fixture::parse(task, &results(&[FINISHER]), FIXTURE_FILE).unwrap_err();
+    assert_snapshot!(format!("{error:#}"), @"parsing task.json: unknown variant `unknown`, expected one of `assigned_area`, `polygon`, `broken_leg`, `fai_triangle`, `unknown_triangle` at line 1 column 23");
+}
+
+#[test]
 fn assigned_area_task_without_a_minimum_task_time_is_an_error() {
     let task = r#"{"task_type": "assigned_area"}"#;
 
