@@ -22,9 +22,10 @@ pub struct RuleSetEdition {
     pub pev: PevRules,
     pub default_zones: DefaultZones,
     pub task_design_limits: TaskDesignLimits,
-    /// Whether ties for the podium places of the overall results are broken
-    /// by counting daily first places, then second places and so on.
-    pub podium_countback: bool,
+    /// The number of leading overall places in which ties are broken by
+    /// counting daily first places, then second places and so on, with 0 for
+    /// no countback.
+    pub countback_places: u8,
     /// The time after a publication within which it can be challenged, in
     /// whole hours, which the suggested complaint deadline is based on.
     pub complaint_period: u32,
@@ -68,7 +69,7 @@ pub static DAEC_SWO_2026: RuleSetEdition = RuleSetEdition {
         minimum_turnpoints: 2,
         minimum_assigned_area_separation: 1.,
     },
-    podium_countback: false,
+    countback_places: 0,
     complaint_period: 14,
     defaults: Rules {
         analysis: AnalysisParameters {
@@ -121,7 +122,7 @@ pub static FAI_ANNEX_A_2025A: RuleSetEdition = RuleSetEdition {
         minimum_turnpoints: 2,
         minimum_assigned_area_separation: 1.,
     },
-    podium_countback: true,
+    countback_places: 3,
     complaint_period: 14,
     defaults: Rules {
         analysis: AnalysisParameters {
