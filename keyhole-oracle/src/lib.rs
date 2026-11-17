@@ -11,6 +11,6 @@ mod task_info;
 
 pub use comparison::{Field, Mismatch, Report, check};
 pub use fixture::{Deviation, Fixture, PublishedDayParameters};
-pub use full_data::{DatasetReport, check_dataset};
+pub use full_data::{Baseline, DatasetReport, check_dataset};
 pub use rule_set_family::{Inference, RuleSetFamily, infer_rule_set_family};
 pub use task_info::TaskInfo;

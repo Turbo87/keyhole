@@ -10,13 +10,22 @@ use keyhole_oracle::check_dataset;
 use tempfile::TempDir;
 
 /// Scores every class day of the dataset that `KEYHOLE_ORACLE_DATASET` names
-/// and prints the report, and does nothing without it.
+/// and prints the report, and does nothing without it. With
+/// `KEYHOLE_ORACLE_ACCEPT` set, it first writes the current mismatches as the
+/// dataset's baseline.
 #[test]
 fn downloaded_class_days_match_the_published_results() {
     let Some(dataset) = env::var_os("KEYHOLE_ORACLE_DATASET") else {
         return;
     };
-    let report = check_dataset(Path::new(&dataset)).unwrap_or_else(|error| panic!("{error:#}"));
+    let dataset = Path::new(&dataset);
+    let check = || check_dataset(dataset).unwrap_or_else(|error| panic!("{error:#}"));
+    let mut report = check();
+    if env::var_os("KEYHOLE_ORACLE_ACCEPT").is_some() {
+        let written = report.write_baseline(dataset);
+        written.unwrap_or_else(|error| panic!("{error:#}\n{report}"));
+        report = check();
+    }
     println!("{report}");
     assert!(report.passes(), "the class days above fail");
 }
@@ -193,4 +202,147 @@ fn report_groups_mismatches_by_field_and_cause_with_day_parameters_first() {
     Checked class days: 4, failing: 3
     Rows with remarks of unknown effect: 1, matching anyway: 0
     ");
+}
+
+const MISMATCHING: &str = "1,A,Crew A,de,,,Arcus,,12:00:00,15:00:00,3:00:00,100,300,999,0,,";
+
+/// The baseline file inside a dataset directory.
+fn baseline(dataset: &TempDir) -> String {
+    fs::read_to_string(dataset.path().join("keyhole-oracle-baseline.toml")).unwrap()
+}
+
+/// Writes a class day with a mismatching day parameter and row and a class day
+/// with an allowed failure, and accepts them.
+fn accepted_dataset() -> TempDir {
+    let dataset = TempDir::new().unwrap();
+    let line = LINE.replace("n2: 1", "n2: 0");
+    write_day(&dataset, DAY, "official", &line, MISMATCHING);
+    let remarked = FINISHER.replace(",1000,0,,", ",999,0,,Airspace");
+    write_day(&dataset, NEXT_DAY, "official", LINE, &remarked);
+    let report = check_dataset(dataset.path()).unwrap();
+    report.write_baseline(dataset.path()).unwrap();
+    dataset
+}
+
+#[test]
+fn accept_mode_writes_the_mismatches_without_allowed_failures_as_the_baseline() {
+    let dataset = accepted_dataset();
+    assert_snapshot!(baseline(&dataset), @r#"
+    [["some-competition/club/2026-06-01"]]
+    field = "n2"
+    explanation = "published 0, Keyhole 1"
+
+    [["some-competition/club/2026-06-01"]]
+    competition_id = "A"
+    field = "points"
+    explanation = "published 999, Keyhole 1000"
+    "#);
+    let report = check_dataset(dataset.path()).unwrap();
+    assert!(report.passes(), "{report}");
+}
+
+#[test]
+fn new_mismatch_fails_against_the_baseline() {
+    let dataset = accepted_dataset();
+    let later_day = "some-competition/club/2026-06-03";
+    write_day(&dataset, later_day, "official", LINE, MISMATCHING);
+    let report = check_dataset(dataset.path()).unwrap();
+    assert!(!report.passes());
+    assert_snapshot!(report, @"
+    points, finished (1):
+      some-competition/club/2026-06-03 A: published 999, Keyhole 1000
+    Allowed failures:
+    points, remark of unknown effect (1):
+      some-competition/club/2026-06-02 A: published 999, Keyhole 1000
+    Checked class days: 3, failing: 1
+    Rows with remarks of unknown effect: 1, matching anyway: 0
+    ");
+}
+
+#[test]
+fn baseline_row_that_starts_matching_fails() {
+    let dataset = accepted_dataset();
+    write_day(&dataset, DAY, "official", LINE, FINISHER);
+    let report = check_dataset(dataset.path()).unwrap();
+    assert!(!report.passes());
+    assert_snapshot!(report, @"
+    Allowed failures:
+    points, remark of unknown effect (1):
+      some-competition/club/2026-06-02 A: published 999, Keyhole 1000
+    Baseline rows that no longer occur (2):
+      some-competition/club/2026-06-01 n2: published 0, Keyhole 1
+      some-competition/club/2026-06-01 A points: published 999, Keyhole 1000
+    Checked class days: 2, failing: 1
+    Rows with remarks of unknown effect: 1, matching anyway: 0
+    ");
+}
+
+#[test]
+fn baseline_row_of_a_class_day_no_longer_checked_fails() {
+    let dataset = accepted_dataset();
+    write_day(&dataset, DAY, "cancelled", LINE, MISMATCHING);
+    let report = check_dataset(dataset.path()).unwrap();
+    assert!(!report.passes());
+    assert_snapshot!(report, @"
+    Allowed failures:
+    points, remark of unknown effect (1):
+      some-competition/club/2026-06-02 A: published 999, Keyhole 1000
+    Baseline rows of class days that weren't checked (2):
+      some-competition/club/2026-06-01 n2: published 0, Keyhole 1
+      some-competition/club/2026-06-01 A points: published 999, Keyhole 1000
+    Checked class days: 1, failing: 0
+    Rows with remarks of unknown effect: 1, matching anyway: 0
+    Left out class days (cancelled): 1
+    ");
+}
+
+#[test]
+fn baseline_row_with_changed_values_fails() {
+    let dataset = accepted_dataset();
+    let line = LINE.replace("n2: 1", "n2: 0");
+    let changed = MISMATCHING.replace(",999,0,", ",500,0,");
+    write_day(&dataset, DAY, "official", &line, &changed);
+    let report = check_dataset(dataset.path()).unwrap();
+    assert!(!report.passes());
+    assert_snapshot!(report, @"
+    points, finished (1):
+      some-competition/club/2026-06-01 A: published 500, Keyhole 1000
+    Allowed failures:
+    points, remark of unknown effect (1):
+      some-competition/club/2026-06-02 A: published 999, Keyhole 1000
+    Checked class days: 2, failing: 1
+    Rows with remarks of unknown effect: 1, matching anyway: 0
+    ");
+}
+
+#[test]
+fn baseline_rows_of_a_class_day_left_out_for_its_handicaps_fail() {
+    let dataset = accepted_dataset();
+    let handicapped = LINE.replace("no handicaps", "handicapping enabled");
+    write_day(&dataset, DAY, "official", &handicapped, MISMATCHING);
+    let report = check_dataset(dataset.path()).unwrap();
+    assert!(!report.passes());
+    assert_snapshot!(report, @"
+    Allowed failures:
+    points, remark of unknown effect (1):
+      some-competition/club/2026-06-02 A: published 999, Keyhole 1000
+    Baseline rows of class days that weren't checked (2):
+      some-competition/club/2026-06-01 n2: published 0, Keyhole 1
+      some-competition/club/2026-06-01 A points: published 999, Keyhole 1000
+    Checked class days: 1, failing: 0
+    Rows with remarks of unknown effect: 1, matching anyway: 0
+    Left out class days (handicapped without a Handicap column): 1
+    ");
+}
+
+#[test]
+fn accept_mode_refuses_class_day_errors_and_keeps_the_baseline() {
+    let dataset = accepted_dataset();
+    let accepted = baseline(&dataset);
+    let line = "Warning: Number of competition pilots launched is zero";
+    write_day(&dataset, DAY, "official", line, MISMATCHING);
+    let report = check_dataset(dataset.path()).unwrap();
+    let error = report.write_baseline(dataset.path()).unwrap_err();
+    assert_snapshot!(error, @"accept mode writes no baseline while class days have errors: 1");
+    assert_eq!(baseline(&dataset), accepted);
 }

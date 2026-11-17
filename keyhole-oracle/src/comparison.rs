@@ -7,7 +7,7 @@ use std::fmt;
 use anyhow::bail;
 use keyhole_engine::day_scoring::{ClassDay, DayResult, DayValidity, Rank, Row, score_class_day};
 use keyhole_engine::rule_sets::RuleSetEdition;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::decisions::{Cause, RemarkDecision, RowDecisions, Source};
 use crate::fixture::{Deviation, Fixture, PublishedDayParameters};
@@ -15,7 +15,7 @@ use crate::published::PublishedRow;
 
 /// A compared value: a day parameter or a field of a row. The order of the
 /// variants lists day parameters before rows in the full-data report.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Field {
     Validity,

@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use keyhole_engine::rule_sets;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::comparison::Field;
 use crate::decisions::ResultDecision;
@@ -162,7 +162,7 @@ pub struct FixtureDecisions {
 }
 
 /// A mismatch with SoaringSpot that the fixture explains.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Deviation {
     /// The row's competition ID, or `None` for a day parameter.

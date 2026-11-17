@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::fs;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
@@ -13,7 +14,7 @@ use serde::Deserialize;
 
 use crate::comparison::{Field, Mismatch, Report, check};
 use crate::decisions::Cause;
-use crate::fixture::{Fixture, FixtureFile, RuleOverrides};
+use crate::fixture::{Deviation, Fixture, FixtureFile, RuleOverrides};
 use crate::rule_set_family::{Inference, infer_rule_set_family};
 use crate::task_info::TaskInfo;
 
@@ -24,6 +25,12 @@ const PREVIOUS_HANDICAP_REFERENCE: [&str; 2] = [
     "wgc2021-club-std-15m-montlucon-gueret-2021",
 ];
 
+/// The baseline inside a dataset directory, which accept mode writes.
+const BASELINE: &str = "keyhole-oracle-baseline.toml";
+
+/// Mismatches that a dataset's checks accept, by class day.
+pub type Baseline = BTreeMap<String, Vec<Deviation>>;
+
 /// The outcome of checking every class day of a dataset.
 #[derive(Debug, Default)]
 pub struct DatasetReport {
@@ -32,11 +39,44 @@ pub struct DatasetReport {
     pub checked: Vec<(String, anyhow::Result<Report>)>,
     /// The number of class days left out, by reason.
     pub left_out: BTreeMap<&'static str, usize>,
+    /// Baseline rows of class days that weren't checked, by class day.
+    pub unchecked_baseline: Baseline,
 }
 
 impl DatasetReport {
     pub fn passes(&self) -> bool {
-        self.checked.iter().all(|(_, report)| passes(report))
+        let checked = self.checked.iter().all(|(_, report)| passes(report));
+        checked && self.unchecked_baseline.is_empty()
+    }
+
+    /// Writes every mismatch of the checked class days except the allowed
+    /// failures as the baseline of the dataset in `directory`.
+    pub fn write_baseline(&self, directory: &Path) -> anyhow::Result<()> {
+        let errors = self.checked.iter().filter(|(_, report)| report.is_err());
+        let errors = errors.count();
+        if errors > 0 {
+            bail!("accept mode writes no baseline while class days have errors: {errors}");
+        }
+        let mut baseline = Baseline::new();
+        for (day, report) in &self.checked {
+            let Ok(report) = report else { continue };
+            let mismatches = report.day_parameter_mismatches.iter();
+            let deviations: Vec<_> = mismatches
+                .chain(&report.row_mismatches)
+                .filter(|mismatch| !allowed(mismatch))
+                .map(|mismatch| Deviation {
+                    competition_id: mismatch.competition_id.clone(),
+                    field: mismatch.field,
+                    explanation: values(mismatch),
+                })
+                .collect();
+            if !deviations.is_empty() {
+                baseline.insert(day.clone(), deviations);
+            }
+        }
+        let path = directory.join(BASELINE);
+        let baseline = toml::to_string(&baseline).context("serializing the baseline")?;
+        fs::write(&path, baseline).with_context(|| format!("writing {}", path.display()))
     }
 
     /// Whether each row with a remark of unknown effect matches anyway.
@@ -73,10 +113,18 @@ fn failures(report: &Report) -> impl Iterator<Item = &Mismatch> {
     unexplained(report).filter(|mismatch| !allowed(mismatch))
 }
 
+/// The mismatches without a baseline row, or whose values differ from the
+/// values their baseline row records.
 fn unexplained(report: &Report) -> impl Iterator<Item = &Mismatch> {
     let mismatches = report.day_parameter_mismatches.iter();
     let mismatches = mismatches.chain(&report.row_mismatches);
-    mismatches.filter(|mismatch| mismatch.explanation.is_none())
+    mismatches.filter(|mismatch| mismatch.explanation.as_ref() != Some(&values(mismatch)))
+}
+
+/// The values of a mismatch, which its baseline row records as explanation.
+fn values(mismatch: &Mismatch) -> String {
+    let (published, keyhole) = (&mismatch.published, &mismatch.keyhole);
+    format!("published {published}, Keyhole {keyhole}")
 }
 
 /// Whether a mismatch is an allowed failure, which only a row with a remark
@@ -96,15 +144,43 @@ fn write_groups(f: &mut fmt::Formatter<'_>, groups: &Groups) -> fmt::Result {
         }
         writeln!(f, " ({}):", mismatches.len())?;
         for (day, mismatch) in mismatches {
-            let row = mismatch.competition_id.as_ref();
-            let row = row.map_or(String::new(), |id| format!(" {id}"));
-            let Mismatch {
-                published, keyhole, ..
-            } = mismatch;
+            let row = row_suffix(&mismatch.competition_id);
+            let (published, keyhole) = (&mismatch.published, &mismatch.keyhole);
             writeln!(f, "  {day}{row}: published {published}, Keyhole {keyhole}")?;
         }
     }
     Ok(())
+}
+
+fn write_baseline_rows<'a>(
+    f: &mut fmt::Formatter<'_>,
+    heading: &str,
+    rows: impl Iterator<Item = (&'a String, &'a Deviation)>,
+) -> fmt::Result {
+    let rows: Vec<_> = rows.collect();
+    if !rows.is_empty() {
+        writeln!(f, "{heading} ({}):", rows.len())?;
+    }
+    for (day, deviation) in rows {
+        let row = row_suffix(&deviation.competition_id);
+        let (field, explanation) = (deviation.field, &deviation.explanation);
+        writeln!(f, "  {day}{row} {field}: {explanation}")?;
+    }
+    Ok(())
+}
+
+/// The baseline rows of one class day, each with its class day.
+fn day_rows<'a>(
+    (day, deviations): (&'a String, &'a Vec<Deviation>),
+) -> impl Iterator<Item = (&'a String, &'a Deviation)> {
+    deviations.iter().map(move |deviation| (day, deviation))
+}
+
+/// The competition ID after a class day, or nothing for a day parameter.
+fn row_suffix(competition_id: &Option<String>) -> String {
+    competition_id
+        .as_ref()
+        .map_or(String::new(), |id| format!(" {id}"))
 }
 
 impl fmt::Display for DatasetReport {
@@ -127,6 +203,18 @@ impl fmt::Display for DatasetReport {
             writeln!(f, "Allowed failures:")?;
             write_groups(f, &allowed_failures)?;
         }
+        let stale = self
+            .checked
+            .iter()
+            .filter_map(|(day, report)| Some((day, &report.as_ref().ok()?.stale_deviations)));
+        let heading = "Baseline rows that no longer occur";
+        write_baseline_rows(f, heading, stale.flat_map(day_rows))?;
+        let heading = "Baseline rows of class days that weren't checked";
+        write_baseline_rows(
+            f,
+            heading,
+            self.unchecked_baseline.iter().flat_map(day_rows),
+        )?;
         for (day, report) in &self.checked {
             if let Err(error) = report {
                 writeln!(f, "{day}: {error:#}")?;
@@ -168,17 +256,27 @@ pub fn check_dataset(directory: &Path) -> anyhow::Result<DatasetReport> {
         bail!("the dataset directory {path} holds no class days");
     }
 
+    let path = directory.join(BASELINE);
+    let mut baseline = match fs::read_to_string(&path) {
+        Ok(baseline) => {
+            toml::from_str(&baseline).with_context(|| format!("parsing {}", path.display()))?
+        }
+        Err(error) if error.kind() == ErrorKind::NotFound => Baseline::new(),
+        Err(error) => Err(error).with_context(|| format!("reading {}", path.display()))?,
+    };
+
     let mut report = DatasetReport::default();
     for day in days {
         let name = day.strip_prefix(directory)?;
         let competition = name.iter().next().unwrap().to_string_lossy();
         let name = name.display().to_string();
-        match check_class_day(&day, &competition) {
+        match check_class_day(&day, &competition, &mut baseline, &name) {
             Ok(ClassDay::Scored(day_report)) => report.checked.push((name, Ok(day_report))),
             Ok(ClassDay::LeftOut(reason)) => *report.left_out.entry(reason).or_default() += 1,
             Err(error) => report.checked.push((name, Err(error))),
         }
     }
+    report.unchecked_baseline = baseline;
     Ok(report)
 }
 
@@ -213,7 +311,12 @@ struct DayStatus {
     result_status: String,
 }
 
-fn check_class_day(directory: &Path, competition: &str) -> anyhow::Result<ClassDay> {
+fn check_class_day(
+    directory: &Path,
+    competition: &str,
+    baseline: &mut Baseline,
+    name: &str,
+) -> anyhow::Result<ClassDay> {
     let read = |name| {
         let path = directory.join(name);
         fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))
@@ -243,7 +346,7 @@ fn check_class_day(directory: &Path, competition: &str) -> anyhow::Result<ClassD
         decisions: BTreeMap::new(),
         deviations: Vec::new(),
     };
-    let fixture = Fixture::with_file(&task_json, &read("results.csv")?, file)?;
+    let mut fixture = Fixture::with_file(&task_json, &read("results.csv")?, file)?;
     let has_handicaps = fixture.rows.iter().any(|row| row.handicap.is_some());
     if fixture.file.handicapped && !has_handicaps {
         return Ok(ClassDay::LeftOut("handicapped without a Handicap column"));
@@ -253,6 +356,7 @@ fn check_class_day(directory: &Path, competition: &str) -> anyhow::Result<ClassD
     if has_handicaps && PREVIOUS_HANDICAP_REFERENCE.contains(&competition) {
         return Ok(ClassDay::LeftOut("SeeYou's pre-9.01 handicap reference"));
     }
+    fixture.file.deviations = baseline.remove(name).unwrap_or_default();
     Ok(ClassDay::Scored(check(&fixture)?))
 }
 
