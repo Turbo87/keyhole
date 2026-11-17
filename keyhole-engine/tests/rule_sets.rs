@@ -1,3 +1,4 @@
+use insta::assert_snapshot;
 use keyhole_engine::day_scoring::ScoringParameters;
 use keyhole_engine::rule_sets::{
     Altitude, AnalysisParameters, DAEC_SWO_2026, EarthModel, FAI_ANNEX_A_2025A, RuleOverrides,
@@ -158,4 +159,99 @@ fn every_class_template_handicap_list_exists() {
             }
         }
     }
+}
+
+#[test]
+fn canonical_rules_list_the_edition_and_every_parameter() {
+    let overrides = RuleOverrides {
+        earth_model: Some(EarthModel::FaiSphere),
+        dm: Some(50.),
+        d1: Some(212.5),
+        start_opening_time: Some(UtcTime(1_659_348_000)),
+        start_closing_time: Some(UtcTime(1_659_355_200)),
+        maximum_start_altitude: Some(1500.),
+        maximum_start_ground_speed: Some(170.),
+        pev_start: Some(true),
+        pev_wait_time: Some(5),
+        pev_start_window: Some(8),
+        subtract_finish_ring_radius: Some(false),
+        delivery_period: Some(30),
+        tow_altitude: Some(600.),
+        maximum_altitude: Some(Altitude::Msl(2999.9)),
+        scoring_end_time: Some(UtcTime(1_659_376_800)),
+    };
+    let rules = DAEC_SWO_2026.resolve(&[overrides]);
+
+    assert_snapshot!(DAEC_SWO_2026.canonical_rules(&rules), @"
+    edition=DAeC SWO 2026
+    earth_model=fai_sphere
+    start_opening_time=1659348000
+    start_closing_time=1659355200
+    maximum_start_altitude=1500
+    maximum_start_ground_speed=170
+    pev_start=true
+    pev_wait_time=5
+    pev_start_window=8
+    subtract_finish_ring_radius=false
+    delivery_period=30
+    tow_altitude=600
+    maximum_altitude=2999.9 m
+    scoring_end_time=1659376800
+    dm=50
+    d1=212.5
+    ");
+}
+
+#[test]
+fn the_rules_hash_of_both_editions_defaults_does_not_change() {
+    let hash = |edition: &RuleSetEdition| edition.rules_hash(&edition.resolve(&[])).to_string();
+
+    assert_snapshot!(hash(&DAEC_SWO_2026), @"eecc5f8e26d6cf10333e0e2aa27a631f531ad64dd2ab10a0ae485121e7b31ff5");
+    assert_snapshot!(hash(&FAI_ANNEX_A_2025A), @"b9278d8d3a93dd7d64c63e8b44aa9e36b8b9ca9d60af04a12cc5da23fa454290");
+}
+
+#[test]
+fn changing_an_analysis_or_scoring_parameter_changes_the_rules_hash() {
+    let hash = |overrides| FAI_ANNEX_A_2025A.rules_hash(&FAI_ANNEX_A_2025A.resolve(&[overrides]));
+    let defaults = hash(RuleOverrides::default());
+
+    let fai_sphere = RuleOverrides {
+        earth_model: Some(EarthModel::FaiSphere),
+        ..Default::default()
+    };
+    assert_ne!(hash(fai_sphere), defaults);
+
+    let lower_dm = RuleOverrides {
+        dm: Some(50.),
+        ..Default::default()
+    };
+    assert_ne!(hash(lower_dm), defaults);
+}
+
+#[test]
+fn layerings_with_the_same_effective_parameters_have_the_same_rules_hash() {
+    let hash = |layers: &[_]| DAEC_SWO_2026.rules_hash(&DAEC_SWO_2026.resolve(layers));
+    let lower_dm = RuleOverrides {
+        dm: Some(50.),
+        ..Default::default()
+    };
+    let class_with_lower_dm = RuleOverrides {
+        dm: Some(50.),
+        ..standard_class()
+    };
+
+    assert_eq!(
+        hash(&[standard_class(), lower_dm]),
+        hash(&[class_with_lower_dm, RuleOverrides::default()]),
+    );
+}
+
+#[test]
+fn the_same_parameters_under_another_edition_have_another_rules_hash() {
+    let rules = DAEC_SWO_2026.resolve(&[]);
+
+    assert_ne!(
+        DAEC_SWO_2026.rules_hash(&rules),
+        FAI_ANNEX_A_2025A.rules_hash(&rules),
+    );
 }

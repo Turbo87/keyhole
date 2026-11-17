@@ -1,7 +1,10 @@
 //! The built-in rule set editions and the resolution of a class day's
 //! effective parameters from its edition and rule overrides.
 
+use std::fmt::{self, Display};
 use std::ops::RangeInclusive;
+
+use sha2::{Digest, Sha256};
 
 use crate::day_scoring::ScoringParameters;
 
@@ -378,5 +381,85 @@ impl RuleSetEdition {
         }
 
         rules
+    }
+
+    /// Lists the edition ID and every effective parameter as one `key=value`
+    /// line each, in a fixed order, which is what the rules hash is taken over,
+    /// so that any change to this text changes every rules hash.
+    pub fn canonical_rules(&self, rules: &Rules) -> String {
+        let Rules { analysis, scoring } = rules;
+        let AnalysisParameters {
+            earth_model,
+            start_opening_time,
+            start_closing_time,
+            maximum_start_altitude,
+            maximum_start_ground_speed,
+            pev_start,
+            pev_wait_time,
+            pev_start_window,
+            subtract_finish_ring_radius,
+            delivery_period,
+            tow_altitude,
+            maximum_altitude,
+            scoring_end_time,
+        } = analysis;
+        let ScoringParameters { dm, d1 } = scoring;
+
+        let earth_model = match earth_model {
+            EarthModel::Wgs84 => "wgs84",
+            EarthModel::FaiSphere => "fai_sphere",
+        };
+        let time = |time: &Option<UtcTime>| or_none(time.map(|UtcTime(seconds)| seconds));
+        let maximum_altitude = maximum_altitude.map(|altitude| match altitude {
+            Altitude::Msl(altitude) => format!("{altitude} m"),
+            Altitude::FlightLevel(level) => format!("FL{level}"),
+        });
+
+        [
+            ("edition", self.id.to_string()),
+            ("earth_model", earth_model.to_string()),
+            ("start_opening_time", time(start_opening_time)),
+            ("start_closing_time", time(start_closing_time)),
+            ("maximum_start_altitude", or_none(*maximum_start_altitude)),
+            (
+                "maximum_start_ground_speed",
+                or_none(*maximum_start_ground_speed),
+            ),
+            ("pev_start", pev_start.to_string()),
+            ("pev_wait_time", pev_wait_time.to_string()),
+            ("pev_start_window", pev_start_window.to_string()),
+            (
+                "subtract_finish_ring_radius",
+                subtract_finish_ring_radius.to_string(),
+            ),
+            ("delivery_period", or_none(*delivery_period)),
+            ("tow_altitude", or_none(*tow_altitude)),
+            ("maximum_altitude", or_none(maximum_altitude)),
+            ("scoring_end_time", time(scoring_end_time)),
+            ("dm", dm.to_string()),
+            ("d1", d1.to_string()),
+        ]
+        .map(|(key, value)| format!("{key}={value}\n"))
+        .concat()
+    }
+
+    /// Hashes the edition ID and a class day's effective parameters, so that
+    /// two publishes with equal hashes were scored under the same rules.
+    pub fn rules_hash(&self, rules: &Rules) -> RulesHash {
+        RulesHash(Sha256::digest(self.canonical_rules(rules)).into())
+    }
+}
+
+fn or_none(value: Option<impl Display>) -> String {
+    value.map_or_else(|| "none".to_string(), |value| value.to_string())
+}
+
+/// A SHA-256 hash over a class day's canonical rules, shown as lowercase hex.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RulesHash([u8; 32]);
+
+impl Display for RulesHash {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.iter().try_for_each(|byte| write!(f, "{byte:02x}"))
     }
 }
