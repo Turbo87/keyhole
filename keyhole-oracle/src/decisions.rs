@@ -112,7 +112,7 @@ impl RowDecisions {
     }
 
     /// Builds the row's scoring input, converting its handicap from the
-    /// class's handicap scale, 1 or 100, to the 1.000 scale.
+    /// class's handicap scale, 1, 100 or 1000, to the 1.000 scale.
     pub fn competitor_result(&self, competition_id: &str, handicap_scale: f64) -> CompetitorResult {
         CompetitorResult {
             competition_id: competition_id.into(),

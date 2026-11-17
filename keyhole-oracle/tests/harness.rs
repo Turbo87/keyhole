@@ -644,6 +644,16 @@ fn handicap_column_divides_by_handicaps_on_the_1_000_scale() {
 }
 
 #[test]
+fn handicap_column_divides_by_handicaps_on_the_1000_scale() {
+    let report = check_day(
+        &[&finisher_with_handicap("1250")],
+        &handicapped_fixture_file(),
+    );
+
+    assert!(report.passes(), "{report}");
+}
+
+#[test]
 fn class_without_handicaps_ignores_the_handicap_column() {
     let finisher = FINISHER.replace(",Arcus,,", ",Arcus,125,");
 

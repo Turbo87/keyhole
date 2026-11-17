@@ -184,14 +184,16 @@ pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
             bail!("no handicap for {}", missing.join(", "));
         }
     }
-    // Handicaps on the 100 scale range from about 60 to 130 and those on the
-    // 1.000 scale from about 0.8 to 1.3, so any value of 10 or more marks the
-    // 100 scale.
-    let handicap_scale = if decisions
+    // Handicaps on the 1.000 scale range from about 0.8 to 1.3, those on the
+    // 100 scale from about 60 to 130 and those on the 1000 scale from about
+    // 800 to 1150, so the largest handicap marks the scale.
+    let largest_handicap = decisions
         .iter()
         .filter_map(|decisions| decisions.handicap)
-        .any(|(handicap, _)| handicap >= 10.)
-    {
+        .fold(0., |largest, (handicap, _)| f64::max(largest, handicap));
+    let handicap_scale = if largest_handicap >= 500. {
+        1000.
+    } else if largest_handicap >= 10. {
         100.
     } else {
         1.
