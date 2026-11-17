@@ -39,11 +39,20 @@ impl Fixture {
     }
 
     pub fn parse(task_json: &str, results_csv: &str, fixture_file: &str) -> anyhow::Result<Self> {
+        let file = toml::from_str(fixture_file).context("parsing fixture.toml")?;
+        Self::with_file(task_json, results_csv, file)
+    }
+
+    /// Combines a downloaded class day with a fixture file built in code.
+    pub fn with_file(
+        task_json: &str,
+        results_csv: &str,
+        file: FixtureFile,
+    ) -> anyhow::Result<Self> {
         let minimum_task_time = serde_json::from_str::<PublishedTask>(task_json)
             .context("parsing task.json")?
             .minimum_task_time();
         let rows = parse_results(results_csv).context("parsing results.csv")?;
-        let file = toml::from_str(fixture_file).context("parsing fixture.toml")?;
         Ok(Self {
             minimum_task_time,
             rows,

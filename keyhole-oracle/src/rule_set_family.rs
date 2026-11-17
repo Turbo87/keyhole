@@ -4,12 +4,24 @@
 use std::sync::LazyLock;
 
 use anyhow::bail;
+use keyhole_engine::rule_sets::{DAEC_SWO_2026, FAI_ANNEX_A_2025A, RuleSetEdition};
 use regex::Regex;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuleSetFamily {
     DaecSwo,
     FaiAnnexA,
+}
+
+impl RuleSetFamily {
+    /// The family's current shipped edition, which every class day of the
+    /// family scores under.
+    pub fn edition(self) -> &'static RuleSetEdition {
+        match self {
+            Self::DaecSwo => &DAEC_SWO_2026,
+            Self::FaiAnnexA => &FAI_ANNEX_A_2025A,
+        }
+    }
 }
 
 /// How the full-data suite treats a downloaded class day.

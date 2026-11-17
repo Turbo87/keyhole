@@ -63,3 +63,13 @@ explanation = "Why Keyhole and SeeYou differ."
 ```
 
 The harness derives each row's decisions from `results.csv`: `DNF` did not fly, `HC` hors concours, `DNS` landed at 0 km, `penalty_points` the penalty rounded to whole points, `handicap` the handicap in a handicapped class, where every row needs one and any value of 10 or more puts every handicap on the 100 scale instead of the 1.000 scale, and every other row flew its published distance, in the time from its start to its finish if it has one. A remark minus its trailing penalty points becomes the penalty's public remark when the row has a penalty, otherwise an official warning when it is in the official warning group, and is only reported when neither applies. Remarks are never compared. Rows are paired by competition ID, so the order of tied rows is never compared. Values are compared at the precision SoaringSpot displays: the day validity verdict and ranks as written, points, `D1` and maximum points as whole numbers, a penalty from the download as published against the whole points Keyhole deducts, distances and speeds, `Do` and `Vo` to 0.01 with a row without a counting result at 0 km as SoaringSpot shows it, and `F` and `FCR` to 0.001.
+
+## Full-data suite
+
+The opt-in full-data suite scores every class day of a local soaringspot-downloader output the same way, with decisions derived from the download alone. It runs only when `KEYHOLE_ORACLE_DATASET` names the output directory:
+
+```sh
+KEYHOLE_ORACLE_DATASET=<directory> cargo test -p keyhole-oracle --test full_data -- --nocapture
+```
+
+The report lists each failing class day and counts the class days it leaves out: cancelled days, competitions under national rules, handicapped days without a `Handicap` column and handicapped days scored with SeeYou's handicap reference before version 9.01. The repository names competitions only in the slug table of `src/rule_set_family.rs` and in that last exclusion.
