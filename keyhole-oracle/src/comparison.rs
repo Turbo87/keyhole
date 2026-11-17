@@ -9,12 +9,13 @@ use keyhole_engine::day_scoring::{ClassDay, DayResult, DayValidity, Rank, Row, s
 use keyhole_engine::rule_sets::RuleSetEdition;
 use serde::Deserialize;
 
-use crate::decisions::{RemarkDecision, RowDecisions, Source};
+use crate::decisions::{Cause, RemarkDecision, RowDecisions, Source};
 use crate::fixture::{Deviation, Fixture, PublishedDayParameters};
 use crate::published::PublishedRow;
 
-/// A compared value: a day parameter or a field of a row.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+/// A compared value: a day parameter or a field of a row. The order of the
+/// variants lists day parameters before rows in the full-data report.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Field {
     Validity,
@@ -64,6 +65,8 @@ pub struct Mismatch {
     pub field: Field,
     pub published: String,
     pub keyhole: String,
+    /// The cause of a row's mismatch, or `None` for a day parameter.
+    pub cause: Option<Cause>,
     /// The fixture file's explanation of a recorded deviation.
     pub explanation: Option<String>,
 }
@@ -323,6 +326,7 @@ fn day_parameter_mismatches(
         field,
         published,
         keyhole,
+        cause: None,
         explanation: None,
     })
 }
@@ -333,6 +337,7 @@ fn row_mismatches(
     keyhole: &Row,
 ) -> impl Iterator<Item = Mismatch> {
     let competition_id = &published.competition_id;
+    let cause = decisions.cause(&published.rank);
     let hundredths = |value: Option<f64>| value.map(|value| decimals(value, 2));
     let (published_penalty, keyhole_penalty) = match decisions.penalty {
         // A penalty from the fixture file fills in what the download lacks.
@@ -368,11 +373,12 @@ fn row_mismatches(
     ]
     .into_iter()
     .filter(|(_, published, keyhole)| published != keyhole)
-    .map(|(field, published, keyhole)| Mismatch {
+    .map(move |(field, published, keyhole)| Mismatch {
         competition_id: Some(competition_id.clone()),
         field,
         published: published.unwrap_or_else(|| "nothing".into()),
         keyhole: keyhole.unwrap_or_else(|| "nothing".into()),
+        cause: Some(cause),
         explanation: None,
     })
 }

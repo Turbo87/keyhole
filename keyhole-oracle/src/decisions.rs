@@ -84,6 +84,37 @@ pub enum RemarkDecision {
     UnknownEffect(String),
 }
 
+/// What sets a row apart, which groups its mismatches in the full-data report.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Cause {
+    Finished,
+    LandedOut,
+    DidNotFly,
+    /// SoaringSpot's `DNS`, a launch without a valid start.
+    NoValidStart,
+    HorsConcours,
+    Penalty,
+    OfficialWarning,
+    RemarkNotApplied,
+    RemarkOfUnknownEffect,
+}
+
+impl fmt::Display for Cause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Finished => "finished",
+            Self::LandedOut => "landed out",
+            Self::DidNotFly => "did not fly",
+            Self::NoValidStart => "no valid start",
+            Self::HorsConcours => "hors concours",
+            Self::Penalty => "penalty",
+            Self::OfficialWarning => "official warning",
+            Self::RemarkNotApplied => "remark not applied",
+            Self::RemarkOfUnknownEffect => "remark of unknown effect",
+        })
+    }
+}
+
 impl RowDecisions {
     pub fn decide(
         row: &PublishedRow,
@@ -113,6 +144,22 @@ impl RowDecisions {
             handicap: handicap.filter(|_| handicapped),
             remark: remark_from_published(row),
         })
+    }
+
+    /// The row's cause, which a remark of unknown effect sets before the
+    /// result status, hors concours, a penalty and other remarks.
+    pub fn cause(&self, published_rank: &str) -> Cause {
+        match (&self.remark, self.result.0) {
+            (Some(RemarkDecision::UnknownEffect(_)), _) => Cause::RemarkOfUnknownEffect,
+            (_, ResultDecision::DidNotFly) => Cause::DidNotFly,
+            _ if published_rank == "DNS" => Cause::NoValidStart,
+            _ if self.hors_concours.0 => Cause::HorsConcours,
+            _ if self.penalty.0 > 0 => Cause::Penalty,
+            (Some(RemarkDecision::OfficialWarning(_)), _) => Cause::OfficialWarning,
+            (Some(RemarkDecision::NotApplied(_)), _) => Cause::RemarkNotApplied,
+            (_, ResultDecision::Flown { time: Some(_), .. }) => Cause::Finished,
+            (_, ResultDecision::Flown { time: None, .. }) => Cause::LandedOut,
+        }
     }
 
     /// Builds the row's scoring input, converting its handicap from the

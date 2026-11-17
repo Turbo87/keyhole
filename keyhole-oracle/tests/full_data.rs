@@ -86,10 +86,8 @@ fn mismatching_class_day_fails() {
     let report = check_dataset(dataset.path()).unwrap();
     assert!(!report.passes());
     assert_snapshot!(report, @"
-    some-competition/club/2026-06-01:
-    A points: published 999, Keyhole 1000
-    Decisions:
-      A: finished 300 km in 3:00:00 (from the download)
+    points, finished (1):
+      some-competition/club/2026-06-01 A: published 999, Keyhole 1000
     Checked class days: 1, failing: 1
     Rows with remarks of unknown effect: 0, matching anyway: 0
     ");
@@ -143,6 +141,9 @@ fn rows_with_remarks_of_unknown_effect_are_allowed_failures() {
     let report = check_dataset(dataset.path()).unwrap();
     assert!(report.passes(), "{report}");
     assert_snapshot!(report, @"
+    Allowed failures:
+    points, remark of unknown effect (1):
+      some-competition/club/2026-06-01 A: published 999, Keyhole 1000
     Checked class days: 2, failing: 0
     Rows with remarks of unknown effect: 2, matching anyway: 1
     ");
@@ -156,12 +157,40 @@ fn day_parameters_are_never_allowed_failures() {
     write_day(&dataset, DAY, "official", &line, &remarked);
     let report = check_dataset(dataset.path()).unwrap();
     assert!(!report.passes());
-    assert_snapshot!(report, @r#"
-    some-competition/club/2026-06-01:
-    n2: published 0, Keyhole 1
-    Decisions:
-      A: finished 300 km in 3:00:00 (from the download), remark "Airspace" (unknown effect)
+    assert_snapshot!(report, @"
+    n2 (1):
+      some-competition/club/2026-06-01: published 0, Keyhole 1
     Checked class days: 1, failing: 1
     Rows with remarks of unknown effect: 1, matching anyway: 1
-    "#);
+    ");
+}
+
+#[test]
+fn report_groups_mismatches_by_field_and_cause_with_day_parameters_first() {
+    let dataset = TempDir::new().unwrap();
+    let days = ["2026-06-01", "2026-06-02", "2026-06-03", "2026-06-04"]
+        .map(|date| format!("some-competition/club/{date}"));
+    let line = LINE.replace("300,00km", "299,99km");
+    write_day(&dataset, &days[0], "official", &line, FINISHER);
+    let finisher = FINISHER.replace(",1000,0,,", ",999,0,,");
+    write_day(&dataset, &days[1], "official", LINE, &finisher);
+    let penalized = FINISHER.replace(",1000,0,,", ",999,0,10,Zielhöhe (10 penalty points)");
+    write_day(&dataset, &days[2], "official", LINE, &penalized);
+    let remarked = FINISHER.replace(",1000,0,,", ",999,0,,Airspace");
+    write_day(&dataset, &days[3], "official", LINE, &remarked);
+    let report = check_dataset(dataset.path()).unwrap();
+    assert!(!report.passes());
+    assert_snapshot!(report, @"
+    Do (1):
+      some-competition/club/2026-06-01: published 299.99, Keyhole 300.00
+    points, finished (1):
+      some-competition/club/2026-06-02 A: published 999, Keyhole 1000
+    points, penalty (1):
+      some-competition/club/2026-06-03 A: published 999, Keyhole 990
+    Allowed failures:
+    points, remark of unknown effect (1):
+      some-competition/club/2026-06-04 A: published 999, Keyhole 1000
+    Checked class days: 4, failing: 3
+    Rows with remarks of unknown effect: 1, matching anyway: 0
+    ");
 }

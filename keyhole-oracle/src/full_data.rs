@@ -11,7 +11,8 @@ use anyhow::{Context, bail};
 use regex::Regex;
 use serde::Deserialize;
 
-use crate::comparison::{Mismatch, Report, check};
+use crate::comparison::{Field, Mismatch, Report, check};
+use crate::decisions::Cause;
 use crate::fixture::{Fixture, FixtureFile, RuleOverrides};
 use crate::rule_set_family::{Inference, infer_rule_set_family};
 use crate::task_info::TaskInfo;
@@ -68,26 +69,67 @@ fn day_passes(report: &Report) -> bool {
 }
 
 /// The mismatches that are neither recorded deviations nor allowed failures.
-/// The allowed failures are the row mismatches of rows with a remark of
-/// unknown effect.
 fn failures(report: &Report) -> impl Iterator<Item = &Mismatch> {
-    let allowed = |mismatch: &Mismatch| {
-        let id = mismatch.competition_id.as_ref();
-        id.is_some_and(|id| report.unknown_effect_rows.contains(id))
-    };
+    unexplained(report).filter(|mismatch| !allowed(mismatch))
+}
+
+fn unexplained(report: &Report) -> impl Iterator<Item = &Mismatch> {
     let mismatches = report.day_parameter_mismatches.iter();
-    mismatches
-        .chain(&report.row_mismatches)
-        .filter(move |mismatch| mismatch.explanation.is_none() && !allowed(mismatch))
+    let mismatches = mismatches.chain(&report.row_mismatches);
+    mismatches.filter(|mismatch| mismatch.explanation.is_none())
+}
+
+/// Whether a mismatch is an allowed failure, which only a row with a remark
+/// of unknown effect can have.
+fn allowed(mismatch: &Mismatch) -> bool {
+    mismatch.cause == Some(Cause::RemarkOfUnknownEffect)
+}
+
+/// Mismatches with the class day each occurs on, by field and cause.
+type Groups<'a> = BTreeMap<(Field, Option<Cause>), Vec<(&'a str, &'a Mismatch)>>;
+
+fn write_groups(f: &mut fmt::Formatter<'_>, groups: &Groups) -> fmt::Result {
+    for ((field, cause), mismatches) in groups {
+        match cause {
+            Some(cause) => write!(f, "{field}, {cause}")?,
+            None => write!(f, "{field}")?,
+        }
+        writeln!(f, " ({}):", mismatches.len())?;
+        for (day, mismatch) in mismatches {
+            let row = mismatch.competition_id.as_ref();
+            let row = row.map_or(String::new(), |id| format!(" {id}"));
+            let Mismatch {
+                published, keyhole, ..
+            } = mismatch;
+            writeln!(f, "  {day}{row}: published {published}, Keyhole {keyhole}")?;
+        }
+    }
+    Ok(())
 }
 
 impl fmt::Display for DatasetReport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let (mut failing, mut allowed_failures) = (Groups::new(), Groups::new());
         for (day, report) in &self.checked {
-            match report {
-                Ok(report) if day_passes(report) => {}
-                Ok(report) => write!(f, "{day}:\n{report}")?,
-                Err(error) => writeln!(f, "{day}: {error:#}")?,
+            let Ok(report) = report else { continue };
+            for mismatch in unexplained(report) {
+                let groups = if allowed(mismatch) {
+                    &mut allowed_failures
+                } else {
+                    &mut failing
+                };
+                let group = groups.entry((mismatch.field, mismatch.cause));
+                group.or_default().push((day, mismatch));
+            }
+        }
+        write_groups(f, &failing)?;
+        if !allowed_failures.is_empty() {
+            writeln!(f, "Allowed failures:")?;
+            write_groups(f, &allowed_failures)?;
+        }
+        for (day, report) in &self.checked {
+            if let Err(error) = report {
+                writeln!(f, "{day}: {error:#}")?;
             }
         }
         let checked = self.checked.len();
