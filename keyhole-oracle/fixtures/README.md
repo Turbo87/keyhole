@@ -72,4 +72,4 @@ The opt-in full-data suite scores every class day of a local soaringspot-downloa
 KEYHOLE_ORACLE_DATASET=<directory> cargo test -p keyhole-oracle --test full_data -- --nocapture
 ```
 
-The report lists each failing class day and counts the class days it leaves out: cancelled days, competitions under national rules, handicapped days without a `Handicap` column and handicapped days scored with SeeYou's handicap reference before version 9.01. The repository names competitions only in the slug table of `src/rule_set_family.rs` and in that last exclusion.
+The report lists each failing class day, counts the rows with remarks of unknown effect, whose mismatches are allowed failures, and how many of them match anyway, and counts the class days it leaves out: cancelled days, competitions under national rules, handicapped days without a `Handicap` column and handicapped days scored with SeeYou's handicap reference before version 9.01. The repository names competitions only in the slug table of `src/rule_set_family.rs` and in that last exclusion.

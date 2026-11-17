@@ -72,7 +72,10 @@ fn matching_class_days_pass() {
     write_day(&dataset, NEXT_DAY, "practice", LINE, FINISHER);
     let report = check_dataset(dataset.path()).unwrap();
     assert!(report.passes(), "{report}");
-    assert_snapshot!(report, @"Checked class days: 2, failing: 0");
+    assert_snapshot!(report, @"
+    Checked class days: 2, failing: 0
+    Rows with remarks of unknown effect: 0, matching anyway: 0
+    ");
 }
 
 #[test]
@@ -88,6 +91,7 @@ fn mismatching_class_day_fails() {
     Decisions:
       A: finished 300 km in 3:00:00 (from the download)
     Checked class days: 1, failing: 1
+    Rows with remarks of unknown effect: 0, matching anyway: 0
     ");
 }
 
@@ -101,6 +105,7 @@ fn class_day_of_unknown_family_fails() {
     assert_snapshot!(report, @"
     some-competition/club/2026-06-01: cannot infer the rule set family of some-competition from a slug table entry, an SWO script or an Annex A parameter line
     Checked class days: 1, failing: 1
+    Rows with remarks of unknown effect: 0, matching anyway: 0
     ");
 }
 
@@ -120,9 +125,43 @@ fn left_out_class_days_are_counted_by_reason() {
     assert!(report.passes(), "{report}");
     assert_snapshot!(report, @"
     Checked class days: 0, failing: 0
+    Rows with remarks of unknown effect: 0, matching anyway: 0
     Left out class days (Australian national rules): 1
     Left out class days (SeeYou's pre-9.01 handicap reference): 1
     Left out class days (cancelled): 1
     Left out class days (handicapped without a Handicap column): 1
     ");
+}
+
+#[test]
+fn rows_with_remarks_of_unknown_effect_are_allowed_failures() {
+    let dataset = TempDir::new().unwrap();
+    let remarked = FINISHER.replace(",1000,0,,", ",999,0,,Airspace");
+    write_day(&dataset, DAY, "official", LINE, &remarked);
+    let matching = FINISHER.replace(",1000,0,,", ",1000,0,,Airspace");
+    write_day(&dataset, NEXT_DAY, "official", LINE, &matching);
+    let report = check_dataset(dataset.path()).unwrap();
+    assert!(report.passes(), "{report}");
+    assert_snapshot!(report, @"
+    Checked class days: 2, failing: 0
+    Rows with remarks of unknown effect: 2, matching anyway: 1
+    ");
+}
+
+#[test]
+fn day_parameters_are_never_allowed_failures() {
+    let dataset = TempDir::new().unwrap();
+    let remarked = FINISHER.replace(",1000,0,,", ",1000,0,,Airspace");
+    let line = LINE.replace("n2: 1", "n2: 0");
+    write_day(&dataset, DAY, "official", &line, &remarked);
+    let report = check_dataset(dataset.path()).unwrap();
+    assert!(!report.passes());
+    assert_snapshot!(report, @r#"
+    some-competition/club/2026-06-01:
+    n2: published 0, Keyhole 1
+    Decisions:
+      A: finished 300 km in 3:00:00 (from the download), remark "Airspace" (unknown effect)
+    Checked class days: 1, failing: 1
+    Rows with remarks of unknown effect: 1, matching anyway: 1
+    "#);
 }

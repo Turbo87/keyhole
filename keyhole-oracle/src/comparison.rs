@@ -9,7 +9,7 @@ use keyhole_engine::day_scoring::{ClassDay, DayResult, DayValidity, Rank, Row, s
 use keyhole_engine::rule_sets::RuleSetEdition;
 use serde::Deserialize;
 
-use crate::decisions::{RowDecisions, Source};
+use crate::decisions::{RemarkDecision, RowDecisions, Source};
 use crate::fixture::{Deviation, Fixture, PublishedDayParameters};
 use crate::published::PublishedRow;
 
@@ -77,6 +77,8 @@ pub struct Report {
     pub stale_deviations: Vec<Deviation>,
     /// The decisions applied to each row by competition ID, in row order.
     pub decisions: Vec<(String, String)>,
+    /// The competition IDs of rows with a remark of unknown effect.
+    pub unknown_effect_rows: Vec<String>,
 }
 
 impl Report {
@@ -252,6 +254,15 @@ pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
             .iter()
             .zip(&decisions)
             .map(|(row, decisions)| (row.competition_id.clone(), decisions.to_string()))
+            .collect(),
+        unknown_effect_rows: fixture
+            .rows
+            .iter()
+            .zip(&decisions)
+            .filter(|(_, decisions)| {
+                matches!(decisions.remark, Some(RemarkDecision::UnknownEffect(_)))
+            })
+            .map(|(row, _)| row.competition_id.clone())
             .collect(),
     })
 }

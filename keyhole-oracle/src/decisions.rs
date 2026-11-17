@@ -76,8 +76,12 @@ pub enum RemarkDecision {
     /// The public remark of the row's penalty.
     PublicRemark(String),
     OfficialWarning(String),
-    /// A remark without an effect on scoring, which only the report shows.
+    /// A remark whose effect on scoring is known but not applied, or which has
+    /// none, and which only the report shows.
     NotApplied(String),
+    /// A remark whose effect on scoring is unknown, such as an airspace or
+    /// turnpoint remark without a penalty, which only the report shows.
+    UnknownEffect(String),
 }
 
 impl RowDecisions {
@@ -152,6 +156,9 @@ impl fmt::Display for RowDecisions {
             Some(RemarkDecision::NotApplied(remark)) => {
                 write!(f, ", remark \"{remark}\" (not applied)")
             }
+            Some(RemarkDecision::UnknownEffect(remark)) => {
+                write!(f, ", remark \"{remark}\" (unknown effect)")
+            }
         }
     }
 }
@@ -210,7 +217,8 @@ fn penalty_from_published(row: &PublishedRow) -> anyhow::Result<u32> {
 }
 
 /// Turns a published remark minus its trailing penalty points into a public
-/// remark, an official warning or a remark without effect.
+/// remark, an official warning, a remark that isn't applied or a remark of
+/// unknown effect.
 fn remark_from_published(row: &PublishedRow) -> Option<RemarkDecision> {
     static PENALTY_POINTS: LazyLock<Regex> =
         LazyLock::new(|| Regex::new(r"\s*\(?[\d,.]+ penalty points\)?\s*$").unwrap());
@@ -224,6 +232,14 @@ fn remark_from_published(row: &PublishedRow) -> Option<RemarkDecision> {
     });
     static OFFICIAL_WARNING: LazyLock<Regex> =
         LazyLock::new(|| Regex::new(r"(?i)warn|first offen|1st offen|^w ?-").unwrap());
+    // Remarks in these groups name a flight end, a start time, a scored file,
+    // a logger check, a finish height or an outlanding.
+    static KNOWN_EFFECT: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(
+            r"(?i)engine|virtu|^start \d|\d ?min penalty|went early|pev.*from pri|secondary|sekundär|resubmission|file from primary|logger ?interval|fix ?rate|gps pr|logger gps|validierung|logger failure|loggerausfall|zielh|zielkreis|zu tief|finish(ing)? (alt|below)|^(ps, )?l/o$|landed out",
+        )
+        .unwrap()
+    });
 
     let remark = PENALTY_POINTS.replace(&row.remarks, "").into_owned();
     if remark.is_empty() {
@@ -232,7 +248,9 @@ fn remark_from_published(row: &PublishedRow) -> Option<RemarkDecision> {
         Some(RemarkDecision::PublicRemark(remark))
     } else if OFFICIAL_WARNING.is_match(&remark) && !EARLIER_GROUPS.is_match(&remark) {
         Some(RemarkDecision::OfficialWarning(remark))
-    } else {
+    } else if EARLIER_GROUPS.is_match(&remark) || KNOWN_EFFECT.is_match(&remark) {
         Some(RemarkDecision::NotApplied(remark))
+    } else {
+        Some(RemarkDecision::UnknownEffect(remark))
     }
 }

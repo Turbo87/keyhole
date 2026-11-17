@@ -11,7 +11,7 @@ use anyhow::{Context, bail};
 use regex::Regex;
 use serde::Deserialize;
 
-use crate::comparison::{Report, check};
+use crate::comparison::{Mismatch, Report, check};
 use crate::fixture::{Fixture, FixtureFile, RuleOverrides};
 use crate::rule_set_family::{Inference, infer_rule_set_family};
 use crate::task_info::TaskInfo;
@@ -37,17 +37,55 @@ impl DatasetReport {
     pub fn passes(&self) -> bool {
         self.checked.iter().all(|(_, report)| passes(report))
     }
+
+    /// Whether each row with a remark of unknown effect matches anyway.
+    fn unknown_effect_rows(&self) -> impl Iterator<Item = bool> {
+        let reports = self.checked.iter();
+        let reports = reports.filter_map(|(_, report)| report.as_ref().ok());
+        reports.flat_map(|report| {
+            let rows = report.unknown_effect_rows.iter();
+            rows.map(move |competition_id| !has_row_mismatch(report, competition_id))
+        })
+    }
+}
+
+fn has_row_mismatch(report: &Report, competition_id: &String) -> bool {
+    let mut ids = report
+        .row_mismatches
+        .iter()
+        .map(|mismatch| &mismatch.competition_id);
+    ids.any(|id| id.as_ref() == Some(competition_id))
 }
 
 fn passes(report: &anyhow::Result<Report>) -> bool {
-    report.as_ref().is_ok_and(Report::passes)
+    report.as_ref().is_ok_and(day_passes)
+}
+
+/// Whether every mismatch of a class day is a recorded deviation or an allowed
+/// failure, and every recorded deviation still occurs.
+fn day_passes(report: &Report) -> bool {
+    report.stale_deviations.is_empty() && failures(report).next().is_none()
+}
+
+/// The mismatches that are neither recorded deviations nor allowed failures.
+/// The allowed failures are the row mismatches of rows with a remark of
+/// unknown effect.
+fn failures(report: &Report) -> impl Iterator<Item = &Mismatch> {
+    let allowed = |mismatch: &Mismatch| {
+        let id = mismatch.competition_id.as_ref();
+        id.is_some_and(|id| report.unknown_effect_rows.contains(id))
+    };
+    let mismatches = report.day_parameter_mismatches.iter();
+    mismatches
+        .chain(&report.row_mismatches)
+        .filter(move |mismatch| mismatch.explanation.is_none() && !allowed(mismatch))
 }
 
 impl fmt::Display for DatasetReport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for (day, report) in &self.checked {
             match report {
-                Ok(report) if report.passes() => {}
+                Ok(report) if day_passes(report) => {}
                 Ok(report) => write!(f, "{day}:\n{report}")?,
                 Err(error) => writeln!(f, "{day}: {error:#}")?,
             }
@@ -59,6 +97,15 @@ impl fmt::Display for DatasetReport {
             .filter(|(_, report)| !passes(report))
             .count();
         writeln!(f, "Checked class days: {checked}, failing: {failing}")?;
+        let remarked = self.unknown_effect_rows().count();
+        let matching = self
+            .unknown_effect_rows()
+            .filter(|matches| *matches)
+            .count();
+        writeln!(
+            f,
+            "Rows with remarks of unknown effect: {remarked}, matching anyway: {matching}"
+        )?;
         for (reason, count) in &self.left_out {
             writeln!(f, "Left out class days ({reason}): {count}")?;
         }

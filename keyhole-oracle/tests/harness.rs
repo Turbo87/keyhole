@@ -597,11 +597,35 @@ fn earlier_remark_groups_take_precedence_over_official_warnings() {
 }
 
 #[test]
-fn other_remarks_are_reported_but_not_applied() {
-    assert_eq!(
-        remark_decision("1000", "", "Loggerintervall"),
-        "remark \"Loggerintervall\" (not applied)"
-    );
+fn remarks_of_known_effect_are_reported_but_not_applied() {
+    for remark in [
+        "Loggerintervall",
+        "Virtuelle Außenlandung",
+        "Secondary FR used",
+        "Start 13:05",
+        "Zielhöhe unterschritten",
+        "L/O",
+    ] {
+        assert_eq!(
+            remark_decision("1000", "", remark),
+            format!("remark \"{remark}\" (not applied)")
+        );
+    }
+}
+
+#[test]
+fn other_remarks_are_reported_as_of_unknown_effect() {
+    for remark in [
+        "Airspace infringement",
+        "Turnpoint 3 not rounded OK",
+        "SC3A 1.4.5.3",
+        "Start altitude",
+    ] {
+        assert_eq!(
+            remark_decision("1000", "", remark),
+            format!("remark \"{remark}\" (unknown effect)")
+        );
+    }
 }
 
 /// Marks the class as handicapped with the day parameters of [`FINISHER`]
