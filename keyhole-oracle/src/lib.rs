@@ -5,6 +5,8 @@ mod comparison;
 mod decisions;
 mod fixture;
 mod published;
+mod task_info;
 
 pub use comparison::{Field, Mismatch, Report, check};
-pub use fixture::{Deviation, Fixture};
+pub use fixture::{Deviation, Fixture, PublishedDayParameters};
+pub use task_info::TaskInfo;
