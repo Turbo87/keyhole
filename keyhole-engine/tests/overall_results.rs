@@ -77,7 +77,7 @@ fn total_is_the_sum_of_rounded_day_scores() {
         day(vec![ranked(1, "A", 400.4), ranked(2, "B", 199.6)]),
     ];
 
-    let rows = overall_results(&days);
+    let rows = overall_results(&days, 0);
 
     // A's unrounded total is higher, but B's rounded day scores add up to more.
     assert_snapshot!(table(&rows), @"
@@ -99,7 +99,7 @@ fn did_not_fly_rows_invalid_days_and_absent_days_count_as_zero() {
         day(vec![ranked(1, "B", 300.), ranked(2, "A", 200.)]),
     ];
 
-    let rows = overall_results(&days);
+    let rows = overall_results(&days, 0);
 
     assert_snapshot!(table(&rows), @"
     rank  cn   raw total  total
@@ -117,7 +117,7 @@ fn equal_totals_share_a_rank_and_skip_the_next() {
         ranked(3, "C", 400.),
     ])];
 
-    let rows = overall_results(&days);
+    let rows = overall_results(&days, 0);
 
     assert_snapshot!(table(&rows), @"
     rank  cn   raw total  total
@@ -135,7 +135,7 @@ fn equal_totals_order_by_unrounded_total_then_competition_id() {
         ranked(1, "A", 999.6),
     ])];
 
-    let rows = overall_results(&days);
+    let rows = overall_results(&days, 0);
 
     assert_snapshot!(table(&rows), @"
     rank  cn   raw total  total
@@ -160,7 +160,7 @@ fn hors_concours_rows_are_listed_among_ranked_rows_without_a_rank() {
         ]),
     ];
 
-    let rows = overall_results(&days);
+    let rows = overall_results(&days, 0);
 
     // A placeholder row hides the hors concours marker on the second day.
     assert_snapshot!(table(&rows), @"
@@ -182,7 +182,7 @@ fn disqualified_rows_are_listed_unranked_below_every_other_row() {
         ]),
     ];
 
-    let rows = overall_results(&days);
+    let rows = overall_results(&days, 0);
 
     // D's first day was published before the competition disqualification.
     assert_snapshot!(table(&rows), @"
@@ -190,5 +190,177 @@ fn disqualified_rows_are_listed_unranked_below_every_other_row() {
     1     B          400    400
     HC    H           50     50
     DSQ   D          200    200
+    ");
+}
+
+/// Three class days on which B places 1, 1, 2 and A places 2, 2, 1 with equal
+/// totals.
+fn days_with_a_tie_for_first() -> [DayResult; 3] {
+    [
+        day(vec![ranked(1, "B", 500.), ranked(2, "A", 400.)]),
+        day(vec![ranked(1, "B", 300.), ranked(2, "A", 200.)]),
+        day(vec![ranked(1, "A", 600.), ranked(2, "B", 400.)]),
+    ]
+}
+
+#[test]
+fn countback_breaks_a_tie_by_daily_first_places() {
+    let rows = overall_results(&days_with_a_tie_for_first(), 3);
+
+    assert_snapshot!(table(&rows), @"
+    rank  cn   raw total  total
+    1     B         1200   1200
+    2     A         1200   1200
+    ");
+}
+
+#[test]
+fn tie_stays_shared_without_countback_places() {
+    let rows = overall_results(&days_with_a_tie_for_first(), 0);
+
+    assert_snapshot!(table(&rows), @"
+    rank  cn   raw total  total
+    1     A         1200   1200
+    1     B         1200   1200
+    ");
+}
+
+#[test]
+fn countback_compares_second_places_after_equal_first_places() {
+    let days = [
+        day(vec![
+            ranked(1, "A", 600.),
+            ranked(2, "B", 300.),
+            ranked(3, "C", 150.),
+        ]),
+        day(vec![
+            ranked(1, "B", 400.),
+            ranked(2, "C", 250.),
+            ranked(3, "A", 200.),
+        ]),
+        day(vec![
+            ranked(1, "C", 500.),
+            ranked(2, "B", 200.),
+            ranked(3, "A", 100.),
+        ]),
+    ];
+
+    let rows = overall_results(&days, 3);
+
+    // A, B and C each have one first place, B has two second places and C one.
+    assert_snapshot!(table(&rows), @"
+    rank  cn   raw total  total
+    1     B          900    900
+    2     C          900    900
+    3     A          900    900
+    ");
+}
+
+#[test]
+fn tie_with_equal_daily_places_stays_shared() {
+    let days = [
+        day(vec![ranked(1, "B", 500.), ranked(2, "A", 400.)]),
+        day(vec![ranked(1, "A", 500.), ranked(2, "B", 400.)]),
+    ];
+
+    let rows = overall_results(&days, 3);
+
+    assert_snapshot!(table(&rows), @"
+    rank  cn   raw total  total
+    1     A          900    900
+    1     B          900    900
+    ");
+}
+
+/// Three class days on which A places 1, 1, 3, B places 2, 2, 2 and C places
+/// 3, 3, 1 with equal totals.
+fn days_with_a_three_way_tie_for_first() -> [DayResult; 3] {
+    [
+        day(vec![
+            ranked(1, "A", 400.),
+            ranked(2, "B", 300.),
+            ranked(3, "C", 200.),
+        ]),
+        day(vec![
+            ranked(1, "A", 300.),
+            ranked(2, "B", 200.),
+            ranked(3, "C", 100.),
+        ]),
+        day(vec![
+            ranked(1, "C", 600.),
+            ranked(2, "B", 400.),
+            ranked(3, "A", 200.),
+        ]),
+    ]
+}
+
+#[test]
+fn countback_orders_every_tied_row_within_the_countback_places() {
+    let rows = overall_results(&days_with_a_three_way_tie_for_first(), 3);
+
+    assert_snapshot!(table(&rows), @"
+    rank  cn   raw total  total
+    1     A          900    900
+    2     C          900    900
+    3     B          900    900
+    ");
+}
+
+#[test]
+fn tie_that_reaches_past_the_countback_places_stays_shared_below_them() {
+    let rows = overall_results(&days_with_a_three_way_tie_for_first(), 1);
+
+    assert_snapshot!(table(&rows), @"
+    rank  cn   raw total  total
+    1     A          900    900
+    2     C          900    900
+    2     B          900    900
+    ");
+}
+
+#[test]
+fn tie_below_the_countback_places_stays_shared() {
+    let days = [
+        day(vec![
+            ranked(1, "L", 1000.),
+            ranked(2, "B", 500.),
+            ranked(3, "A", 400.),
+        ]),
+        day(vec![
+            ranked(1, "L", 1000.),
+            ranked(2, "B", 300.),
+            ranked(3, "A", 200.),
+        ]),
+        day(vec![
+            ranked(1, "L", 1000.),
+            ranked(2, "A", 600.),
+            ranked(3, "B", 400.),
+        ]),
+    ];
+
+    let rows = overall_results(&days, 1);
+
+    assert_snapshot!(table(&rows), @"
+    rank  cn   raw total  total
+    1     L         3000   3000
+    2     A         1200   1200
+    2     B         1200   1200
+    ");
+}
+
+#[test]
+fn countback_skips_places_on_invalid_days() {
+    let days = [
+        day(vec![ranked(1, "B", 500.), ranked(2, "A", 400.)]),
+        day(vec![ranked(1, "A", 500.), ranked(2, "B", 400.)]),
+        invalid_day(vec![ranked(1, "B", 0.), row(Rank::DidNotFly, "A", 0.)]),
+    ];
+
+    let rows = overall_results(&days, 3);
+
+    assert_snapshot!(table(&rows), @"
+    rank  cn   raw total  total
+    1     A          900    900
+    1     B          900    900
     ");
 }

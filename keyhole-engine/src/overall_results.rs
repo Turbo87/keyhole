@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::day_scoring::{DayResult, Rank};
+use crate::day_scoring::{DayResult, DayValidity, Rank};
 use crate::ranking::share_ranks;
 
 /// One competitor's overall result.
@@ -10,7 +10,8 @@ use crate::ranking::share_ranks;
 pub struct OverallRow {
     pub rank: OverallRank,
     pub competition_id: String,
-    /// The sum of the unrounded day scores, which orders equal totals.
+    /// The sum of the unrounded day scores, which orders equal totals after
+    /// any countback.
     pub raw_total: f64,
     /// The sum of the rounded day scores.
     pub total: u32,
@@ -35,7 +36,11 @@ pub enum OverallRank {
 /// day keeps that marker. Rows are ordered by total, then unrounded total,
 /// then competition ID, with hors concours rows among the ranked ones, then
 /// disqualified rows.
-pub fn overall_results(counting_days: &[DayResult]) -> Vec<OverallRow> {
+///
+/// Ties at the first `countback_places` ranks are broken by counting the
+/// daily first places on valid class days, then second places and so on.
+/// Rows that the countback moves beyond those ranks keep sharing a rank.
+pub fn overall_results(counting_days: &[DayResult], countback_places: u8) -> Vec<OverallRow> {
     let mut overall_rows = BTreeMap::<&str, OverallRow>::new();
     for row in counting_days.iter().flat_map(|day| &day.rows) {
         let overall = overall_rows
@@ -56,20 +61,69 @@ pub fn overall_results(counting_days: &[DayResult]) -> Vec<OverallRow> {
     }
 
     let mut rows: Vec<_> = overall_rows.into_values().collect();
+    let countback_places = u32::from(countback_places);
+    let ranked_totals: Vec<_> = rows
+        .iter()
+        .filter(|row| matches!(row.rank, OverallRank::Ranked(_)))
+        .map(|row| row.total)
+        .collect();
+    // A ranked total is within the countback places when fewer ranked rows
+    // than that have a higher total.
+    let within_countback = |total: u32| {
+        let higher = ranked_totals.iter().filter(|&&other| other > total).count();
+        ranked_totals.contains(&total) && (higher as u32) < countback_places
+    };
+    let place_counts = daily_place_counts(counting_days);
+    let countback_key = |row: &OverallRow| {
+        let counts = place_counts.get(row.competition_id.as_str());
+        within_countback(row.total).then_some(counts.map_or(&[][..], Vec::as_slice))
+    };
+
     rows.sort_by(|a, b| {
         let disqualified = |row: &OverallRow| row.rank == OverallRank::Disqualified;
         disqualified(a)
             .cmp(&disqualified(b))
             .then(b.total.cmp(&a.total))
+            .then_with(|| countback_key(b).cmp(&countback_key(a)))
             .then(b.raw_total.total_cmp(&a.raw_total))
             .then_with(|| a.competition_id.cmp(&b.competition_id))
     });
     share_ranks(
-        rows.iter_mut().filter_map(|row| match &mut row.rank {
-            OverallRank::Ranked(rank) => Some((row.total, rank)),
-            _ => None,
+        rows.iter_mut().filter_map(|row| {
+            let key = (row.total, countback_key(row));
+            match &mut row.rank {
+                OverallRank::Ranked(rank) => Some((key, rank)),
+                _ => None,
+            }
         }),
-        |previous, _, score| previous == score,
+        // A tie that reaches beyond the countback places stays shared there.
+        |(previous_total, previous_counts), previous_rank, (total, counts)| {
+            previous_total == total
+                && (previous_counts == counts || previous_rank > countback_places)
+        },
     );
     rows
+}
+
+/// Counts each competitor's daily places on valid class days, with the
+/// number of first places first. Every competitor's counts have the same
+/// length, so that they compare place by place.
+fn daily_place_counts(counting_days: &[DayResult]) -> BTreeMap<&str, Vec<u32>> {
+    let places: Vec<_> = counting_days
+        .iter()
+        .filter(|day| day.validity == DayValidity::Valid)
+        .flat_map(|day| &day.rows)
+        .filter_map(|row| match row.rank {
+            Rank::Ranked(place) => Some((row.competition_id.as_str(), place as usize)),
+            _ => None,
+        })
+        .collect();
+    let place_count = places.iter().map(|&(_, place)| place).max().unwrap_or(0);
+    let mut counts = BTreeMap::<&str, Vec<u32>>::new();
+    for (competition_id, place) in places {
+        counts
+            .entry(competition_id)
+            .or_insert_with(|| vec![0; place_count])[place - 1] += 1;
+    }
+    counts
 }
