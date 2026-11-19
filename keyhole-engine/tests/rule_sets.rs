@@ -2,8 +2,9 @@ use insta::assert_snapshot;
 use keyhole_engine::day_scoring::ScoringParameters;
 use keyhole_engine::rule_sets::{
     Altitude, AnalysisParameters, DAEC_SWO_2026, EarthModel, FAI_ANNEX_A_2025A, RuleOverrides,
-    RuleSetEdition, UtcTime,
+    RuleSetEdition,
 };
+use keyhole_engine::time::UtcTime;
 use keyhole_handicaps::HandicapList;
 
 fn standard_class() -> RuleOverrides {

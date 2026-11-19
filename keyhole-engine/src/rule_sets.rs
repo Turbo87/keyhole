@@ -7,6 +7,7 @@ use std::ops::RangeInclusive;
 use sha2::{Digest, Sha256};
 
 use crate::day_scoring::ScoringParameters;
+use crate::time::UtcTime;
 
 /// One dated version of a rule set, shipped as immutable data.
 ///
@@ -324,10 +325,6 @@ pub enum Altitude {
     Msl(f64),
     FlightLevel(u16),
 }
-
-/// A point in time, in seconds since the Unix epoch.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct UtcTime(pub i64);
 
 impl RuleSetEdition {
     /// Looks up a built-in edition by its ID.

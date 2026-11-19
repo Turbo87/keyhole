@@ -5,6 +5,7 @@ pub mod day_scoring;
 pub mod overall_results;
 mod ranking;
 pub mod rule_sets;
+pub mod time;
 
 /// The version of the engine's algorithms, published with every result.
 ///
