@@ -95,3 +95,61 @@ fn reports_a_file_without_igc_records() {
     no flight
     ");
 }
+
+const FIX: &str = "B1000005122265N00651234EA0010000110\n";
+
+#[test]
+fn reports_a_file_without_a_logger_identity() {
+    let analysis = analyze(&format!("HFDTE160624\n{FIX}"));
+    assert_snapshot!(render(&analysis), @"
+    error   file_failed_to_parse   file   MissingLoggerId
+    no flight
+    ");
+}
+
+#[test]
+fn reports_a_file_without_a_recorded_date() {
+    let analysis = analyze(&format!("ALXVABC\n{FIX}"));
+    assert_snapshot!(render(&analysis), @"
+    error   file_failed_to_parse   file   MissingRecordedDate
+    no flight
+    ");
+}
+
+#[test]
+fn reports_a_file_without_logger_identity_and_recorded_date() {
+    let analysis = analyze(&format!("HFPLTPILOT:Jane Doe\n{FIX}"));
+    assert_snapshot!(render(&analysis), @"
+    error   file_failed_to_parse   file   MissingLoggerId
+    error   file_failed_to_parse   file   MissingRecordedDate
+    no flight
+    ");
+}
+
+#[test]
+fn reports_an_unreadable_recorded_date() {
+    let analysis = analyze(&format!("ALXVABC\nHFDTEDATE:16O624,01\n{FIX}"));
+    assert_snapshot!(render(&analysis), @"
+    error   file_failed_to_parse   file   MissingRecordedDate
+    no flight
+    ");
+}
+
+#[test]
+fn reports_a_recorded_date_that_does_not_exist() {
+    let analysis = analyze(&format!("ALXVABC\nHFDTE300224\n{FIX}"));
+    assert_snapshot!(render(&analysis), @"
+    error   file_failed_to_parse   file   MissingRecordedDate
+    no flight
+    ");
+}
+
+#[test]
+fn accepts_a_leap_day_as_recorded_date() {
+    let analysis = analyze(&format!("ALXVABC\nHFDTE290224\n{FIX}"));
+    assert_snapshot!(render(&analysis), @"
+    logger LXV ABC
+    date   2024-02-29
+    fix    10:00:00 A 51.37108 6.85390 100 110
+    ");
+}

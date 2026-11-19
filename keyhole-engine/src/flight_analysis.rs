@@ -46,6 +46,21 @@ pub struct Date {
 }
 
 impl Date {
+    /// Returns `None` if the day does not exist in the Gregorian calendar.
+    fn new(year: u16, month: u8, day: u8) -> Option<Self> {
+        let is_leap_year =
+            year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400));
+        let days_in_month = match month {
+            2 if is_leap_year => 29,
+            2 => 28,
+            4 | 6 | 9 | 11 => 30,
+            1..=12 => 31,
+            _ => return None,
+        };
+        let date = Self { year, month, day };
+        (1..=days_in_month).contains(&day).then_some(date)
+    }
+
     /// The start of this day.
     pub fn midnight(self) -> UtcTime {
         // Howard Hinnant's `days_from_civil()`, with years starting in March so
@@ -100,15 +115,16 @@ pub fn analyze_file(contents: Bytes) -> FileAnalysis {
     }
 
     if !has_igc_records {
-        return FileAnalysis {
-            flight: None,
-            log: vec![AnalysisLogEntry {
-                details: AnalysisLogDetails::FileFailedToParse {
-                    reason: FileFailure::NotIgc,
-                },
-                evidence: Evidence::File,
-            }],
-        };
+        let log = vec![file_failure(FileFailure::NotIgc)];
+        return FileAnalysis { flight: None, log };
+    }
+
+    let mut log = Vec::new();
+    if logger.is_none() {
+        log.push(file_failure(FileFailure::MissingLoggerId));
+    }
+    if recorded_date.is_none() {
+        log.push(file_failure(FileFailure::MissingRecordedDate));
     }
 
     let flight = logger.zip(recorded_date).map(|(logger, recorded_date)| {
@@ -121,10 +137,16 @@ pub fn analyze_file(contents: Bytes) -> FileAnalysis {
         }
     });
 
-    FileAnalysis {
-        flight,
-        log: Vec::new(),
-    }
+    FileAnalysis { flight, log }
+}
+
+fn file_failure(reason: FileFailure) -> AnalysisLogEntry {
+    file_entry(AnalysisLogDetails::FileFailedToParse { reason })
+}
+
+fn file_entry(details: AnalysisLogDetails) -> AnalysisLogEntry {
+    let evidence = Evidence::File;
+    AnalysisLogEntry { details, evidence }
 }
 
 fn logger_id(line: &str, record: &ARecord) -> LoggerId {
@@ -140,11 +162,7 @@ fn logger_id(line: &str, record: &ARecord) -> LoggerId {
 /// `HFDTEDDMMYY` and the `HFDTEDATE:DDMMYY,NN` forms.
 fn parse_date(record: &HRecord) -> Option<Date> {
     let date = igc::util::Date::parse(record.data.get(..6)?).ok()?;
-    Some(Date {
-        year: 2000 + u16::from(date.year),
-        month: date.month,
-        day: date.day,
-    })
+    Date::new(2000 + u16::from(date.year), date.month, date.day)
 }
 
 /// Converts a B record into a fix whose time is still the time of day, since

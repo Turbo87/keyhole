@@ -45,6 +45,10 @@ impl AnalysisLogDetails {
 pub enum FileFailure {
     /// No line of the file is an IGC record.
     NotIgc,
+    /// The A record is missing or unreadable.
+    MissingLoggerId,
+    /// The `HFDTE` header is missing or does not hold a valid date.
+    MissingRecordedDate,
 }
 
 /// The part of the recording an entry refers to.
