@@ -175,19 +175,27 @@ pub fn analyze_file(contents: Bytes) -> FileAnalysis {
     FileAnalysis { flight, log }
 }
 
-/// Turns the fixes' times of day into points in time. The recorded date is
-/// the date of the first valid fix, so leading fixes more than 12 h later in
-/// the day than that fix were recorded on the day before.
+/// Turns the fixes' times of day into points in time. Each fix lies within
+/// 12 h of the latest fix before it, so a step back by more than 12 h crosses
+/// midnight. The recorded date is the date of the first valid fix.
 fn date_fixes(fixes: &mut [Fix], recorded_date: Date, first_valid_fix: usize) {
-    let anchor = fixes[first_valid_fix].time.0;
-    for fix in &mut fixes[..first_valid_fix] {
-        if fix.time.0 - anchor > SECONDS_PER_DAY / 2 {
-            fix.time.0 -= SECONDS_PER_DAY;
-        }
+    let mut latest = fixes[0].time;
+    for fix in &mut *fixes {
+        fix.time = date_near(fix.time.0, latest);
+        latest = latest.max(fix.time);
     }
 
-    let midnight = recorded_date.midnight().0;
-    fixes.iter_mut().for_each(|fix| fix.time.0 += midnight);
+    let anchor = fixes[first_valid_fix].time.0;
+    let offset = recorded_date.midnight().0 - (anchor - anchor.rem_euclid(SECONDS_PER_DAY));
+    fixes.iter_mut().for_each(|fix| fix.time.0 += offset);
+}
+
+/// Dates a time of day within 12 h of the given time.
+fn date_near(time_of_day: i64, reference: UtcTime) -> UtcTime {
+    let half_day = SECONDS_PER_DAY / 2;
+    let offset = time_of_day - reference.0.rem_euclid(SECONDS_PER_DAY);
+    let offset = (offset + half_day).rem_euclid(SECONDS_PER_DAY) - half_day;
+    UtcTime(reference.0 + offset)
 }
 
 fn file_failure(reason: FileFailure) -> AnalysisLogEntry {

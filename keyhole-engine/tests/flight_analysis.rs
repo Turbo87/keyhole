@@ -264,3 +264,41 @@ fn keeps_leading_invalid_fixes_up_to_12_hours_later_on_the_recorded_date() {
     fix    01:00:00 A 51.37108 6.85390 100 110
     ");
 }
+
+#[test]
+fn dates_stale_fixes_after_midnight_on_the_previous_day() {
+    let analysis = analyze(
+        "ALXVABC\n\
+         HFDTE160624\n\
+         B2359585122265N00651234EA0010000110\n\
+         B0000015122265N00651234EA0010000110\n\
+         B2359595122265N00651234EA0010000110\n\
+         B0000025122265N00651234EA0010000110\n",
+    );
+    assert_snapshot!(render(&analysis), @"
+    logger LXV ABC
+    date   2024-06-16
+    fix    23:59:58 A 51.37108 6.85390 100 110
+    fix    00:00:01 +1d A 51.37108 6.85390 100 110
+    fix    23:59:59 A 51.37108 6.85390 100 110
+    fix    00:00:02 +1d A 51.37108 6.85390 100 110
+    ");
+}
+
+#[test]
+fn dates_fixes_after_midnight_on_the_next_day() {
+    let analysis = analyze(
+        "ALXVABC\n\
+         HFDTE160624\n\
+         B2359595122265N00651234EA0010000110\n\
+         B0000005122265N00651234EA0010000110\n\
+         B0000015122265N00651234EA0010000110\n",
+    );
+    assert_snapshot!(render(&analysis), @"
+    logger LXV ABC
+    date   2024-06-16
+    fix    23:59:59 A 51.37108 6.85390 100 110
+    fix    00:00:00 +1d A 51.37108 6.85390 100 110
+    fix    00:00:01 +1d A 51.37108 6.85390 100 110
+    ");
+}
