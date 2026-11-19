@@ -152,8 +152,8 @@ pub fn analyze_file(contents: Bytes) -> FileAnalysis {
     if recorded_date.is_none() {
         log.push(file_failure(FileFailure::MissingRecordedDate));
     }
-    let has_valid_fix = fixes.iter().any(|fix| fix.valid);
-    if !has_valid_fix {
+    let first_valid_fix = fixes.iter().position(|fix| fix.valid);
+    if first_valid_fix.is_none() {
         log.push(file_failure(FileFailure::NoValidFixes));
     }
 
@@ -162,10 +162,9 @@ pub fn analyze_file(contents: Bytes) -> FileAnalysis {
         log.push(file_entry(details));
     }
 
-    let usable = logger.zip(recorded_date).filter(|_| has_valid_fix);
-    let flight = usable.map(|(logger, recorded_date)| {
-        let midnight = recorded_date.midnight().0;
-        fixes.iter_mut().for_each(|fix| fix.time.0 += midnight);
+    let usable = logger.zip(recorded_date).zip(first_valid_fix);
+    let flight = usable.map(|((logger, recorded_date), first_valid_fix)| {
+        date_fixes(&mut fixes, recorded_date, first_valid_fix);
         Flight {
             logger,
             recorded_date,
@@ -174,6 +173,21 @@ pub fn analyze_file(contents: Bytes) -> FileAnalysis {
     });
 
     FileAnalysis { flight, log }
+}
+
+/// Turns the fixes' times of day into points in time. The recorded date is
+/// the date of the first valid fix, so leading fixes more than 12 h later in
+/// the day than that fix were recorded on the day before.
+fn date_fixes(fixes: &mut [Fix], recorded_date: Date, first_valid_fix: usize) {
+    let anchor = fixes[first_valid_fix].time.0;
+    for fix in &mut fixes[..first_valid_fix] {
+        if fix.time.0 - anchor > SECONDS_PER_DAY / 2 {
+            fix.time.0 -= SECONDS_PER_DAY;
+        }
+    }
+
+    let midnight = recorded_date.midnight().0;
+    fixes.iter_mut().for_each(|fix| fix.time.0 += midnight);
 }
 
 fn file_failure(reason: FileFailure) -> AnalysisLogEntry {
@@ -219,8 +233,8 @@ fn parse_date(record: &HRecord) -> Option<Date> {
     Date::new(2000 + u16::from(date.year), date.month, date.day)
 }
 
-/// Converts a B record into a fix whose time is still the time of day, since
-/// the recorded date may only follow later in the file.
+/// Converts a B record into a fix whose time is still the time of day, until
+/// `date_fixes()` dates all fixes at once.
 fn fix(record: &BRecord) -> Fix {
     Fix {
         time: UtcTime(record.timestamp.seconds_since_midnight().into()),

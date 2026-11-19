@@ -10,8 +10,8 @@ fn analyze(contents: &str) -> FileAnalysis {
     analyze_file(Bytes::copy_from_slice(contents.as_bytes()))
 }
 
-/// Renders the analysis log, then the flight with fix times relative to
-/// midnight of the recorded date, so that the snapshots stay readable.
+/// Renders the analysis log, then the flight with fix times as time of day
+/// and days after the recorded date, so that the snapshots stay readable.
 fn render(analysis: &FileAnalysis) -> String {
     let mut out = String::new();
     for entry in &analysis.log {
@@ -50,11 +50,17 @@ fn render(analysis: &FileAnalysis) -> String {
     let midnight = flight.recorded_date.midnight().0;
     for fix in &flight.fixes {
         let seconds = fix.time.0 - midnight;
+        let (days, seconds) = (seconds.div_euclid(86_400), seconds.rem_euclid(86_400));
         let (hours, minutes, seconds) = (seconds / 3600, seconds / 60 % 60, seconds % 60);
+        let days = if days == 0 {
+            String::new()
+        } else {
+            format!(" {days:+}d")
+        };
         let validity = if fix.valid { 'A' } else { 'V' };
         writeln!(
             out,
-            "fix    {hours:02}:{minutes:02}:{seconds:02} {validity} {:.5} {:.5} {} {}",
+            "fix    {hours:02}:{minutes:02}:{seconds:02}{days} {validity} {:.5} {:.5} {} {}",
             fix.latitude, fix.longitude, fix.pressure_altitude, fix.gnss_altitude,
         )
         .unwrap();
@@ -220,5 +226,41 @@ fn reports_unreadable_lines_of_files_that_fail_to_parse() {
     error   file_failed_to_parse   file   MissingRecordedDate
     error   unreadable_lines       file   H Malformed: 2
     no flight
+    ");
+}
+
+#[test]
+fn dates_leading_invalid_fixes_before_midnight_on_the_previous_day() {
+    let analysis = analyze(
+        "ALXVABC\n\
+         HFDTE160624\n\
+         B2359585122265N00651234EV0010000110\n\
+         B2359595122265N00651234EV0010000110\n\
+         B0000015122265N00651234EA0010000110\n\
+         B0000025122265N00651234EA0010000110\n",
+    );
+    assert_snapshot!(render(&analysis), @"
+    logger LXV ABC
+    date   2024-06-16
+    fix    23:59:58 -1d V 51.37108 6.85390 100 110
+    fix    23:59:59 -1d V 51.37108 6.85390 100 110
+    fix    00:00:01 A 51.37108 6.85390 100 110
+    fix    00:00:02 A 51.37108 6.85390 100 110
+    ");
+}
+
+#[test]
+fn keeps_leading_invalid_fixes_up_to_12_hours_later_on_the_recorded_date() {
+    let analysis = analyze(
+        "ALXVABC\n\
+         HFDTE160624\n\
+         B1300005122265N00651234EV0010000110\n\
+         B0100005122265N00651234EA0010000110\n",
+    );
+    assert_snapshot!(render(&analysis), @"
+    logger LXV ABC
+    date   2024-06-16
+    fix    13:00:00 V 51.37108 6.85390 100 110
+    fix    01:00:00 A 51.37108 6.85390 100 110
     ");
 }
