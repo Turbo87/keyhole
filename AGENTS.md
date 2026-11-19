@@ -11,3 +11,7 @@ The five default triage labels are used as-is: `needs-triage`, `needs-info`, `re
 ### Domain docs
 
 Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+## Rule texts
+
+The rule set documents that the editions cite, with download links: `docs/rules.md`.
