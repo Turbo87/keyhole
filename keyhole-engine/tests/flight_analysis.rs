@@ -10,8 +10,8 @@ fn analyze(contents: &str) -> FileAnalysis {
     analyze_file(Bytes::copy_from_slice(contents.as_bytes()))
 }
 
-/// Renders the analysis log, then the flight with fix times as time of day
-/// and days after the recorded date, so that the snapshots stay readable.
+/// Renders the analysis log, then the flight with times as time of day and
+/// days after the recorded date, so that the snapshots stay readable.
 fn render(analysis: &FileAnalysis) -> String {
     let mut out = String::new();
     for entry in &analysis.log {
@@ -51,20 +51,12 @@ fn render(analysis: &FileAnalysis) -> String {
     let Date { year, month, day } = flight.recorded_date;
     writeln!(out, "date   {year:04}-{month:02}-{day:02}").unwrap();
 
-    let midnight = flight.recorded_date.midnight().0;
     for fix in &flight.fixes {
-        let seconds = fix.time.0 - midnight;
-        let (days, seconds) = (seconds.div_euclid(86_400), seconds.rem_euclid(86_400));
-        let (hours, minutes, seconds) = (seconds / 3600, seconds / 60 % 60, seconds % 60);
-        let days = if days == 0 {
-            String::new()
-        } else {
-            format!(" {days:+}d")
-        };
+        let time = time(flight.recorded_date, fix.time);
         let validity = if fix.valid { 'A' } else { 'V' };
         write!(
             out,
-            "fix    {hours:02}:{minutes:02}:{seconds:02}{days} {validity} {:.5} {:.5} {} {}",
+            "fix    {time} {validity} {:.5} {:.5} {} {}",
             fix.latitude, fix.longitude, fix.pressure_altitude, fix.gnss_altitude,
         )
         .unwrap();
@@ -75,8 +67,25 @@ fn render(analysis: &FileAnalysis) -> String {
         }
         out.push('\n');
     }
+    for &pev in &flight.pevs {
+        writeln!(out, "pev    {}", time(flight.recorded_date, pev)).unwrap();
+    }
 
     out
+}
+
+/// Formats a time as time of day, with the days after the recorded date
+/// unless it lies on that date.
+fn time(recorded_date: Date, time: UtcTime) -> String {
+    let seconds = time.0 - recorded_date.midnight().0;
+    let (days, seconds) = (seconds.div_euclid(86_400), seconds.rem_euclid(86_400));
+    let (hours, minutes, seconds) = (seconds / 3600, seconds / 60 % 60, seconds % 60);
+    let time = format!("{hours:02}:{minutes:02}:{seconds:02}");
+    if days == 0 {
+        time
+    } else {
+        format!("{time} {days:+}d")
+    }
 }
 
 fn join(lines: &[usize]) -> String {
@@ -231,6 +240,7 @@ fn reports_unreadable_lines_grouped_by_record_type_and_problem() {
     date   2024-06-16
     fix    10:00:00 A 51.37108 6.85390 100 110
     fix    10:00:04 A 51.37108 6.85390 100 110
+    pev    10:00:04
     ");
 }
 
@@ -380,5 +390,32 @@ fn decodes_extensions_of_an_i_record_after_the_task_declaration() {
     logger LXV ABC
     date   2024-06-16
     fix    10:00:00 A 51.37108 6.85390 100 110 ENL=042
+    ");
+}
+
+#[test]
+fn dates_pilot_events_by_the_preceding_fix() {
+    let analysis = analyze(
+        "ALXVABC\n\
+         HFDTE160624\n\
+         E235957PEV\n\
+         B2359585122265N00651234EA0010000110\n\
+         E235959PEV\n\
+         E000000PEV\n\
+         B0000015122265N00651234EA0010000110\n\
+         E235959PEV\n\
+         E000002PEVPILOT\n\
+         E000003XYZ\n",
+    );
+    assert_snapshot!(render(&analysis), @"
+    logger LXV ABC
+    date   2024-06-16
+    fix    23:59:58 A 51.37108 6.85390 100 110
+    fix    00:00:01 +1d A 51.37108 6.85390 100 110
+    pev    23:59:57
+    pev    23:59:59
+    pev    00:00:00 +1d
+    pev    23:59:59
+    pev    00:00:02 +1d
     ");
 }

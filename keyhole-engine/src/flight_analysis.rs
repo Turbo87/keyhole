@@ -37,6 +37,8 @@ pub struct Flight {
     /// The B records in file order, without those whose time does not advance
     /// past the fixes before them.
     pub fixes: Vec<Fix>,
+    /// The pilot event markers, in file order.
+    pub pevs: Vec<UtcTime>,
 }
 
 /// A logger's manufacturer and serial, as written in the A record.
@@ -148,6 +150,7 @@ pub fn analyze_file(contents: Bytes) -> FileAnalysis {
     let mut fixes = Vec::new();
     let mut fix_lines = Vec::new();
     let mut extension_definitions = Vec::new();
+    let mut pevs = Vec::new();
     let mut has_igc_records = false;
     let mut unreadable_lines = BTreeMap::<_, Vec<_>>::new();
 
@@ -181,6 +184,10 @@ pub fn analyze_file(contents: Bytes) -> FileAnalysis {
             }
             Ok(Record::H(record)) if record.mnemonic == "DTE" => {
                 recorded_date = recorded_date.or_else(|| parse_date(&record));
+            }
+            Ok(Record::E(record)) if record.mnemonic == "PEV" => {
+                let time_of_day = record.time.seconds_since_midnight().into();
+                pevs.push((time_of_day, fixes.len().saturating_sub(1)));
             }
             Ok(Record::I(record)) => {
                 let definitions = record.0.extensions.iter();
@@ -222,6 +229,10 @@ pub fn analyze_file(contents: Bytes) -> FileAnalysis {
     let usable = logger.zip(recorded_date).zip(first_valid_fix);
     let flight = usable.map(|((logger, recorded_date), first_valid_fix)| {
         date_fixes(&mut fixes, recorded_date, first_valid_fix);
+        let pevs = pevs
+            .iter()
+            .map(|&(time, fix)| date_near(time, fixes[fix].time))
+            .collect();
         let (fixes, lines) = drop_out_of_order_fixes(fixes, &fix_lines, first_valid_fix);
         if !lines.is_empty() {
             log.push(file_entry(AnalysisLogDetails::TimestampErrors { lines }));
@@ -230,6 +241,7 @@ pub fn analyze_file(contents: Bytes) -> FileAnalysis {
             logger,
             recorded_date,
             fixes,
+            pevs,
         }
     });
 
