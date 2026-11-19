@@ -1,9 +1,10 @@
 use bytes::Bytes;
+use jiff::SignedDuration;
 use keyhole_engine::flight_analysis::{FileAnalysis, FileAnalysisOptions, analyze_file};
 use proptest::prelude::*;
 
 const OPTIONS: FileAnalysisOptions = FileAnalysisOptions {
-    maximum_recording_interval: 1,
+    maximum_recording_interval: SignedDuration::from_secs(1),
 };
 
 const HEADER: &str = "ALXVABC\nHFDTE160624\n";

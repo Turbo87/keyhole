@@ -122,9 +122,8 @@ impl ExtensionDefinition {
 /// The limits that the file stage checks the recording against.
 #[derive(Debug, Clone, Copy)]
 pub struct FileAnalysisOptions {
-    /// The longest interval between two fixes that does not warrant a
-    /// warning, in whole seconds.
-    pub maximum_recording_interval: u32,
+    /// The longest interval between two fixes that does not warrant a warning.
+    pub maximum_recording_interval: SignedDuration,
 }
 
 /// Parses an IGC file, skipping what it cannot read, and checks the
@@ -283,16 +282,16 @@ fn exceeded_recording_intervals(
     fixes: &[Fix],
     options: FileAnalysisOptions,
 ) -> Vec<AnalysisLogEntry> {
-    let limit = i64::from(options.maximum_recording_interval);
-    let seconds = |start: Timestamp, end: Timestamp| end.as_second() - start.as_second();
+    let limit = options.maximum_recording_interval;
+    let length = |&(start, end): &(Timestamp, Timestamp)| end.duration_since(start);
     let intervals = fixes.windows(2).map(|pair| (pair[0].time, pair[1].time));
     let intervals = intervals.collect::<Vec<_>>();
-    let exceeds = |&(start, end): &(Timestamp, Timestamp)| seconds(start, end) > limit;
+    let exceeds = |interval: &(Timestamp, Timestamp)| length(interval) > limit;
 
     let stretches = intervals.chunk_by(|a, b| exceeds(a) == exceeds(b));
     let stretches = stretches.filter(|stretch| exceeds(&stretch[0]));
     let entries = stretches.map(|stretch| {
-        let intervals = stretch.iter().map(|&(start, end)| seconds(start, end));
+        let intervals = stretch.iter().map(length);
         let longest_interval = intervals.max().unwrap_or_default();
         let details = AnalysisLogDetails::RecordingIntervalExceeded { longest_interval };
         let evidence = Evidence::Interval(stretch[0].0, stretch[stretch.len() - 1].1);

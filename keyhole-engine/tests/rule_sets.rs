@@ -1,5 +1,5 @@
 use insta::assert_snapshot;
-use jiff::Timestamp;
+use jiff::{SignedDuration, Timestamp};
 use keyhole_engine::day_scoring::ScoringParameters;
 use keyhole_engine::flight_analysis::analysis_log::AnalysisLogKind;
 use keyhole_engine::rule_sets::{
@@ -10,6 +10,10 @@ use keyhole_handicaps::HandicapList;
 
 fn utc(second: i64) -> Timestamp {
     Timestamp::from_second(second).unwrap()
+}
+
+fn minutes(minutes: i64) -> SignedDuration {
+    SignedDuration::from_mins(minutes)
 }
 
 fn standard_class() -> RuleOverrides {
@@ -80,8 +84,8 @@ fn start_procedure_overrides_apply() {
         maximum_start_altitude: Some(1500.),
         maximum_start_ground_speed: Some(170.),
         pev_start: Some(true),
-        pev_wait_time: Some(5),
-        pev_start_window: Some(8),
+        pev_wait_time: Some(minutes(5)),
+        pev_start_window: Some(minutes(8)),
         ..Default::default()
     };
 
@@ -94,8 +98,8 @@ fn start_procedure_overrides_apply() {
         maximum_start_altitude: Some(1500.),
         maximum_start_ground_speed: Some(170.),
         pev_start: true,
-        pev_wait_time: 5,
-        pev_start_window: 8,
+        pev_wait_time: minutes(5),
+        pev_start_window: minutes(8),
         ..FAI_ANNEX_A_2025A.defaults.analysis.clone()
     };
     assert_eq!(analysis, expected);
@@ -105,7 +109,7 @@ fn start_procedure_overrides_apply() {
 fn finish_altitude_and_scoring_end_overrides_apply() {
     let overrides = RuleOverrides {
         subtract_finish_ring_radius: Some(false),
-        delivery_period: Some(30),
+        delivery_period: Some(minutes(30)),
         tow_altitude: Some(600.),
         maximum_altitude: Some(Altitude::FlightLevel(95)),
         scoring_end_time: Some(utc(1_659_376_800)),
@@ -116,7 +120,7 @@ fn finish_altitude_and_scoring_end_overrides_apply() {
 
     let expected = AnalysisParameters {
         subtract_finish_ring_radius: false,
-        delivery_period: Some(30),
+        delivery_period: Some(minutes(30)),
         tow_altitude: Some(600.),
         maximum_altitude: Some(Altitude::FlightLevel(95)),
         scoring_end_time: Some(utc(1_659_376_800)),
@@ -189,10 +193,10 @@ fn canonical_rules_list_the_edition_and_every_parameter() {
         maximum_start_altitude: Some(1500.),
         maximum_start_ground_speed: Some(170.),
         pev_start: Some(true),
-        pev_wait_time: Some(5),
-        pev_start_window: Some(8),
+        pev_wait_time: Some(minutes(5)),
+        pev_start_window: Some(minutes(8)),
         subtract_finish_ring_radius: Some(false),
-        delivery_period: Some(30),
+        delivery_period: Some(minutes(30)),
         tow_altitude: Some(600.),
         maximum_altitude: Some(Altitude::Msl(2999.9)),
         scoring_end_time: Some(utc(1_659_376_800)),

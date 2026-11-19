@@ -2,14 +2,14 @@ use std::fmt::Write;
 
 use bytes::Bytes;
 use insta::assert_snapshot;
-use jiff::Timestamp;
 use jiff::civil::Date;
 use jiff::tz::Offset;
+use jiff::{SignedDuration, Timestamp};
 use keyhole_engine::flight_analysis::analysis_log::{AnalysisLogDetails, Evidence, Level};
 use keyhole_engine::flight_analysis::{FileAnalysis, FileAnalysisOptions, analyze_file};
 
 const OPTIONS: FileAnalysisOptions = FileAnalysisOptions {
-    maximum_recording_interval: 1,
+    maximum_recording_interval: SignedDuration::from_secs(1),
 };
 
 fn analyze(contents: &str) -> FileAnalysis {
@@ -41,7 +41,7 @@ fn render(analysis: &FileAnalysis) -> String {
                 )
             }
             AnalysisLogDetails::RecordingIntervalExceeded { longest_interval } => {
-                ("interval_exceeded", format!("longest {longest_interval} s"))
+                ("interval_exceeded", format!("longest {longest_interval:#}"))
             }
         };
         let evidence = match entry.evidence {
@@ -238,7 +238,7 @@ fn reports_unreadable_lines_grouped_by_record_type_and_problem() {
     error   unreadable_lines       file   B OutOfRange: 6
     error   unreadable_lines       file   E Malformed: 12
     error   unreadable_lines       file   Unknown Malformed: 8
-    warning interval_exceeded      10:00:00 to 10:00:04 longest 4 s
+    warning interval_exceeded      10:00:00 to 10:00:04 longest 4s
     logger LXV ABC
     date   2024-06-16
     fix    10:00:00 A 51.37108 6.85390 100 110
@@ -268,7 +268,7 @@ fn dates_leading_invalid_fixes_before_midnight_on_the_previous_day() {
          B0000025122265N00651234EA0010000110\n",
     );
     assert_snapshot!(render(&analysis), @"
-    warning interval_exceeded      23:59:59 -1d to 00:00:01 longest 2 s
+    warning interval_exceeded      23:59:59 -1d to 00:00:01 longest 2s
     logger LXV ABC
     date   2024-06-16
     fix    23:59:58 -1d V 51.37108 6.85390 100 110
@@ -306,7 +306,7 @@ fn dates_stale_fixes_after_midnight_on_the_previous_day() {
     );
     assert_snapshot!(render(&analysis), @"
     warning timestamp_errors       file   1 fixes: 5
-    warning interval_exceeded      23:59:58 to 00:00:01 +1d longest 3 s
+    warning interval_exceeded      23:59:58 to 00:00:01 +1d longest 3s
     logger LXV ABC
     date   2024-06-16
     fix    23:59:58 A 51.37108 6.85390 100 110
@@ -431,7 +431,7 @@ fn dates_pilot_events_by_the_preceding_fix() {
          E000003XYZ\n",
     );
     assert_snapshot!(render(&analysis), @"
-    warning interval_exceeded      23:59:58 to 00:00:01 +1d longest 3 s
+    warning interval_exceeded      23:59:58 to 00:00:01 +1d longest 3s
     logger LXV ABC
     date   2024-06-16
     fix    23:59:58 A 51.37108 6.85390 100 110
@@ -458,8 +458,8 @@ fn warns_about_each_stretch_of_intervals_over_the_limit() {
          B1000205122265N00651234EV0010000110\n",
     );
     assert_snapshot!(render(&analysis), @"
-    warning interval_exceeded      10:00:01 to 10:00:06 longest 3 s
-    warning interval_exceeded      10:00:08 to 10:00:20 longest 12 s
+    warning interval_exceeded      10:00:01 to 10:00:06 longest 3s
+    warning interval_exceeded      10:00:08 to 10:00:20 longest 12s
     logger LXV ABC
     date   2024-06-16
     fix    10:00:00 A 51.37108 6.85390 100 110

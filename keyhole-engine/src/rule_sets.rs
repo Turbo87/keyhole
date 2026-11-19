@@ -4,7 +4,7 @@
 use std::fmt::{self, Display};
 use std::ops::RangeInclusive;
 
-use jiff::Timestamp;
+use jiff::{SignedDuration, Timestamp};
 use sha2::{Digest, Sha256};
 
 use crate::day_scoring::ScoringParameters;
@@ -28,12 +28,11 @@ pub struct RuleSetEdition {
     /// counting daily first places, then second places and so on, with 0 for
     /// no countback.
     pub countback_places: u8,
-    /// The time after a publication within which it can be challenged, in
-    /// whole hours, which the suggested complaint deadline is based on.
-    pub complaint_period: u32,
-    /// The longest interval between two fixes that the edition allows, in
-    /// whole seconds.
-    pub maximum_recording_interval: u32,
+    /// The time after a publication within which it can be challenged, which
+    /// the suggested complaint deadline is based on.
+    pub complaint_period: SignedDuration,
+    /// The longest interval between two fixes that the edition allows.
+    pub maximum_recording_interval: SignedDuration,
     /// The clauses that analysis log entries cite, by kind. Kinds without a
     /// clause in the edition are absent.
     pub clauses: &'static [(AnalysisLogKind, &'static str)],
@@ -55,11 +54,11 @@ pub static DAEC_SWO_2026: RuleSetEdition = RuleSetEdition {
         ClassTemplate::new("Standard", 120., 300., false, Some(DAEC_STANDARD)),
     ],
     pev: PevRules {
-        wait_times: 10..=10,
-        start_windows: 7..=7,
+        wait_times: SignedDuration::from_mins(10)..=SignedDuration::from_mins(10),
+        start_windows: SignedDuration::from_mins(7)..=SignedDuration::from_mins(7),
         limit: 3,
         limit_scope: PevLimitScope::Day,
-        clustering_time: 30,
+        clustering_time: SignedDuration::from_secs(30),
         penalty_per_second: 1,
         maximum_penalty: 60,
     },
@@ -78,8 +77,8 @@ pub static DAEC_SWO_2026: RuleSetEdition = RuleSetEdition {
         minimum_assigned_area_separation: 1.,
     },
     countback_places: 0,
-    complaint_period: 14,
-    maximum_recording_interval: 1,
+    complaint_period: SignedDuration::from_hours(14),
+    maximum_recording_interval: SignedDuration::from_secs(1),
     clauses: &[
         (AnalysisLogKind::FileFailedToParse, "5.9.8"),
         (AnalysisLogKind::RecordingIntervalExceeded, "5.9.3"),
@@ -92,10 +91,10 @@ pub static DAEC_SWO_2026: RuleSetEdition = RuleSetEdition {
             maximum_start_altitude: None,
             maximum_start_ground_speed: None,
             pev_start: false,
-            pev_wait_time: 10,
-            pev_start_window: 7,
+            pev_wait_time: SignedDuration::from_mins(10),
+            pev_start_window: SignedDuration::from_mins(7),
             subtract_finish_ring_radius: true,
-            delivery_period: Some(45),
+            delivery_period: Some(SignedDuration::from_mins(45)),
             tow_altitude: None,
             maximum_altitude: None,
             scoring_end_time: None,
@@ -117,11 +116,11 @@ pub static FAI_ANNEX_A_2025A: RuleSetEdition = RuleSetEdition {
         ClassTemplate::new("Standard", 120., 300., false, None),
     ],
     pev: PevRules {
-        wait_times: 5..=10,
-        start_windows: 5..=10,
+        wait_times: SignedDuration::from_mins(5)..=SignedDuration::from_mins(10),
+        start_windows: SignedDuration::from_mins(5)..=SignedDuration::from_mins(10),
         limit: 3,
         limit_scope: PevLimitScope::Launch,
-        clustering_time: 30,
+        clustering_time: SignedDuration::from_secs(30),
         penalty_per_second: 1,
         maximum_penalty: 60,
     },
@@ -136,8 +135,8 @@ pub static FAI_ANNEX_A_2025A: RuleSetEdition = RuleSetEdition {
         minimum_assigned_area_separation: 1.,
     },
     countback_places: 3,
-    complaint_period: 14,
-    maximum_recording_interval: 1,
+    complaint_period: SignedDuration::from_hours(14),
+    maximum_recording_interval: SignedDuration::from_secs(1),
     clauses: &[(AnalysisLogKind::RecordingIntervalExceeded, "5.3c")],
     defaults: Rules {
         analysis: AnalysisParameters {
@@ -147,8 +146,8 @@ pub static FAI_ANNEX_A_2025A: RuleSetEdition = RuleSetEdition {
             maximum_start_altitude: None,
             maximum_start_ground_speed: None,
             pev_start: false,
-            pev_wait_time: 10,
-            pev_start_window: 10,
+            pev_wait_time: SignedDuration::from_mins(10),
+            pev_start_window: SignedDuration::from_mins(10),
             subtract_finish_ring_radius: true,
             delivery_period: None,
             tow_altitude: None,
@@ -203,16 +202,16 @@ impl ClassTemplate {
 /// outside the PEV start window is penalised.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PevRules {
-    /// The PEV wait times the edition allows, in whole minutes.
-    pub wait_times: RangeInclusive<u32>,
-    /// The PEV start windows the edition allows, in whole minutes.
-    pub start_windows: RangeInclusive<u32>,
+    /// The PEV wait times the edition allows.
+    pub wait_times: RangeInclusive<SignedDuration>,
+    /// The PEV start windows the edition allows.
+    pub start_windows: RangeInclusive<SignedDuration>,
     /// The number of PEVs that count, after which further PEVs are ignored.
     pub limit: u32,
     pub limit_scope: PevLimitScope,
     /// The time within which several PEVs count as one at the time of the
-    /// first, in seconds.
-    pub clustering_time: u32,
+    /// first.
+    pub clustering_time: SignedDuration,
     /// The penalty points per second that a start lies outside the PEV start
     /// window.
     pub penalty_per_second: u32,
@@ -249,10 +248,10 @@ pub struct RuleOverrides {
     pub maximum_start_altitude: Option<f64>,
     pub maximum_start_ground_speed: Option<f64>,
     pub pev_start: Option<bool>,
-    pub pev_wait_time: Option<u32>,
-    pub pev_start_window: Option<u32>,
+    pub pev_wait_time: Option<SignedDuration>,
+    pub pev_start_window: Option<SignedDuration>,
     pub subtract_finish_ring_radius: Option<bool>,
-    pub delivery_period: Option<u32>,
+    pub delivery_period: Option<SignedDuration>,
     pub tow_altitude: Option<f64>,
     pub maximum_altitude: Option<Altitude>,
     pub scoring_end_time: Option<Timestamp>,
@@ -318,15 +317,12 @@ pub struct AnalysisParameters {
     pub maximum_start_ground_speed: Option<f64>,
     /// Whether a start is timed from a PEV.
     pub pev_start: bool,
-    /// In whole minutes.
-    pub pev_wait_time: u32,
-    /// In whole minutes.
-    pub pev_start_window: u32,
+    pub pev_wait_time: SignedDuration,
+    pub pev_start_window: SignedDuration,
     /// Whether the finish ring radius is subtracted from the task distance.
     pub subtract_finish_ring_radius: bool,
-    /// The time after landing within which a flight must be delivered, in
-    /// whole minutes.
-    pub delivery_period: Option<u32>,
+    /// The time after landing within which a flight must be delivered.
+    pub delivery_period: Option<SignedDuration>,
     /// In m MSL.
     pub tow_altitude: Option<f64>,
     pub maximum_altitude: Option<Altitude>,
@@ -445,13 +441,16 @@ impl RuleSetEdition {
                 or_none(*maximum_start_ground_speed),
             ),
             ("pev_start", pev_start.to_string()),
-            ("pev_wait_time", pev_wait_time.to_string()),
-            ("pev_start_window", pev_start_window.to_string()),
+            ("pev_wait_time", pev_wait_time.as_mins().to_string()),
+            ("pev_start_window", pev_start_window.as_mins().to_string()),
             (
                 "subtract_finish_ring_radius",
                 subtract_finish_ring_radius.to_string(),
             ),
-            ("delivery_period", or_none(*delivery_period)),
+            (
+                "delivery_period",
+                or_none(delivery_period.map(|period| period.as_mins())),
+            ),
             ("tow_altitude", or_none(*tow_altitude)),
             ("maximum_altitude", or_none(maximum_altitude)),
             ("scoring_end_time", time(scoring_end_time)),
