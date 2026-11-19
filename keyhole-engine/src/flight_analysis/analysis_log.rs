@@ -1,6 +1,8 @@
 //! The analysis log, which holds the messages that the flight analysis
 //! produces for one IGC file, so that scorers can review them.
 
+use crate::time::UtcTime;
+
 /// One message of the flight analysis, with the evidence it refers to.
 #[derive(Debug)]
 pub struct AnalysisLogEntry {
@@ -14,13 +16,14 @@ pub enum AnalysisLogKind {
     FileFailedToParse,
     UnreadableLines,
     TimestampErrors,
+    RecordingIntervalExceeded,
 }
 
 impl AnalysisLogKind {
     pub fn level(self) -> Level {
         match self {
             Self::FileFailedToParse | Self::UnreadableLines => Level::Error,
-            Self::TimestampErrors => Level::Warning,
+            Self::TimestampErrors | Self::RecordingIntervalExceeded => Level::Warning,
         }
     }
 }
@@ -44,6 +47,11 @@ pub enum AnalysisLogDetails {
     /// Fixes that were dropped because their timestamp did not advance, by
     /// 1-based line number.
     TimestampErrors { lines: Vec<usize> },
+    /// Consecutive fixes lie further apart than the edition allows.
+    RecordingIntervalExceeded {
+        /// In seconds.
+        longest_interval: i64,
+    },
 }
 
 impl AnalysisLogDetails {
@@ -52,6 +60,7 @@ impl AnalysisLogDetails {
             Self::FileFailedToParse { .. } => AnalysisLogKind::FileFailedToParse,
             Self::UnreadableLines { .. } => AnalysisLogKind::UnreadableLines,
             Self::TimestampErrors { .. } => AnalysisLogKind::TimestampErrors,
+            Self::RecordingIntervalExceeded { .. } => AnalysisLogKind::RecordingIntervalExceeded,
         }
     }
 }
@@ -104,4 +113,6 @@ pub enum LineProblem {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Evidence {
     File,
+    /// The span from the first time to the second.
+    Interval(UtcTime, UtcTime),
 }

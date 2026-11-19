@@ -80,7 +80,10 @@ pub static DAEC_SWO_2026: RuleSetEdition = RuleSetEdition {
     countback_places: 0,
     complaint_period: 14,
     maximum_recording_interval: 1,
-    clauses: &[(AnalysisLogKind::FileFailedToParse, "5.9.8")],
+    clauses: &[
+        (AnalysisLogKind::FileFailedToParse, "5.9.8"),
+        (AnalysisLogKind::RecordingIntervalExceeded, "5.9.3"),
+    ],
     defaults: Rules {
         analysis: AnalysisParameters {
             earth_model: EarthModel::Wgs84,
@@ -135,7 +138,7 @@ pub static FAI_ANNEX_A_2025A: RuleSetEdition = RuleSetEdition {
     countback_places: 3,
     complaint_period: 14,
     maximum_recording_interval: 1,
-    clauses: &[],
+    clauses: &[(AnalysisLogKind::RecordingIntervalExceeded, "5.3c")],
     defaults: Rules {
         analysis: AnalysisParameters {
             earth_model: EarthModel::Wgs84,

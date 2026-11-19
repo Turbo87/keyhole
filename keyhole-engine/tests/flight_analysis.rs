@@ -3,11 +3,15 @@ use std::fmt::Write;
 use bytes::Bytes;
 use insta::assert_snapshot;
 use keyhole_engine::flight_analysis::analysis_log::{AnalysisLogDetails, Evidence, Level};
-use keyhole_engine::flight_analysis::{Date, FileAnalysis, analyze_file};
+use keyhole_engine::flight_analysis::{Date, FileAnalysis, FileAnalysisOptions, analyze_file};
 use keyhole_engine::time::UtcTime;
 
+const OPTIONS: FileAnalysisOptions = FileAnalysisOptions {
+    maximum_recording_interval: 1,
+};
+
 fn analyze(contents: &str) -> FileAnalysis {
-    analyze_file(Bytes::copy_from_slice(contents.as_bytes()))
+    analyze_file(Bytes::copy_from_slice(contents.as_bytes()), OPTIONS)
 }
 
 /// Renders the analysis log, then the flight with times as time of day and
@@ -34,9 +38,17 @@ fn render(analysis: &FileAnalysis) -> String {
                     format!("{count} fixes: {}", join(lines)),
                 )
             }
+            AnalysisLogDetails::RecordingIntervalExceeded { longest_interval } => {
+                ("interval_exceeded", format!("longest {longest_interval} s"))
+            }
         };
         let evidence = match entry.evidence {
-            Evidence::File => "file",
+            Evidence::File => "file".into(),
+            Evidence::Interval(start, end) => {
+                let flight = analysis.flight.as_ref().unwrap();
+                let date = flight.recorded_date;
+                format!("{} to {}", time(date, start), time(date, end))
+            }
         };
         writeln!(out, "{level:<7} {kind:<22} {evidence:<6} {data}").unwrap();
     }
@@ -126,7 +138,7 @@ fn dates_start_at_utc_midnight() {
 fn reports_a_file_without_igc_records() {
     let mut contents = "_".repeat(1000).into_bytes();
     contents.extend_from_slice(b"\n\x00\x9f\xff\x07\nB\xc3\x28\xfe\n\r\n");
-    let analysis = analyze_file(Bytes::from(contents));
+    let analysis = analyze_file(Bytes::from(contents), OPTIONS);
 
     assert_snapshot!(render(&analysis), @"
     error   file_failed_to_parse   file   NotIgc
@@ -236,6 +248,7 @@ fn reports_unreadable_lines_grouped_by_record_type_and_problem() {
     error   unreadable_lines       file   B OutOfRange: 6
     error   unreadable_lines       file   E Malformed: 12
     error   unreadable_lines       file   Unknown Malformed: 8
+    warning interval_exceeded      10:00:00 to 10:00:04 longest 4 s
     logger LXV ABC
     date   2024-06-16
     fix    10:00:00 A 51.37108 6.85390 100 110
@@ -265,6 +278,7 @@ fn dates_leading_invalid_fixes_before_midnight_on_the_previous_day() {
          B0000025122265N00651234EA0010000110\n",
     );
     assert_snapshot!(render(&analysis), @"
+    warning interval_exceeded      23:59:59 -1d to 00:00:01 longest 2 s
     logger LXV ABC
     date   2024-06-16
     fix    23:59:58 -1d V 51.37108 6.85390 100 110
@@ -302,6 +316,7 @@ fn dates_stale_fixes_after_midnight_on_the_previous_day() {
     );
     assert_snapshot!(render(&analysis), @"
     warning timestamp_errors       file   1 fixes: 5
+    warning interval_exceeded      23:59:58 to 00:00:01 +1d longest 3 s
     logger LXV ABC
     date   2024-06-16
     fix    23:59:58 A 51.37108 6.85390 100 110
@@ -408,6 +423,7 @@ fn dates_pilot_events_by_the_preceding_fix() {
          E000003XYZ\n",
     );
     assert_snapshot!(render(&analysis), @"
+    warning interval_exceeded      23:59:58 to 00:00:01 +1d longest 3 s
     logger LXV ABC
     date   2024-06-16
     fix    23:59:58 A 51.37108 6.85390 100 110
@@ -417,5 +433,33 @@ fn dates_pilot_events_by_the_preceding_fix() {
     pev    00:00:00 +1d
     pev    23:59:59
     pev    00:00:02 +1d
+    ");
+}
+
+#[test]
+fn warns_about_each_stretch_of_intervals_over_the_limit() {
+    let analysis = analyze(
+        "ALXVABC\n\
+         HFDTE160624\n\
+         B1000005122265N00651234EA0010000110\n\
+         B1000015122265N00651234EA0010000110\n\
+         B1000035122265N00651234EA0010000110\n\
+         B1000065122265N00651234EA0010000110\n\
+         B1000075122265N00651234EA0010000110\n\
+         B1000085122265N00651234EA0010000110\n\
+         B1000205122265N00651234EV0010000110\n",
+    );
+    assert_snapshot!(render(&analysis), @"
+    warning interval_exceeded      10:00:01 to 10:00:06 longest 3 s
+    warning interval_exceeded      10:00:08 to 10:00:20 longest 12 s
+    logger LXV ABC
+    date   2024-06-16
+    fix    10:00:00 A 51.37108 6.85390 100 110
+    fix    10:00:01 A 51.37108 6.85390 100 110
+    fix    10:00:03 A 51.37108 6.85390 100 110
+    fix    10:00:06 A 51.37108 6.85390 100 110
+    fix    10:00:07 A 51.37108 6.85390 100 110
+    fix    10:00:08 A 51.37108 6.85390 100 110
+    fix    10:00:20 V 51.37108 6.85390 100 110
     ");
 }

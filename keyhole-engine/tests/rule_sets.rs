@@ -29,6 +29,10 @@ fn analysis_log_kinds_cite_the_clauses_of_the_edition() {
     let kind = AnalysisLogKind::FileFailedToParse;
     assert_eq!(DAEC_SWO_2026.clause(kind), Some("5.9.8"));
     assert_eq!(FAI_ANNEX_A_2025A.clause(kind), None);
+
+    let kind = AnalysisLogKind::RecordingIntervalExceeded;
+    assert_eq!(DAEC_SWO_2026.clause(kind), Some("5.9.3"));
+    assert_eq!(FAI_ANNEX_A_2025A.clause(kind), Some("5.3c"));
 }
 
 #[test]

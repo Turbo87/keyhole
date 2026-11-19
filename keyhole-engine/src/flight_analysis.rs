@@ -143,8 +143,17 @@ impl ExtensionDefinition {
     }
 }
 
-/// Parses an IGC file, skipping what it cannot read.
-pub fn analyze_file(contents: Bytes) -> FileAnalysis {
+/// The limits that the file stage checks the recording against.
+#[derive(Debug, Clone, Copy)]
+pub struct FileAnalysisOptions {
+    /// The longest interval between two fixes that does not warrant a
+    /// warning, in whole seconds.
+    pub maximum_recording_interval: u32,
+}
+
+/// Parses an IGC file, skipping what it cannot read, and checks the
+/// recording against the given limits.
+pub fn analyze_file(contents: Bytes, options: FileAnalysisOptions) -> FileAnalysis {
     let mut logger = None;
     let mut recorded_date = None;
     let mut fixes = Vec::new();
@@ -237,6 +246,7 @@ pub fn analyze_file(contents: Bytes) -> FileAnalysis {
         if !lines.is_empty() {
             log.push(file_entry(AnalysisLogDetails::TimestampErrors { lines }));
         }
+        log.extend(exceeded_recording_intervals(&fixes, options));
         Flight {
             logger,
             recorded_date,
@@ -269,6 +279,29 @@ fn date_near(time_of_day: i64, reference: UtcTime) -> UtcTime {
     let offset = time_of_day - reference.0.rem_euclid(SECONDS_PER_DAY);
     let offset = (offset + half_day).rem_euclid(SECONDS_PER_DAY) - half_day;
     UtcTime(reference.0 + offset)
+}
+
+/// Warns about each stretch of consecutive intervals between fixes that
+/// exceed the limit.
+fn exceeded_recording_intervals(
+    fixes: &[Fix],
+    options: FileAnalysisOptions,
+) -> Vec<AnalysisLogEntry> {
+    let limit = i64::from(options.maximum_recording_interval);
+    let intervals = fixes.windows(2).map(|pair| (pair[0].time, pair[1].time));
+    let intervals = intervals.collect::<Vec<_>>();
+    let exceeds = |&(start, end): &(UtcTime, UtcTime)| end.0 - start.0 > limit;
+
+    let stretches = intervals.chunk_by(|a, b| exceeds(a) == exceeds(b));
+    let stretches = stretches.filter(|stretch| exceeds(&stretch[0]));
+    let entries = stretches.map(|stretch| {
+        let intervals = stretch.iter().map(|(start, end)| end.0 - start.0);
+        let longest_interval = intervals.max().unwrap_or_default();
+        let details = AnalysisLogDetails::RecordingIntervalExceeded { longest_interval };
+        let evidence = Evidence::Interval(stretch[0].0, stretch[stretch.len() - 1].1);
+        AnalysisLogEntry { details, evidence }
+    });
+    entries.collect()
 }
 
 /// Keeps the fixes whose time advances past the fixes kept before them and
