@@ -1,12 +1,16 @@
 use insta::assert_snapshot;
+use jiff::Timestamp;
 use keyhole_engine::day_scoring::ScoringParameters;
 use keyhole_engine::flight_analysis::analysis_log::AnalysisLogKind;
 use keyhole_engine::rule_sets::{
     Altitude, AnalysisParameters, DAEC_SWO_2026, EarthModel, FAI_ANNEX_A_2025A, RuleOverrides,
     RuleSetEdition,
 };
-use keyhole_engine::time::UtcTime;
 use keyhole_handicaps::HandicapList;
+
+fn utc(second: i64) -> Timestamp {
+    Timestamp::from_second(second).unwrap()
+}
 
 fn standard_class() -> RuleOverrides {
     RuleOverrides {
@@ -71,8 +75,8 @@ fn later_layers_win_over_earlier_layers_and_edition_defaults() {
 #[test]
 fn start_procedure_overrides_apply() {
     let start = RuleOverrides {
-        start_opening_time: Some(UtcTime(1_659_348_000)),
-        start_closing_time: Some(UtcTime(1_659_355_200)),
+        start_opening_time: Some(utc(1_659_348_000)),
+        start_closing_time: Some(utc(1_659_355_200)),
         maximum_start_altitude: Some(1500.),
         maximum_start_ground_speed: Some(170.),
         pev_start: Some(true),
@@ -85,8 +89,8 @@ fn start_procedure_overrides_apply() {
 
     let expected = AnalysisParameters {
         earth_model: EarthModel::Wgs84,
-        start_opening_time: Some(UtcTime(1_659_348_000)),
-        start_closing_time: Some(UtcTime(1_659_355_200)),
+        start_opening_time: Some(utc(1_659_348_000)),
+        start_closing_time: Some(utc(1_659_355_200)),
         maximum_start_altitude: Some(1500.),
         maximum_start_ground_speed: Some(170.),
         pev_start: true,
@@ -104,7 +108,7 @@ fn finish_altitude_and_scoring_end_overrides_apply() {
         delivery_period: Some(30),
         tow_altitude: Some(600.),
         maximum_altitude: Some(Altitude::FlightLevel(95)),
-        scoring_end_time: Some(UtcTime(1_659_376_800)),
+        scoring_end_time: Some(utc(1_659_376_800)),
         ..Default::default()
     };
 
@@ -115,7 +119,7 @@ fn finish_altitude_and_scoring_end_overrides_apply() {
         delivery_period: Some(30),
         tow_altitude: Some(600.),
         maximum_altitude: Some(Altitude::FlightLevel(95)),
-        scoring_end_time: Some(UtcTime(1_659_376_800)),
+        scoring_end_time: Some(utc(1_659_376_800)),
         ..DAEC_SWO_2026.defaults.analysis.clone()
     };
     assert_eq!(analysis, expected);
@@ -180,8 +184,8 @@ fn canonical_rules_list_the_edition_and_every_parameter() {
         earth_model: Some(EarthModel::FaiSphere),
         dm: Some(50.),
         d1: Some(212.5),
-        start_opening_time: Some(UtcTime(1_659_348_000)),
-        start_closing_time: Some(UtcTime(1_659_355_200)),
+        start_opening_time: Some(utc(1_659_348_000)),
+        start_closing_time: Some(utc(1_659_355_200)),
         maximum_start_altitude: Some(1500.),
         maximum_start_ground_speed: Some(170.),
         pev_start: Some(true),
@@ -191,7 +195,7 @@ fn canonical_rules_list_the_edition_and_every_parameter() {
         delivery_period: Some(30),
         tow_altitude: Some(600.),
         maximum_altitude: Some(Altitude::Msl(2999.9)),
-        scoring_end_time: Some(UtcTime(1_659_376_800)),
+        scoring_end_time: Some(utc(1_659_376_800)),
     };
     let rules = DAEC_SWO_2026.resolve(&[overrides]);
 

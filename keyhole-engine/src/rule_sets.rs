@@ -4,11 +4,11 @@
 use std::fmt::{self, Display};
 use std::ops::RangeInclusive;
 
+use jiff::Timestamp;
 use sha2::{Digest, Sha256};
 
 use crate::day_scoring::ScoringParameters;
 use crate::flight_analysis::analysis_log::AnalysisLogKind;
-use crate::time::UtcTime;
 
 /// One dated version of a rule set, shipped as immutable data.
 ///
@@ -244,8 +244,8 @@ pub struct RuleOverrides {
     pub earth_model: Option<EarthModel>,
     pub dm: Option<f64>,
     pub d1: Option<f64>,
-    pub start_opening_time: Option<UtcTime>,
-    pub start_closing_time: Option<UtcTime>,
+    pub start_opening_time: Option<Timestamp>,
+    pub start_closing_time: Option<Timestamp>,
     pub maximum_start_altitude: Option<f64>,
     pub maximum_start_ground_speed: Option<f64>,
     pub pev_start: Option<bool>,
@@ -255,7 +255,7 @@ pub struct RuleOverrides {
     pub delivery_period: Option<u32>,
     pub tow_altitude: Option<f64>,
     pub maximum_altitude: Option<Altitude>,
-    pub scoring_end_time: Option<UtcTime>,
+    pub scoring_end_time: Option<Timestamp>,
 }
 
 /// The effective parameters a class day is analysed and scored with, split so
@@ -310,8 +310,8 @@ pub enum ObservationZone {
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnalysisParameters {
     pub earth_model: EarthModel,
-    pub start_opening_time: Option<UtcTime>,
-    pub start_closing_time: Option<UtcTime>,
+    pub start_opening_time: Option<Timestamp>,
+    pub start_closing_time: Option<Timestamp>,
     /// In m MSL.
     pub maximum_start_altitude: Option<f64>,
     /// In km/h.
@@ -330,7 +330,7 @@ pub struct AnalysisParameters {
     /// In m MSL.
     pub tow_altitude: Option<f64>,
     pub maximum_altitude: Option<Altitude>,
-    pub scoring_end_time: Option<UtcTime>,
+    pub scoring_end_time: Option<Timestamp>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -428,7 +428,7 @@ impl RuleSetEdition {
             EarthModel::Wgs84 => "wgs84",
             EarthModel::FaiSphere => "fai_sphere",
         };
-        let time = |time: &Option<UtcTime>| or_none(time.map(|UtcTime(seconds)| seconds));
+        let time = |time: &Option<Timestamp>| or_none(time.map(Timestamp::as_second));
         let maximum_altitude = maximum_altitude.map(|altitude| match altitude {
             Altitude::Msl(altitude) => format!("{altitude} m"),
             Altitude::FlightLevel(level) => format!("FL{level}"),
