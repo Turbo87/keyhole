@@ -56,7 +56,7 @@ fn wrong_published_day_parameter_fails() {
     assert_snapshot!(report, @"
     Do: published 299.99, Keyhole 300.00
     Decisions:
-      A: finished 300 km in 3:00:00 (from the download)
+      A: finished 300 km in 03:00:00 (from the download)
     ");
 }
 
@@ -73,7 +73,7 @@ fn wrong_published_day_validity_fails() {
     assert_snapshot!(report, @"
     day validity: published invalid, Keyhole valid
     Decisions:
-      A: finished 300 km in 3:00:00 (from the download)
+      A: finished 300 km in 03:00:00 (from the download)
     ");
 }
 
@@ -114,7 +114,7 @@ rule_set = "FAI Annex A 2025a"
     assert_snapshot!(report, @"
     A points: published 999, Keyhole 1000
     Decisions:
-      A: finished 300 km in 3:00:00 (from the download)
+      A: finished 300 km in 03:00:00 (from the download)
     ");
 }
 
@@ -128,7 +128,7 @@ fn values_without_rule_overrides_keep_the_edition_defaults() {
     assert_snapshot!(report, @"
     D1: published 300, Keyhole 250
     Decisions:
-      A: finished 300 km in 3:00:00 (from the download)
+      A: finished 300 km in 03:00:00 (from the download)
     ");
 }
 
@@ -184,7 +184,7 @@ fn wrong_published_row_value_fails() {
     A points: published 999, Keyhole 1000
     A speed: published 100.01, Keyhole 100.00
     Decisions:
-      A: finished 300 km in 3:00:00 (from the download)
+      A: finished 300 km in 03:00:00 (from the download)
     ");
 }
 
@@ -214,7 +214,7 @@ fn recorded_deviation_explains_a_mismatch() {
     assert_snapshot!(report, @"
     A points: published 999, Keyhole 1000 (recorded deviation: SeeYou scored a different value.)
     Decisions:
-      A: finished 300 km in 3:00:00 (from the download)
+      A: finished 300 km in 03:00:00 (from the download)
     ");
 }
 
@@ -226,7 +226,7 @@ fn stale_recorded_deviation_fails() {
     assert_snapshot!(report, @"
     A points: recorded deviation no longer occurs: SeeYou scored a different value.
     Decisions:
-      A: finished 300 km in 3:00:00 (from the download)
+      A: finished 300 km in 03:00:00 (from the download)
     ");
 }
 
@@ -241,7 +241,7 @@ fn report_lists_day_parameter_mismatches_before_row_mismatches() {
     n2: published 0, Keyhole 1
     A points: published 999, Keyhole 1000
     Decisions:
-      A: finished 300 km in 3:00:00 (from the download)
+      A: finished 300 km in 03:00:00 (from the download)
     ");
 }
 
@@ -251,7 +251,7 @@ fn report_names_the_decisions_applied_to_each_row() {
 
     assert_snapshot!(report, @"
     Decisions:
-      A: finished 300 km in 3:00:00 (from the download)
+      A: finished 300 km in 03:00:00 (from the download)
     ");
 }
 
@@ -289,7 +289,7 @@ explanation = "SoaringSpot leaves DNS rows unranked."
     assert_snapshot!(report, @"
     B rank: published DNS, Keyhole 2 (recorded deviation: SoaringSpot leaves DNS rows unranked.)
     Decisions:
-      A: finished 300 km in 3:00:00 (from the download)
+      A: finished 300 km in 03:00:00 (from the download)
       B: landed after 0 km (from the download)
       C: did not fly (from the download)
     ");
@@ -304,7 +304,7 @@ fn penalty_points_become_the_penalty() {
     assert!(report.passes(), "{report}");
     assert_snapshot!(report, @r#"
     Decisions:
-      A: finished 300 km in 3:00:00 (from the download), penalty 12 (from the download), public remark "Start" (from the download)
+      A: finished 300 km in 03:00:00 (from the download), penalty 12 (from the download), public remark "Start" (from the download)
     "#);
 }
 
@@ -318,7 +318,7 @@ fn fractional_penalty_points_are_rounded_and_compared() {
     assert_snapshot!(report, @"
     A penalty: published 5.164, Keyhole 5
     Decisions:
-      A: finished 300 km in 3:00:00 (from the download), penalty 5 (from the download)
+      A: finished 300 km in 03:00:00 (from the download), penalty 5 (from the download)
     ");
 }
 
@@ -381,7 +381,7 @@ result = {{ flown = {{ distance = 300.0, time = "3:00:00" }} }}
     assert!(report.passes(), "{report}");
     assert_snapshot!(report, @"
     Decisions:
-      A: finished 300 km in 3:00:00 (from the fixture file)
+      A: finished 300 km in 03:00:00 (from the fixture file)
     ");
 }
 
@@ -406,6 +406,15 @@ fn finish_at_the_start_time_is_an_error() {
     let error = check(&fixture).unwrap_err();
 
     assert_eq!(error.to_string(), "A finished at or before the start");
+}
+
+#[test]
+fn unreadable_start_time_is_an_error() {
+    let finisher = FINISHER.replace("12:00:00,", "noon,");
+
+    let error = Fixture::parse(TASK, &results(&[&finisher]), FIXTURE_FILE).unwrap_err();
+
+    assert_snapshot!(format!("{error:#}"), @"parsing results.csv: CSV deserialize error: record 1 (line: 2, byte: 167): failed to parse two digit integer as hour: invalid digit, expected 0-9 but got n");
 }
 
 #[test]
@@ -480,7 +489,7 @@ fn wrong_published_rank_fails() {
     assert_snapshot!(report, @"
     A rank: published 2, Keyhole 1
     Decisions:
-      A: finished 300 km in 3:00:00 (from the download)
+      A: finished 300 km in 03:00:00 (from the download)
     ");
 }
 
@@ -515,8 +524,8 @@ fn hc_rows_are_hors_concours() {
     assert!(report.passes(), "{report}");
     assert_snapshot!(report, @"
     Decisions:
-      A: finished 300 km in 3:00:00 (from the download)
-      G: finished 300 km in 3:00:00 (from the download), hors concours (from the download)
+      A: finished 300 km in 03:00:00 (from the download)
+      G: finished 300 km in 03:00:00 (from the download), hors concours (from the download)
     ");
 }
 
@@ -530,8 +539,8 @@ fn fixture_file_decides_on_hors_concours() {
     assert_snapshot!(report, @"
     G rank: published HC, Keyhole 1
     Decisions:
-      A: finished 300 km in 3:00:00 (from the download)
-      G: finished 300 km in 3:00:00 (from the download), not hors concours (from the fixture file)
+      A: finished 300 km in 03:00:00 (from the download)
+      G: finished 300 km in 03:00:00 (from the download), not hors concours (from the fixture file)
     ");
 }
 
@@ -653,7 +662,7 @@ fn handicap_column_divides_by_handicaps_on_the_100_scale() {
     assert!(report.passes(), "{report}");
     assert_snapshot!(report, @"
     Decisions:
-      A: finished 300 km in 3:00:00 (from the download), handicap 125 (from the download)
+      A: finished 300 km in 03:00:00 (from the download), handicap 125 (from the download)
     ");
 }
 
@@ -686,7 +695,7 @@ fn class_without_handicaps_ignores_the_handicap_column() {
     assert!(report.passes(), "{report}");
     assert_snapshot!(report, @"
     Decisions:
-      A: finished 300 km in 3:00:00 (from the download)
+      A: finished 300 km in 03:00:00 (from the download)
     ");
 }
 
@@ -702,7 +711,7 @@ fn fixture_file_decides_on_the_handicap() {
     assert!(report.passes(), "{report}");
     assert_snapshot!(report, @"
     Decisions:
-      A: finished 300 km in 3:00:00 (from the download), handicap 125 (from the fixture file)
+      A: finished 300 km in 03:00:00 (from the download), handicap 125 (from the fixture file)
     ");
 }
 

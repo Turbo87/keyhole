@@ -4,9 +4,9 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
-use std::time::Duration;
 
 use anyhow::Context;
+use jiff::SignedDuration;
 use keyhole_engine::rule_sets;
 use serde::{Deserialize, Serialize};
 
@@ -17,7 +17,7 @@ use crate::published::{PublishedRow, PublishedTask, parse_results};
 /// One published class day with what its download lacks.
 #[derive(Debug)]
 pub struct Fixture {
-    pub minimum_task_time: Option<Duration>,
+    pub minimum_task_time: Option<SignedDuration>,
     pub rows: Vec<PublishedRow>,
     pub file: FixtureFile,
 }

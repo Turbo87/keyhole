@@ -1,7 +1,7 @@
 //! The analysis log, which holds the messages that the flight analysis
 //! produces for one IGC file, so that scorers can review them.
 
-use crate::time::UtcTime;
+use jiff::{SignedDuration, Timestamp};
 
 /// One message of the flight analysis, with the evidence it refers to.
 #[derive(Debug)]
@@ -48,10 +48,7 @@ pub enum AnalysisLogDetails {
     /// 1-based line number.
     TimestampErrors { lines: Vec<usize> },
     /// Consecutive fixes lie further apart than the edition allows.
-    RecordingIntervalExceeded {
-        /// In seconds.
-        longest_interval: i64,
-    },
+    RecordingIntervalExceeded { longest_interval: SignedDuration },
 }
 
 impl AnalysisLogDetails {
@@ -114,5 +111,5 @@ pub enum LineProblem {
 pub enum Evidence {
     File,
     /// The span from the first time to the second.
-    Interval(UtcTime, UtcTime),
+    Interval(Timestamp, Timestamp),
 }

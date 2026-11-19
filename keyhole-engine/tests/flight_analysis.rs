@@ -2,12 +2,14 @@ use std::fmt::Write;
 
 use bytes::Bytes;
 use insta::assert_snapshot;
+use jiff::civil::Date;
+use jiff::tz::Offset;
+use jiff::{SignedDuration, Timestamp};
 use keyhole_engine::flight_analysis::analysis_log::{AnalysisLogDetails, Evidence, Level};
-use keyhole_engine::flight_analysis::{Date, FileAnalysis, FileAnalysisOptions, analyze_file};
-use keyhole_engine::time::UtcTime;
+use keyhole_engine::flight_analysis::{FileAnalysis, FileAnalysisOptions, analyze_file};
 
 const OPTIONS: FileAnalysisOptions = FileAnalysisOptions {
-    maximum_recording_interval: 1,
+    maximum_recording_interval: SignedDuration::from_secs(1),
 };
 
 fn analyze(contents: &str) -> FileAnalysis {
@@ -39,7 +41,7 @@ fn render(analysis: &FileAnalysis) -> String {
                 )
             }
             AnalysisLogDetails::RecordingIntervalExceeded { longest_interval } => {
-                ("interval_exceeded", format!("longest {longest_interval} s"))
+                ("interval_exceeded", format!("longest {longest_interval:#}"))
             }
         };
         let evidence = match entry.evidence {
@@ -60,8 +62,7 @@ fn render(analysis: &FileAnalysis) -> String {
 
     let logger = &flight.logger;
     writeln!(out, "logger {} {}", logger.manufacturer, logger.serial).unwrap();
-    let Date { year, month, day } = flight.recorded_date;
-    writeln!(out, "date   {year:04}-{month:02}-{day:02}").unwrap();
+    writeln!(out, "date   {}", flight.recorded_date).unwrap();
 
     for fix in &flight.fixes {
         let time = time(flight.recorded_date, fix.time);
@@ -88,11 +89,10 @@ fn render(analysis: &FileAnalysis) -> String {
 
 /// Formats a time as time of day, with the days after the recorded date
 /// unless it lies on that date.
-fn time(recorded_date: Date, time: UtcTime) -> String {
-    let seconds = time.0 - recorded_date.midnight().0;
-    let (days, seconds) = (seconds.div_euclid(86_400), seconds.rem_euclid(86_400));
-    let (hours, minutes, seconds) = (seconds / 3600, seconds / 60 % 60, seconds % 60);
-    let time = format!("{hours:02}:{minutes:02}:{seconds:02}");
+fn time(recorded_date: Date, time: Timestamp) -> String {
+    let time = Offset::UTC.to_datetime(time);
+    let days = time.date().since(recorded_date).unwrap().get_days();
+    let time = time.strftime("%H:%M:%S").to_string();
     if days == 0 {
         time
     } else {
@@ -122,16 +122,6 @@ fn parses_a_well_formed_file_into_a_flight() {
     fix    10:00:01 A -51.37110 -6.85392 -10 -5
     fix    10:00:02 A 51.37112 6.85393 102 112
     ");
-}
-
-#[test]
-fn dates_start_at_utc_midnight() {
-    let midnight = |year, month, day| Date { year, month, day }.midnight();
-    assert_eq!(midnight(1970, 1, 1), UtcTime(0));
-    assert_eq!(midnight(2000, 1, 1), UtcTime(946_684_800));
-    assert_eq!(midnight(2024, 2, 29), UtcTime(1_709_164_800));
-    assert_eq!(midnight(2024, 3, 1), UtcTime(1_709_251_200));
-    assert_eq!(midnight(2024, 6, 16), UtcTime(1_718_496_000));
 }
 
 #[test]
@@ -248,7 +238,7 @@ fn reports_unreadable_lines_grouped_by_record_type_and_problem() {
     error   unreadable_lines       file   B OutOfRange: 6
     error   unreadable_lines       file   E Malformed: 12
     error   unreadable_lines       file   Unknown Malformed: 8
-    warning interval_exceeded      10:00:00 to 10:00:04 longest 4 s
+    warning interval_exceeded      10:00:00 to 10:00:04 longest 4s
     logger LXV ABC
     date   2024-06-16
     fix    10:00:00 A 51.37108 6.85390 100 110
@@ -278,7 +268,7 @@ fn dates_leading_invalid_fixes_before_midnight_on_the_previous_day() {
          B0000025122265N00651234EA0010000110\n",
     );
     assert_snapshot!(render(&analysis), @"
-    warning interval_exceeded      23:59:59 -1d to 00:00:01 longest 2 s
+    warning interval_exceeded      23:59:59 -1d to 00:00:01 longest 2s
     logger LXV ABC
     date   2024-06-16
     fix    23:59:58 -1d V 51.37108 6.85390 100 110
@@ -316,7 +306,7 @@ fn dates_stale_fixes_after_midnight_on_the_previous_day() {
     );
     assert_snapshot!(render(&analysis), @"
     warning timestamp_errors       file   1 fixes: 5
-    warning interval_exceeded      23:59:58 to 00:00:01 +1d longest 3 s
+    warning interval_exceeded      23:59:58 to 00:00:01 +1d longest 3s
     logger LXV ABC
     date   2024-06-16
     fix    23:59:58 A 51.37108 6.85390 100 110
@@ -332,6 +322,24 @@ fn dates_fixes_after_midnight_on_the_next_day() {
          HFDTE160624\n\
          B2359595122265N00651234EA0010000110\n\
          B0000005122265N00651234EA0010000110\n\
+         B0000015122265N00651234EA0010000110\n",
+    );
+    assert_snapshot!(render(&analysis), @"
+    logger LXV ABC
+    date   2024-06-16
+    fix    23:59:59 A 51.37108 6.85390 100 110
+    fix    00:00:00 +1d A 51.37108 6.85390 100 110
+    fix    00:00:01 +1d A 51.37108 6.85390 100 110
+    ");
+}
+
+#[test]
+fn dates_times_past_the_end_of_the_day_on_the_next_day() {
+    let analysis = analyze(
+        "ALXVABC\n\
+         HFDTE160624\n\
+         B2359595122265N00651234EA0010000110\n\
+         B2400005122265N00651234EA0010000110\n\
          B0000015122265N00651234EA0010000110\n",
     );
     assert_snapshot!(render(&analysis), @"
@@ -423,7 +431,7 @@ fn dates_pilot_events_by_the_preceding_fix() {
          E000003XYZ\n",
     );
     assert_snapshot!(render(&analysis), @"
-    warning interval_exceeded      23:59:58 to 00:00:01 +1d longest 3 s
+    warning interval_exceeded      23:59:58 to 00:00:01 +1d longest 3s
     logger LXV ABC
     date   2024-06-16
     fix    23:59:58 A 51.37108 6.85390 100 110
@@ -450,8 +458,8 @@ fn warns_about_each_stretch_of_intervals_over_the_limit() {
          B1000205122265N00651234EV0010000110\n",
     );
     assert_snapshot!(render(&analysis), @"
-    warning interval_exceeded      10:00:01 to 10:00:06 longest 3 s
-    warning interval_exceeded      10:00:08 to 10:00:20 longest 12 s
+    warning interval_exceeded      10:00:01 to 10:00:06 longest 3s
+    warning interval_exceeded      10:00:08 to 10:00:20 longest 12s
     logger LXV ABC
     date   2024-06-16
     fix    10:00:00 A 51.37108 6.85390 100 110

@@ -7,8 +7,9 @@ use std::ops::Range;
 use bytes::Bytes;
 use igc::records::{self, ARecord, BRecord, FixValid, HRecord, Record};
 use igc::util::ParseError;
-
-use crate::time::UtcTime;
+use jiff::civil::{Date, Time};
+use jiff::tz::Offset;
+use jiff::{SignedDuration, Timestamp};
 
 use self::analysis_log::{
     AnalysisLogDetails, AnalysisLogEntry, Evidence, FileFailure, LineFailure, LineProblem,
@@ -16,8 +17,6 @@ use self::analysis_log::{
 };
 
 pub mod analysis_log;
-
-const SECONDS_PER_DAY: i64 = 24 * 60 * 60;
 
 /// What the file stage extracted from one IGC file.
 #[derive(Debug)]
@@ -38,7 +37,7 @@ pub struct Flight {
     /// past the fixes before them.
     pub fixes: Vec<Fix>,
     /// The pilot event markers, in file order.
-    pub pevs: Vec<UtcTime>,
+    pub pevs: Vec<Timestamp>,
 }
 
 /// A logger's manufacturer and serial, as written in the A record.
@@ -48,48 +47,11 @@ pub struct LoggerId {
     pub serial: String,
 }
 
-/// A calendar day in UTC.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Date {
-    pub year: u16,
-    pub month: u8,
-    pub day: u8,
-}
-
-impl Date {
-    /// Returns `None` if the day does not exist in the Gregorian calendar.
-    fn new(year: u16, month: u8, day: u8) -> Option<Self> {
-        let is_leap_year =
-            year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400));
-        let days_in_month = match month {
-            2 if is_leap_year => 29,
-            2 => 28,
-            4 | 6 | 9 | 11 => 30,
-            1..=12 => 31,
-            _ => return None,
-        };
-        let date = Self { year, month, day };
-        (1..=days_in_month).contains(&day).then_some(date)
-    }
-
-    /// The start of this day.
-    pub fn midnight(self) -> UtcTime {
-        // Howard Hinnant's `days_from_civil()`, with years starting in March so
-        // that the leap day comes last.
-        let year = i64::from(self.year) - i64::from(self.month <= 2);
-        let month = i64::from(self.month);
-        let year_of_era = year.rem_euclid(400);
-        let day_of_year = (153 * ((month + 9) % 12) + 2) / 5 + i64::from(self.day) - 1;
-        let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
-        let days = year.div_euclid(400) * 146_097 + day_of_era - 719_468;
-        UtcTime(days * SECONDS_PER_DAY)
-    }
-}
-
-/// One B record.
+/// One B record. Its time is a time of day until the file stage dates the
+/// fixes.
 #[derive(Debug)]
-pub struct Fix {
-    pub time: UtcTime,
+pub struct Fix<T = Timestamp> {
+    pub time: T,
     /// In degrees, positive to the north.
     pub latitude: f64,
     /// In degrees, positive to the east.
@@ -103,6 +65,20 @@ pub struct Fix {
     /// The values of the extensions that the latest I record defines, without
     /// those that the B record is too short for.
     pub extensions: Vec<Extension>,
+}
+
+impl Fix<Time> {
+    fn dated(self, time: Timestamp) -> Fix {
+        Fix {
+            time,
+            latitude: self.latitude,
+            longitude: self.longitude,
+            valid: self.valid,
+            pressure_altitude: self.pressure_altitude,
+            gnss_altitude: self.gnss_altitude,
+            extensions: self.extensions,
+        }
+    }
 }
 
 impl Fix {
@@ -146,9 +122,8 @@ impl ExtensionDefinition {
 /// The limits that the file stage checks the recording against.
 #[derive(Debug, Clone, Copy)]
 pub struct FileAnalysisOptions {
-    /// The longest interval between two fixes that does not warrant a
-    /// warning, in whole seconds.
-    pub maximum_recording_interval: u32,
+    /// The longest interval between two fixes that does not warrant a warning.
+    pub maximum_recording_interval: SignedDuration,
 }
 
 /// Parses an IGC file, skipping what it cannot read, and checks the
@@ -199,8 +174,7 @@ pub fn analyze_file(contents: Bytes, options: FileAnalysisOptions) -> FileAnalys
                 recorded_date = recorded_date.or_else(|| parse_date(&record));
             }
             Ok(Record::E(record)) if record.mnemonic == "PEV" => {
-                let time_of_day = record.time.seconds_since_midnight().into();
-                pevs.push((time_of_day, fixes.len().saturating_sub(1)));
+                pevs.push((time_of_day(record.time), fixes.len().saturating_sub(1)));
             }
             Ok(Record::I(record)) => {
                 let definitions = record.0.extensions.iter();
@@ -241,7 +215,7 @@ pub fn analyze_file(contents: Bytes, options: FileAnalysisOptions) -> FileAnalys
 
     let usable = logger.zip(recorded_date).zip(first_valid_fix);
     let flight = usable.map(|((logger, recorded_date), first_valid_fix)| {
-        date_fixes(&mut fixes, recorded_date, first_valid_fix);
+        let fixes = date_fixes(fixes, recorded_date, first_valid_fix);
         let pevs = pevs
             .iter()
             .map(|&(time, fix)| date_near(time, fixes[fix].time))
@@ -265,24 +239,41 @@ pub fn analyze_file(contents: Bytes, options: FileAnalysisOptions) -> FileAnalys
 /// Turns the fixes' times of day into points in time. Each fix lies within
 /// 12 h of the latest fix before it, so a step back by more than 12 h crosses
 /// midnight. The recorded date is the date of the first valid fix.
-fn date_fixes(fixes: &mut [Fix], recorded_date: Date, first_valid_fix: usize) {
-    let mut latest = fixes[0].time;
-    for fix in &mut *fixes {
-        fix.time = date_near(fix.time.0, latest);
-        latest = latest.max(fix.time);
-    }
+fn date_fixes(fixes: Vec<Fix<Time>>, recorded_date: Date, first_valid_fix: usize) -> Vec<Fix> {
+    let mut latest = utc_timestamp(recorded_date, fixes[0].time);
+    let mut fixes = fixes
+        .into_iter()
+        .map(|fix| {
+            let time = date_near(fix.time, latest);
+            latest = latest.max(time);
+            fix.dated(time)
+        })
+        .collect::<Vec<_>>();
 
-    let anchor = fixes[first_valid_fix].time.0;
-    let offset = recorded_date.midnight().0 - (anchor - anchor.rem_euclid(SECONDS_PER_DAY));
-    fixes.iter_mut().for_each(|fix| fix.time.0 += offset);
+    let anchor = Offset::UTC.to_datetime(fixes[first_valid_fix].time).date();
+    let offset = recorded_date.duration_since(anchor);
+    fixes.iter_mut().for_each(|fix| fix.time += offset);
+    fixes
 }
 
 /// Dates a time of day within 12 h of the given time.
-fn date_near(time_of_day: i64, reference: UtcTime) -> UtcTime {
-    let half_day = SECONDS_PER_DAY / 2;
-    let offset = time_of_day - reference.0.rem_euclid(SECONDS_PER_DAY);
-    let offset = (offset + half_day).rem_euclid(SECONDS_PER_DAY) - half_day;
-    UtcTime(reference.0 + offset)
+fn date_near(time_of_day: Time, reference: Timestamp) -> Timestamp {
+    const DAY: SignedDuration = SignedDuration::from_hours(24);
+    const HALF_DAY: SignedDuration = SignedDuration::from_hours(12);
+    let reference_time = Offset::UTC.to_datetime(reference).time();
+    let offset = match time_of_day.duration_since(reference_time) {
+        offset if offset >= HALF_DAY => offset - DAY,
+        offset if offset < -HALF_DAY => offset + DAY,
+        offset => offset,
+    };
+    reference + offset
+}
+
+/// The point in time of a time of day on a UTC date.
+fn utc_timestamp(date: Date, time: Time) -> Timestamp {
+    let datetime = date.to_datetime(time);
+    let timestamp = Offset::UTC.to_timestamp(datetime);
+    timestamp.expect("IGC dates lie within the supported range")
 }
 
 /// Warns about each stretch of consecutive intervals between fixes that
@@ -291,15 +282,16 @@ fn exceeded_recording_intervals(
     fixes: &[Fix],
     options: FileAnalysisOptions,
 ) -> Vec<AnalysisLogEntry> {
-    let limit = i64::from(options.maximum_recording_interval);
+    let limit = options.maximum_recording_interval;
+    let length = |&(start, end): &(Timestamp, Timestamp)| end.duration_since(start);
     let intervals = fixes.windows(2).map(|pair| (pair[0].time, pair[1].time));
     let intervals = intervals.collect::<Vec<_>>();
-    let exceeds = |&(start, end): &(UtcTime, UtcTime)| end.0 - start.0 > limit;
+    let exceeds = |interval: &(Timestamp, Timestamp)| length(interval) > limit;
 
     let stretches = intervals.chunk_by(|a, b| exceeds(a) == exceeds(b));
     let stretches = stretches.filter(|stretch| exceeds(&stretch[0]));
     let entries = stretches.map(|stretch| {
-        let intervals = stretch.iter().map(|(start, end)| end.0 - start.0);
+        let intervals = stretch.iter().map(length);
         let longest_interval = intervals.max().unwrap_or_default();
         let details = AnalysisLogDetails::RecordingIntervalExceeded { longest_interval };
         let evidence = Evidence::Interval(stretch[0].0, stretch[stretch.len() - 1].1);
@@ -375,14 +367,16 @@ fn logger_id(line: &str, record: &ARecord) -> LoggerId {
 /// `HFDTEDDMMYY` and the `HFDTEDATE:DDMMYY,NN` forms.
 fn parse_date(record: &HRecord) -> Option<Date> {
     let date = igc::util::Date::parse(record.data.get(..6)?).ok()?;
-    Date::new(2000 + u16::from(date.year), date.month, date.day)
+    let year = 2000 + i16::from(date.year);
+    let month = i8::try_from(date.month).ok()?;
+    let day = i8::try_from(date.day).ok()?;
+    Date::new(year, month, day).ok()
 }
 
-/// Converts a B record into a fix whose time is still the time of day, until
-/// `date_fixes()` dates all fixes at once.
-fn fix(record: &BRecord, extensions: Vec<Extension>) -> Fix {
+/// Converts a B record into a fix that `date_fixes()` dates later.
+fn fix(record: &BRecord, extensions: Vec<Extension>) -> Fix<Time> {
     Fix {
-        time: UtcTime(record.timestamp.seconds_since_midnight().into()),
+        time: time_of_day(record.timestamp),
         latitude: record.pos.lat.0.into(),
         longitude: record.pos.lon.0.into(),
         valid: record.fix_valid == FixValid::Valid,
@@ -390,4 +384,11 @@ fn fix(record: &BRecord, extensions: Vec<Extension>) -> Fix {
         gnss_altitude: record.gps_alt.into(),
         extensions,
     }
+}
+
+/// Reads an IGC time, wrapping values such as `240000` that the IGC parser
+/// accepts past the end of the day.
+fn time_of_day(time: igc::util::Time) -> Time {
+    let seconds = SignedDuration::from_secs(time.seconds_since_midnight().into());
+    Time::midnight().wrapping_add(seconds)
 }

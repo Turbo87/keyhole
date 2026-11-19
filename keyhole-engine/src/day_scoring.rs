@@ -6,7 +6,7 @@
 //! be above 0. Scoring does not check these and its results are meaningless
 //! when they are violated.
 
-use std::time::Duration;
+use jiff::SignedDuration;
 
 use crate::ranking::share_ranks;
 
@@ -16,7 +16,7 @@ pub struct ClassDay {
     pub parameters: ScoringParameters,
     /// The minimum task time of an assigned area task, or `None` on a racing
     /// task.
-    pub minimum_task_time: Option<Duration>,
+    pub minimum_task_time: Option<SignedDuration>,
     pub competitors: Vec<CompetitorResult>,
 }
 
@@ -65,7 +65,7 @@ pub struct Achievement {
     /// finisher.
     pub distance: f64,
     /// The time from the start to the finish, or `None` without a finish.
-    pub time: Option<Duration>,
+    pub time: Option<SignedDuration>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -103,7 +103,7 @@ pub struct DayParameters {
     /// The best handicapped speed, or 0 without finishers.
     pub v0: f64,
     /// The time the finisher with `V0` is scored over, the lower one on a tie.
-    pub t0: Option<Duration>,
+    pub t0: Option<SignedDuration>,
     /// The maximum available points.
     pub pm: f64,
     /// The maximum available speed points.
@@ -159,11 +159,15 @@ struct Finish {
     speed: f64,
     /// The handicapped speed `Vh`.
     handicapped_speed: f64,
-    time: Duration,
+    time: SignedDuration,
 }
 
 impl CountingAchievement {
-    fn new(achievement: &Achievement, handicap: f64, minimum_task_time: Option<Duration>) -> Self {
+    fn new(
+        achievement: &Achievement,
+        handicap: f64,
+        minimum_task_time: Option<SignedDuration>,
+    ) -> Self {
         let distance = achievement.distance;
         let finish = achievement.time.map(|time| {
             let time = time.max(minimum_task_time.unwrap_or_default());
@@ -183,7 +187,7 @@ impl CountingAchievement {
     }
 }
 
-fn hours(duration: Duration) -> f64 {
+fn hours(duration: SignedDuration) -> f64 {
     duration.as_secs_f64() / 3600.
 }
 

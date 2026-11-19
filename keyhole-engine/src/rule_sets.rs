@@ -4,11 +4,14 @@
 use std::fmt::{self, Display};
 use std::ops::RangeInclusive;
 
+use jiff::SignedDuration;
+use jiff::civil::Time;
+use jiff::fmt::temporal::{DateTimePrinter, SpanPrinter};
+use jiff::tz::TimeZone;
 use sha2::{Digest, Sha256};
 
 use crate::day_scoring::ScoringParameters;
 use crate::flight_analysis::analysis_log::AnalysisLogKind;
-use crate::time::UtcTime;
 
 /// One dated version of a rule set, shipped as immutable data.
 ///
@@ -28,18 +31,18 @@ pub struct RuleSetEdition {
     /// counting daily first places, then second places and so on, with 0 for
     /// no countback.
     pub countback_places: u8,
-    /// The time after a publication within which it can be challenged, in
-    /// whole hours, which the suggested complaint deadline is based on.
-    pub complaint_period: u32,
-    /// The longest interval between two fixes that the edition allows, in
-    /// whole seconds.
-    pub maximum_recording_interval: u32,
+    /// The time after a publication within which it can be challenged, which
+    /// the suggested complaint deadline is based on.
+    pub complaint_period: SignedDuration,
+    /// The longest interval between two fixes that the edition allows.
+    pub maximum_recording_interval: SignedDuration,
     /// The clauses that analysis log entries cite, by kind. Kinds without a
     /// clause in the edition are absent.
     pub clauses: &'static [(AnalysisLogKind, &'static str)],
     /// The effective parameters without any rule overrides. `Dm` and `D1`
     /// default to the lowest class's values, since the edition has no
-    /// default of its own for them.
+    /// default of its own for them, and the time zone is UTC until
+    /// resolution sets the competition time zone.
     pub defaults: Rules,
 }
 
@@ -55,11 +58,11 @@ pub static DAEC_SWO_2026: RuleSetEdition = RuleSetEdition {
         ClassTemplate::new("Standard", 120., 300., false, Some(DAEC_STANDARD)),
     ],
     pev: PevRules {
-        wait_times: 10..=10,
-        start_windows: 7..=7,
+        wait_times: SignedDuration::from_mins(10)..=SignedDuration::from_mins(10),
+        start_windows: SignedDuration::from_mins(7)..=SignedDuration::from_mins(7),
         limit: 3,
         limit_scope: PevLimitScope::Day,
-        clustering_time: 30,
+        clustering_time: SignedDuration::from_secs(30),
         penalty_per_second: 1,
         maximum_penalty: 60,
     },
@@ -78,8 +81,8 @@ pub static DAEC_SWO_2026: RuleSetEdition = RuleSetEdition {
         minimum_assigned_area_separation: 1.,
     },
     countback_places: 0,
-    complaint_period: 14,
-    maximum_recording_interval: 1,
+    complaint_period: SignedDuration::from_hours(14),
+    maximum_recording_interval: SignedDuration::from_secs(1),
     clauses: &[
         (AnalysisLogKind::FileFailedToParse, "5.9.8"),
         (AnalysisLogKind::RecordingIntervalExceeded, "5.9.3"),
@@ -87,15 +90,16 @@ pub static DAEC_SWO_2026: RuleSetEdition = RuleSetEdition {
     defaults: Rules {
         analysis: AnalysisParameters {
             earth_model: EarthModel::Wgs84,
+            time_zone: TimeZone::UTC,
             start_opening_time: None,
             start_closing_time: None,
             maximum_start_altitude: None,
             maximum_start_ground_speed: None,
             pev_start: false,
-            pev_wait_time: 10,
-            pev_start_window: 7,
+            pev_wait_time: SignedDuration::from_mins(10),
+            pev_start_window: SignedDuration::from_mins(7),
             subtract_finish_ring_radius: true,
-            delivery_period: Some(45),
+            delivery_period: Some(SignedDuration::from_mins(45)),
             tow_altitude: None,
             maximum_altitude: None,
             scoring_end_time: None,
@@ -117,11 +121,11 @@ pub static FAI_ANNEX_A_2025A: RuleSetEdition = RuleSetEdition {
         ClassTemplate::new("Standard", 120., 300., false, None),
     ],
     pev: PevRules {
-        wait_times: 5..=10,
-        start_windows: 5..=10,
+        wait_times: SignedDuration::from_mins(5)..=SignedDuration::from_mins(10),
+        start_windows: SignedDuration::from_mins(5)..=SignedDuration::from_mins(10),
         limit: 3,
         limit_scope: PevLimitScope::Launch,
-        clustering_time: 30,
+        clustering_time: SignedDuration::from_secs(30),
         penalty_per_second: 1,
         maximum_penalty: 60,
     },
@@ -136,19 +140,20 @@ pub static FAI_ANNEX_A_2025A: RuleSetEdition = RuleSetEdition {
         minimum_assigned_area_separation: 1.,
     },
     countback_places: 3,
-    complaint_period: 14,
-    maximum_recording_interval: 1,
+    complaint_period: SignedDuration::from_hours(14),
+    maximum_recording_interval: SignedDuration::from_secs(1),
     clauses: &[(AnalysisLogKind::RecordingIntervalExceeded, "5.3c")],
     defaults: Rules {
         analysis: AnalysisParameters {
             earth_model: EarthModel::Wgs84,
+            time_zone: TimeZone::UTC,
             start_opening_time: None,
             start_closing_time: None,
             maximum_start_altitude: None,
             maximum_start_ground_speed: None,
             pev_start: false,
-            pev_wait_time: 10,
-            pev_start_window: 10,
+            pev_wait_time: SignedDuration::from_mins(10),
+            pev_start_window: SignedDuration::from_mins(10),
             subtract_finish_ring_radius: true,
             delivery_period: None,
             tow_altitude: None,
@@ -203,16 +208,16 @@ impl ClassTemplate {
 /// outside the PEV start window is penalised.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PevRules {
-    /// The PEV wait times the edition allows, in whole minutes.
-    pub wait_times: RangeInclusive<u32>,
-    /// The PEV start windows the edition allows, in whole minutes.
-    pub start_windows: RangeInclusive<u32>,
+    /// The PEV wait times the edition allows.
+    pub wait_times: RangeInclusive<SignedDuration>,
+    /// The PEV start windows the edition allows.
+    pub start_windows: RangeInclusive<SignedDuration>,
     /// The number of PEVs that count, after which further PEVs are ignored.
     pub limit: u32,
     pub limit_scope: PevLimitScope,
     /// The time within which several PEVs count as one at the time of the
-    /// first, in seconds.
-    pub clustering_time: u32,
+    /// first.
+    pub clustering_time: SignedDuration,
     /// The penalty points per second that a start lies outside the PEV start
     /// window.
     pub penalty_per_second: u32,
@@ -244,18 +249,18 @@ pub struct RuleOverrides {
     pub earth_model: Option<EarthModel>,
     pub dm: Option<f64>,
     pub d1: Option<f64>,
-    pub start_opening_time: Option<UtcTime>,
-    pub start_closing_time: Option<UtcTime>,
+    pub start_opening_time: Option<Time>,
+    pub start_closing_time: Option<Time>,
     pub maximum_start_altitude: Option<f64>,
     pub maximum_start_ground_speed: Option<f64>,
     pub pev_start: Option<bool>,
-    pub pev_wait_time: Option<u32>,
-    pub pev_start_window: Option<u32>,
+    pub pev_wait_time: Option<SignedDuration>,
+    pub pev_start_window: Option<SignedDuration>,
     pub subtract_finish_ring_radius: Option<bool>,
-    pub delivery_period: Option<u32>,
+    pub delivery_period: Option<SignedDuration>,
     pub tow_altitude: Option<f64>,
     pub maximum_altitude: Option<Altitude>,
-    pub scoring_end_time: Option<UtcTime>,
+    pub scoring_end_time: Option<Time>,
 }
 
 /// The effective parameters a class day is analysed and scored with, split so
@@ -310,27 +315,27 @@ pub enum ObservationZone {
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnalysisParameters {
     pub earth_model: EarthModel,
-    pub start_opening_time: Option<UtcTime>,
-    pub start_closing_time: Option<UtcTime>,
+    /// The competition time zone, in which the start opening and closing
+    /// times and the scoring end time are local times of day.
+    pub time_zone: TimeZone,
+    pub start_opening_time: Option<Time>,
+    pub start_closing_time: Option<Time>,
     /// In m MSL.
     pub maximum_start_altitude: Option<f64>,
     /// In km/h.
     pub maximum_start_ground_speed: Option<f64>,
     /// Whether a start is timed from a PEV.
     pub pev_start: bool,
-    /// In whole minutes.
-    pub pev_wait_time: u32,
-    /// In whole minutes.
-    pub pev_start_window: u32,
+    pub pev_wait_time: SignedDuration,
+    pub pev_start_window: SignedDuration,
     /// Whether the finish ring radius is subtracted from the task distance.
     pub subtract_finish_ring_radius: bool,
-    /// The time after landing within which a flight must be delivered, in
-    /// whole minutes.
-    pub delivery_period: Option<u32>,
+    /// The time after landing within which a flight must be delivered.
+    pub delivery_period: Option<SignedDuration>,
     /// In m MSL.
     pub tow_altitude: Option<f64>,
     pub maximum_altitude: Option<Altitude>,
-    pub scoring_end_time: Option<UtcTime>,
+    pub scoring_end_time: Option<Time>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -355,12 +360,23 @@ impl RuleSetEdition {
         clauses.find_map(|&(clause_kind, clause)| (clause_kind == kind).then_some(clause))
     }
 
-    /// Resolves a class day's effective parameters by applying the override
-    /// layers in order to the edition's defaults, so that a later layer wins
-    /// over an earlier one.
-    pub fn resolve(&self, layers: &[RuleOverrides]) -> Rules {
+    /// Resolves a class day's effective parameters in the competition time
+    /// zone by applying the override layers in order to the edition's
+    /// defaults, so that a later layer wins over an earlier one.
+    ///
+    /// # Panics
+    ///
+    /// If the time zone has no IANA name, such as a fixed offset, which cannot
+    /// follow a change of daylight saving time during the competition.
+    pub fn resolve(&self, time_zone: TimeZone, layers: &[RuleOverrides]) -> Rules {
+        let is_iana = time_zone.iana_name().is_some();
+        assert!(
+            is_iana,
+            "the competition time zone must be an IANA time zone"
+        );
         let mut rules = self.defaults.clone();
         let Rules { analysis, scoring } = &mut rules;
+        analysis.time_zone = time_zone;
         for overrides in layers {
             let &RuleOverrides {
                 earth_model,
@@ -409,6 +425,7 @@ impl RuleSetEdition {
         let Rules { analysis, scoring } = rules;
         let AnalysisParameters {
             earth_model,
+            time_zone,
             start_opening_time,
             start_closing_time,
             maximum_start_altitude,
@@ -428,7 +445,12 @@ impl RuleSetEdition {
             EarthModel::Wgs84 => "wgs84",
             EarthModel::FaiSphere => "fai_sphere",
         };
-        let time = |time: &Option<UtcTime>| or_none(time.map(|UtcTime(seconds)| seconds));
+        const TIMES: DateTimePrinter = DateTimePrinter::new();
+        const DURATIONS: SpanPrinter = SpanPrinter::new();
+        let time_zone = time_zone.iana_name();
+        let time_zone = time_zone.expect("resolve() only accepts IANA time zones");
+        let time = |time: &Option<Time>| or_none(time.map(|time| TIMES.time_to_string(&time)));
+        let duration = |duration: &SignedDuration| DURATIONS.duration_to_string(duration);
         let maximum_altitude = maximum_altitude.map(|altitude| match altitude {
             Altitude::Msl(altitude) => format!("{altitude} m"),
             Altitude::FlightLevel(level) => format!("FL{level}"),
@@ -437,6 +459,7 @@ impl RuleSetEdition {
         [
             ("edition", self.id.to_string()),
             ("earth_model", earth_model.to_string()),
+            ("time_zone", time_zone.to_string()),
             ("start_opening_time", time(start_opening_time)),
             ("start_closing_time", time(start_closing_time)),
             ("maximum_start_altitude", or_none(*maximum_start_altitude)),
@@ -445,13 +468,16 @@ impl RuleSetEdition {
                 or_none(*maximum_start_ground_speed),
             ),
             ("pev_start", pev_start.to_string()),
-            ("pev_wait_time", pev_wait_time.to_string()),
-            ("pev_start_window", pev_start_window.to_string()),
+            ("pev_wait_time", duration(pev_wait_time)),
+            ("pev_start_window", duration(pev_start_window)),
             (
                 "subtract_finish_ring_radius",
                 subtract_finish_ring_radius.to_string(),
             ),
-            ("delivery_period", or_none(*delivery_period)),
+            (
+                "delivery_period",
+                or_none(delivery_period.as_ref().map(duration)),
+            ),
             ("tow_altitude", or_none(*tow_altitude)),
             ("maximum_altitude", or_none(maximum_altitude)),
             ("scoring_end_time", time(scoring_end_time)),

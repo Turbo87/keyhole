@@ -3,15 +3,15 @@
 
 use std::fmt;
 use std::sync::LazyLock;
-use std::time::Duration;
 
 use anyhow::{Context, bail};
+use jiff::SignedDuration;
 use keyhole_engine::day_scoring::{Achievement, CompetitorResult, ResultStatus};
 use regex::Regex;
 use serde::Deserialize;
 
 use crate::fixture::FixtureDecisions;
-use crate::published::{PublishedRow, format_time, optional_time};
+use crate::published::{PublishedRow, format_duration};
 
 /// A row's result as the scorer decides it.
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
@@ -21,8 +21,8 @@ pub enum ResultDecision {
     Flown {
         distance: f64,
         /// The time from the start to the finish, or `None` without a finish.
-        #[serde(default, deserialize_with = "optional_time")]
-        time: Option<Duration>,
+        #[serde(default)]
+        time: Option<SignedDuration>,
     },
 }
 
@@ -42,7 +42,7 @@ impl fmt::Display for ResultDecision {
             Self::Flown {
                 distance,
                 time: Some(time),
-            } => write!(f, "finished {distance} km in {}", format_time(time)),
+            } => write!(f, "finished {distance} km in {}", format_duration(time)),
             Self::Flown {
                 distance,
                 time: None,
@@ -234,10 +234,10 @@ fn result_from_published(row: &PublishedRow) -> anyhow::Result<ResultDecision> {
             let start_time = row
                 .start_time
                 .with_context(|| format!("{competition_id} finished without a start time"))?;
-            let time = finish_time
-                .checked_sub(start_time)
-                .filter(|time| !time.is_zero())
-                .with_context(|| format!("{competition_id} finished at or before the start"))?;
+            let time = finish_time.duration_since(start_time);
+            if !time.is_positive() {
+                bail!("{competition_id} finished at or before the start");
+            }
             ResultDecision::Flown {
                 distance,
                 time: Some(time),

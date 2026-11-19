@@ -36,6 +36,10 @@ _Avoid_: Contest, event
 A calendar date on which a competition runs. A competition's dates are usually one continuous range but can leave dates out, such as the weekdays of a competition flown only at weekends.
 _Avoid_: Competition day (for the date itself), event date
 
+**Competition time zone**:
+The IANA time zone a competition runs in, such as Europe/Berlin. The start opening and closing times and the scoring end time are local times in it, and it decides each IGC file's flight date.
+_Avoid_: Local time zone, UTC offset
+
 **Archived competition**:
 A finished competition whose scoring work has been removed from Keyhole, leaving only its published results, which can no longer change.
 _Avoid_: Closed, deleted, completed competition
@@ -237,11 +241,11 @@ How starts work on a class day: the type of start and its options, such as a PEV
 _Avoid_: Start settings, start rules
 
 **Start opening time**:
-The time from which starts are valid on a class day.
+The local time of day in the competition time zone from which starts are valid on a class day.
 _Avoid_: Gate opening, start gate
 
 **Start closing time**:
-The time after which starts are no longer valid on a class day.
+The local time of day in the competition time zone after which starts are no longer valid on a class day.
 _Avoid_: Gate closing
 
 **Start ground speed**:
@@ -289,7 +293,7 @@ The highest altitude, in m MSL or as a flight level, that a flight may reach at 
 _Avoid_: Ceiling, max height, sporting limit
 
 **Scoring end time**:
-The time on a class day after which a flight earns no further distance or speed, as if it had landed then.
+The local time of day in the competition time zone on a class day after which a flight earns no further distance or speed, as if it had landed then.
 _Avoid_: Scoring end, finish closing time
 
 **QNH**:
@@ -333,7 +337,7 @@ The UTC date an IGC file states for its flight in its `HFDTE` header. It differs
 _Avoid_: File date
 
 **Flight date**:
-The local date in the competition's time zone that an IGC file counts for, which picks its logger link and class day. It is the date of take-off, or of the first fix without one, corrected for a GPS week number rollover, unless a scorer overrides it.
+The local date in the competition time zone that an IGC file counts for, which picks its logger link and class day. It is the date of take-off, or of the first fix without one, corrected for a GPS week number rollover, unless a scorer overrides it.
 _Avoid_: File date, take-off date
 
 **Analysis log**:
