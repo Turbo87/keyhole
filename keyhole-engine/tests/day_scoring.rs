@@ -1,4 +1,5 @@
-use std::time::Duration;
+use jiff::SignedDuration;
+use jiff::fmt::friendly::SpanPrinter;
 
 use insta::assert_snapshot;
 use keyhole_engine::day_scoring::{
@@ -6,8 +7,8 @@ use keyhole_engine::day_scoring::{
     score_class_day,
 };
 
-fn hours(hours: f64) -> Duration {
-    Duration::from_secs_f64(hours * 3600.)
+fn hours(hours: f64) -> SignedDuration {
+    SignedDuration::from_secs_f64(hours * 3600.)
 }
 
 fn class_day(competitors: Vec<CompetitorResult>) -> ClassDay {
@@ -18,7 +19,10 @@ fn class_day(competitors: Vec<CompetitorResult>) -> ClassDay {
     }
 }
 
-fn assigned_area_day(minimum_task_time: Duration, competitors: Vec<CompetitorResult>) -> ClassDay {
+fn assigned_area_day(
+    minimum_task_time: SignedDuration,
+    competitors: Vec<CompetitorResult>,
+) -> ClassDay {
     let mut day = class_day(competitors);
     day.minimum_task_time = Some(minimum_task_time);
     day
@@ -35,7 +39,7 @@ fn competitor(competition_id: &str, result: ResultStatus) -> CompetitorResult {
     }
 }
 
-fn finisher(competition_id: &str, distance: f64, time: Duration) -> CompetitorResult {
+fn finisher(competition_id: &str, distance: f64, time: SignedDuration) -> CompetitorResult {
     let achievement = Achievement {
         distance,
         time: Some(time),
@@ -106,15 +110,9 @@ fn number(value: f64) -> String {
     number.trim_end_matches('0').trim_end_matches('.').into()
 }
 
-/// Writes a duration as `h:mm:ss` with any fraction of a second.
-fn duration(duration: Duration) -> String {
-    let seconds = duration.as_secs();
-    let (hours, minutes, seconds) = (seconds / 3600, seconds / 60 % 60, seconds % 60);
-    let fraction = match duration.subsec_nanos() {
-        0 => String::new(),
-        nanos => format!(".{nanos:09}").trim_end_matches('0').into(),
-    };
-    format!("{hours}:{minutes:02}:{seconds:02}{fraction}")
+fn duration(duration: SignedDuration) -> String {
+    const PRINTER: SpanPrinter = SpanPrinter::new().hours_minutes_seconds(true);
+    PRINTER.duration_to_string(&duration)
 }
 
 #[test]
@@ -124,7 +122,7 @@ fn lone_finisher_scores_the_day_maximum() {
     let result = score_class_day(&day);
 
     assert_snapshot!(table(&result), @"
-    Valid  N=1 n1=1 n2=1  Dm=100 D1=250 D0=300 V0=100 T0=3:00:00
+    Valid  N=1 n1=1 n2=1  Dm=100 D1=250 D0=300 V0=100 T0=03:00:00
     Pm=1000 Pvm=666.666667 Pdm=333.333333 F=1 FCR=1
 
     rank  cn    distance       speed   raw score  score
@@ -160,7 +158,7 @@ fn finishers_score_speed_points_above_two_thirds_of_the_best_speed() {
     let result = score_class_day(&day);
 
     assert_snapshot!(table(&result), @"
-    Valid  N=4 n1=4 n2=2  Dm=100 D1=250 D0=300 V0=100 T0=3:00:00
+    Valid  N=4 n1=4 n2=2  Dm=100 D1=250 D0=300 V0=100 T0=03:00:00
     Pm=1000 Pvm=333.333333 Pdm=666.666667 F=1 FCR=1
 
     rank  cn    distance       speed   raw score  score
@@ -182,7 +180,7 @@ fn best_speed_tie_takes_the_lower_time() {
 
     // B's lower time limits Pm to 400 * 2.5 - 200.
     assert_snapshot!(table(&result), @"
-    Valid  N=2 n1=2 n2=2  Dm=100 D1=250 D0=300 V0=100 T0=2:30:00
+    Valid  N=2 n1=2 n2=2  Dm=100 D1=250 D0=300 V0=100 T0=02:30:00
     Pm=800 Pvm=533.333333 Pdm=266.666667 F=1 FCR=1
 
     rank  cn    distance       speed   raw score  score
@@ -199,7 +197,7 @@ fn distance_limits_the_maximum_points() {
 
     // Pm is 1250 * 150 / 250 - 250.
     assert_snapshot!(table(&result), @"
-    Valid  N=1 n1=1 n2=1  Dm=100 D1=250 D0=150 V0=50 T0=3:00:00
+    Valid  N=1 n1=1 n2=1  Dm=100 D1=250 D0=150 V0=50 T0=03:00:00
     Pm=500 Pvm=333.333333 Pdm=166.666667 F=1 FCR=1
 
     rank  cn    distance       speed   raw score  score
@@ -217,7 +215,7 @@ fn did_not_fly_results_stay_out_of_the_day_parameters() {
     let result = score_class_day(&day);
 
     assert_snapshot!(table(&result), @"
-    Valid  N=1 n1=1 n2=1  Dm=100 D1=250 D0=300 V0=100 T0=3:00:00
+    Valid  N=1 n1=1 n2=1  Dm=100 D1=250 D0=300 V0=100 T0=03:00:00
     Pm=1000 Pvm=666.666667 Pdm=333.333333 F=1 FCR=1
 
     rank  cn    distance       speed   raw score  score
@@ -249,7 +247,7 @@ fn landing_without_distance_counts_with_zero_points() {
 
     // B counts toward N, so only half of N reaches Dm and F drops to 0.625.
     assert_snapshot!(table(&result), @"
-    Valid  N=2 n1=1 n2=1  Dm=100 D1=250 D0=300 V0=100 T0=3:00:00
+    Valid  N=2 n1=1 n2=1  Dm=100 D1=250 D0=300 V0=100 T0=03:00:00
     Pm=1000 Pvm=333.333333 Pdm=666.666667 F=0.625 FCR=1
 
     rank  cn    distance       speed   raw score  score
@@ -271,7 +269,7 @@ fn only_the_day_score_is_rounded_with_halves_away_from_zero() {
     // parameters keep their decimals.
     assert_eq!(result.rows[0].raw_score, 302.5);
     assert_snapshot!(table(&result), @"
-    Valid  N=2 n1=2 n2=1  Dm=100 D1=250 D0=110.5 V0=36.833333 T0=3:00:00
+    Valid  N=2 n1=2 n2=1  Dm=100 D1=250 D0=110.5 V0=36.833333 T0=03:00:00
     Pm=302.5 Pvm=100.833333 Pdm=201.666667 F=1 FCR=1
 
     rank  cn    distance       speed   raw score  score
@@ -292,7 +290,7 @@ fn day_where_a_quarter_reached_dm_fails_the_validity_rule() {
     let result = score_class_day(&day);
 
     assert_snapshot!(table(&result), @"
-    Invalid  N=4 n1=1 n2=1  Dm=100 D1=250 D0=300 V0=100 T0=3:00:00
+    Invalid  N=4 n1=1 n2=1  Dm=100 D1=250 D0=300 V0=100 T0=03:00:00
     Pm=1000 Pvm=166.666667 Pdm=833.333333 F=0.3125 FCR=1
 
     rank  cn    distance       speed   raw score  score
@@ -315,7 +313,7 @@ fn day_where_more_than_a_quarter_reached_dm_is_valid() {
     let result = score_class_day(&day);
 
     assert_snapshot!(table(&result), @"
-    Valid  N=4 n1=2 n2=1  Dm=100 D1=250 D0=300 V0=100 T0=3:00:00
+    Valid  N=4 n1=2 n2=1  Dm=100 D1=250 D0=300 V0=100 T0=03:00:00
     Pm=1000 Pvm=166.666667 Pdm=833.333333 F=0.625 FCR=1
 
     rank  cn    distance       speed   raw score  score
@@ -341,7 +339,7 @@ fn penalty_is_deducted_after_the_formula_without_changing_day_parameters() {
     assert_eq!(result.parameters, unpenalised.parameters);
     // Without the penalty, A scores 1000 and B 600.
     assert_snapshot!(table(&result), @"
-    Valid  N=2 n1=2 n2=2  Dm=100 D1=250 D0=300 V0=100 T0=3:00:00
+    Valid  N=2 n1=2 n2=2  Dm=100 D1=250 D0=300 V0=100 T0=03:00:00
     Pm=1000 Pvm=666.666667 Pdm=333.333333 F=1 FCR=1
 
     rank  cn    distance       speed   raw score  score
@@ -360,7 +358,7 @@ fn penalty_larger_than_the_score_floors_the_day_score_at_zero() {
     let result = score_class_day(&day);
 
     assert_snapshot!(table(&result), @"
-    Valid  N=2 n1=2 n2=2  Dm=100 D1=250 D0=300 V0=100 T0=3:00:00
+    Valid  N=2 n1=2 n2=2  Dm=100 D1=250 D0=300 V0=100 T0=03:00:00
     Pm=1000 Pvm=666.666667 Pdm=333.333333 F=1 FCR=1
 
     rank  cn    distance       speed   raw score  score
@@ -383,7 +381,7 @@ fn assigned_area_finisher_is_raised_to_the_minimum_task_time() {
 
     // A's speed and T0 use the 3 hour minimum task time instead of 2.5 hours.
     assert_snapshot!(table(&result), @"
-    Valid  N=2 n1=2 n2=2  Dm=100 D1=250 D0=280 V0=90 T0=3:00:00
+    Valid  N=2 n1=2 n2=2  Dm=100 D1=250 D0=280 V0=90 T0=03:00:00
     Pm=1000 Pvm=666.666667 Pdm=333.333333 F=1 FCR=1
 
     rank  cn    distance       speed   raw score  score
@@ -404,7 +402,7 @@ fn equal_day_scores_share_a_rank_and_skip_the_next() {
     let result = score_class_day(&day);
 
     assert_snapshot!(table(&result), @"
-    Valid  N=4 n1=4 n2=3  Dm=100 D1=250 D0=300 V0=100 T0=3:00:00
+    Valid  N=4 n1=4 n2=3  Dm=100 D1=250 D0=300 V0=100 T0=03:00:00
     Pm=1000 Pvm=500 Pdm=500 F=1 FCR=1
 
     rank  cn    distance       speed   raw score  score
@@ -429,7 +427,7 @@ fn tied_rows_order_by_unrounded_score_then_competition_id() {
     // X's slightly longer time puts its raw score below Y and Z, while all
     // three round to the same day score and share a rank.
     assert_snapshot!(table(&result), @"
-    Valid  N=4 n1=4 n2=4  Dm=100 D1=250 D0=300 V0=100 T0=3:00:00
+    Valid  N=4 n1=4 n2=4  Dm=100 D1=250 D0=300 V0=100 T0=03:00:00
     Pm=1000 Pvm=666.666667 Pdm=333.333333 F=1 FCR=1
 
     rank  cn    distance       speed   raw score  score
@@ -450,7 +448,7 @@ fn did_not_fly_results_are_unranked_below_the_ranked_rows() {
     let result = score_class_day(&day);
 
     assert_snapshot!(table(&result), @"
-    Valid  N=1 n1=1 n2=1  Dm=100 D1=250 D0=300 V0=100 T0=3:00:00
+    Valid  N=1 n1=1 n2=1  Dm=100 D1=250 D0=300 V0=100 T0=03:00:00
     Pm=1000 Pvm=666.666667 Pdm=333.333333 F=1 FCR=1
 
     rank  cn    distance       speed   raw score  score
@@ -471,7 +469,7 @@ fn launched_competitor_without_a_valid_start_shares_the_last_rank_with_zero_poin
 
     // C, credited with 0 km, ties with B, whose penalty zeroes its score.
     assert_snapshot!(table(&result), @"
-    Valid  N=3 n1=2 n2=2  Dm=100 D1=250 D0=300 V0=100 T0=3:00:00
+    Valid  N=3 n1=2 n2=2  Dm=100 D1=250 D0=300 V0=100 T0=03:00:00
     Pm=1000 Pvm=444.444444 Pdm=555.555556 F=0.833333 FCR=1
 
     rank  cn    distance       speed   raw score  score
@@ -501,7 +499,7 @@ fn hors_concours_rows_are_listed_by_score_without_a_rank_and_never_change_other_
     assert_eq!(result.rows[1..], without_guest.rows[..]);
     // G is faster than V0, which comes from A, so it scores above 1000.
     assert_snapshot!(table(&result), @"
-    Valid  N=2 n1=2 n2=1  Dm=100 D1=250 D0=300 V0=80 T0=3:45:00
+    Valid  N=2 n1=2 n2=1  Dm=100 D1=250 D0=300 V0=80 T0=03:45:00
     Pm=1000 Pvm=333.333333 Pdm=666.666667 F=1 FCR=1
 
     rank  cn    distance       speed   raw score  score
@@ -521,7 +519,7 @@ fn hors_concours_marker_takes_precedence_over_did_not_fly() {
     let result = score_class_day(&day);
 
     assert_snapshot!(table(&result), @"
-    Valid  N=1 n1=1 n2=1  Dm=100 D1=250 D0=300 V0=100 T0=3:00:00
+    Valid  N=1 n1=1 n2=1  Dm=100 D1=250 D0=300 V0=100 T0=03:00:00
     Pm=1000 Pvm=666.666667 Pdm=333.333333 F=1 FCR=1
 
     rank  cn    distance       speed   raw score  score
@@ -560,7 +558,7 @@ fn disqualified_row_scores_zero_unranked_and_still_feeds_the_day_parameters() {
     assert_eq!(result.parameters, undisqualified.parameters);
     // Without the disqualification, A scores 1000 and B 600.
     assert_snapshot!(table(&result), @"
-    Valid  N=2 n1=2 n2=2  Dm=100 D1=250 D0=300 V0=100 T0=3:00:00
+    Valid  N=2 n1=2 n2=2  Dm=100 D1=250 D0=300 V0=100 T0=03:00:00
     Pm=1000 Pvm=666.666667 Pdm=333.333333 F=1 FCR=1
 
     rank  cn    distance       speed   raw score  score
@@ -588,7 +586,7 @@ fn disqualified_rows_are_listed_below_ranked_rows_and_above_did_not_fly_rows() {
     let result = score_class_day(&day);
 
     assert_snapshot!(table(&result), @"
-    Valid  N=3 n1=2 n2=2  Dm=100 D1=250 D0=300 V0=100 T0=3:00:00
+    Valid  N=3 n1=2 n2=2  Dm=100 D1=250 D0=300 V0=100 T0=03:00:00
     Pm=1000 Pvm=444.444444 Pdm=555.555556 F=0.833333 FCR=1
 
     rank  cn    distance       speed   raw score  score
@@ -610,7 +608,7 @@ fn disqualified_marker_takes_precedence_over_hors_concours_and_did_not_fly() {
     let result = score_class_day(&day);
 
     assert_snapshot!(table(&result), @"
-    Valid  N=1 n1=1 n2=1  Dm=100 D1=250 D0=300 V0=100 T0=3:00:00
+    Valid  N=1 n1=1 n2=1  Dm=100 D1=250 D0=300 V0=100 T0=03:00:00
     Pm=1000 Pvm=666.666667 Pdm=333.333333 F=1 FCR=1
 
     rank  cn    distance       speed   raw score  score
@@ -630,7 +628,7 @@ fn penalty_leaves_a_disqualified_row_at_zero() {
     let result = score_class_day(&day);
 
     assert_snapshot!(table(&result), @"
-    Valid  N=2 n1=2 n2=2  Dm=100 D1=250 D0=300 V0=100 T0=3:00:00
+    Valid  N=2 n1=2 n2=2  Dm=100 D1=250 D0=300 V0=100 T0=03:00:00
     Pm=1000 Pvm=666.666667 Pdm=333.333333 F=1 FCR=1
 
     rank  cn    distance       speed   raw score  score
@@ -655,7 +653,7 @@ fn placeholder_counts_as_a_finisher_at_the_best_speed_without_points_or_rank() {
     let result = score_class_day(&day);
 
     assert_snapshot!(table(&result), @"
-    Valid  N=4 n1=4 n2=2  Dm=100 D1=250 D0=300 V0=100 T0=3:00:00
+    Valid  N=4 n1=4 n2=2  Dm=100 D1=250 D0=300 V0=100 T0=03:00:00
     Pm=1000 Pvm=333.333333 Pdm=666.666667 F=1 FCR=1
 
     rank  cn    distance       speed   raw score  score
@@ -712,7 +710,7 @@ fn hors_concours_placeholder_is_marked_without_feeding_the_day_parameters() {
     assert_eq!(result.parameters, without_guest.parameters);
     assert_eq!(result.rows[..2], without_guest.rows[..]);
     assert_snapshot!(table(&result), @"
-    Valid  N=2 n1=2 n2=1  Dm=100 D1=250 D0=300 V0=80 T0=3:45:00
+    Valid  N=2 n1=2 n2=1  Dm=100 D1=250 D0=300 V0=80 T0=03:45:00
     Pm=1000 Pvm=333.333333 Pdm=666.666667 F=1 FCR=1
 
     rank  cn    distance       speed   raw score  score
@@ -732,7 +730,7 @@ fn disqualified_competitor_with_an_unknown_result_still_feeds_a_placeholder() {
     let result = score_class_day(&day);
 
     assert_snapshot!(table(&result), @"
-    Valid  N=2 n1=2 n2=2  Dm=100 D1=250 D0=300 V0=100 T0=3:00:00
+    Valid  N=2 n1=2 n2=2  Dm=100 D1=250 D0=300 V0=100 T0=03:00:00
     Pm=1000 Pvm=666.666667 Pdm=333.333333 F=1 FCR=1
 
     rank  cn    distance       speed   raw score  score
@@ -774,7 +772,7 @@ fn placeholder_rows_are_listed_below_ranked_rows_and_above_disqualified_rows() {
     let result = score_class_day(&day);
 
     assert_snapshot!(table(&result), @"
-    Valid  N=3 n1=3 n2=3  Dm=100 D1=250 D0=300 V0=100 T0=3:00:00
+    Valid  N=3 n1=3 n2=3  Dm=100 D1=250 D0=300 V0=100 T0=03:00:00
     Pm=1000 Pvm=666.666667 Pdm=333.333333 F=1 FCR=1
 
     rank  cn    distance       speed   raw score  score
@@ -805,7 +803,7 @@ fn distances_and_speeds_divide_by_the_handicap() {
     // B flies fastest, but A's handicapped speed of 100 beats B's 96, so A
     // sets V0 and T0. Rows show the distances and speeds as flown.
     assert_snapshot!(table(&result), @"
-    Valid  N=3 n1=3 n2=2  Dm=100 D1=250 D0=300 V0=100 T0=3:00:00
+    Valid  N=3 n1=3 n2=2  Dm=100 D1=250 D0=300 V0=100 T0=03:00:00
     Pm=1000 Pvm=444.444444 Pdm=555.555556 F=1 FCR=1
 
     rank  cn    distance       speed   raw score  score
@@ -827,7 +825,7 @@ fn n1_counts_handicapped_distances_of_at_least_dm() {
 
     // C's 110 km divide to 91.67 km, below Dm.
     assert_snapshot!(table(&result), @"
-    Valid  N=3 n1=2 n2=1  Dm=100 D1=250 D0=300 V0=100 T0=3:00:00
+    Valid  N=3 n1=2 n2=1  Dm=100 D1=250 D0=300 V0=100 T0=03:00:00
     Pm=1000 Pvm=222.222222 Pdm=777.777778 F=0.833333 FCR=1
 
     rank  cn    distance       speed   raw score  score

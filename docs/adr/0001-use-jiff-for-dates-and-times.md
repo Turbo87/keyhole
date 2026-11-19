@@ -1,5 +1,5 @@
 # Use jiff for dates and times
 
-Keyhole uses the `jiff` crate for every date and time, and its types appear directly in the engine's API without newtypes around them. A point in time is a `Timestamp`, and a calendar date such as the recorded date or the flight date is a `civil::Date`.
+Keyhole uses the `jiff` crate for every date, time and duration, and its types appear directly in the engine's API without newtypes around them. A point in time is a `Timestamp`, a calendar date such as the recorded date or the flight date is a `civil::Date`, and elapsed time is a `SignedDuration`. The standard library's `Duration` is not used, because time differences in scoring are naturally signed and one duration type avoids conversions where durations meet points in time.
 
 `jiff` is built with the bundled time zone database only, without the `tz-system` feature and without reading the operating system's zoneinfo. Two machines scoring the same competition must turn the same local times into the same points in time, and an older system database after a change in a country's daylight saving rules would break that while the rules hash stays equal. Updating the zone rules therefore means updating `jiff-tzdb` in `Cargo.lock`. The engine never looks at the host's own time zone.

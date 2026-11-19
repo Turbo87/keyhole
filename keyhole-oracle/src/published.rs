@@ -1,10 +1,10 @@
 //! The values SoaringSpot publishes for a class day, as soaringspot-downloader
 //! writes them to `task.json` and `results.csv`.
 
-use std::time::Duration;
-
-use anyhow::anyhow;
-use serde::{Deserialize, Deserializer};
+use jiff::SignedDuration;
+use jiff::civil::Time;
+use jiff::fmt::friendly::SpanPrinter;
+use serde::Deserialize;
 
 /// The part of `task.json` that day scoring uses.
 #[derive(Debug, Deserialize)]
@@ -12,7 +12,7 @@ use serde::{Deserialize, Deserializer};
 pub enum PublishedTask {
     AssignedArea {
         /// The minimum task time in seconds.
-        task_duration: u64,
+        task_duration: u32,
     },
     #[serde(rename = "polygon")]
     Racing,
@@ -25,18 +25,18 @@ pub enum PublishedTask {
     )]
     CourseShape {
         #[serde(default)]
-        task_duration: u64,
+        task_duration: u32,
     },
 }
 
 impl PublishedTask {
-    pub fn minimum_task_time(&self) -> Option<Duration> {
-        match *self {
-            Self::AssignedArea { task_duration } => Some(Duration::from_secs(task_duration)),
-            Self::Racing => None,
-            Self::CourseShape { task_duration: 0 } => None,
-            Self::CourseShape { task_duration } => Some(Duration::from_secs(task_duration)),
-        }
+    pub fn minimum_task_time(&self) -> Option<SignedDuration> {
+        let task_duration = match *self {
+            Self::AssignedArea { task_duration } => task_duration,
+            Self::Racing | Self::CourseShape { task_duration: 0 } => return None,
+            Self::CourseShape { task_duration } => task_duration,
+        };
+        Some(SignedDuration::from_secs(task_duration.into()))
     }
 }
 
@@ -49,10 +49,10 @@ pub struct PublishedRow {
     pub competition_id: String,
     /// The handicap on the class's scale.
     pub handicap: Option<f64>,
-    #[serde(rename = "start_time_local", deserialize_with = "optional_time")]
-    pub start_time: Option<Duration>,
-    #[serde(rename = "finish_time_local", deserialize_with = "optional_time")]
-    pub finish_time: Option<Duration>,
+    #[serde(rename = "start_time_local")]
+    pub start_time: Option<Time>,
+    #[serde(rename = "finish_time_local")]
+    pub finish_time: Option<Time>,
     #[serde(rename = "speed_kmh")]
     pub speed: Option<f64>,
     #[serde(rename = "distance_km")]
@@ -68,34 +68,7 @@ pub fn parse_results(results_csv: &str) -> anyhow::Result<Vec<PublishedRow>> {
     Ok(rows)
 }
 
-/// Deserializes an optional `H:MM:SS` time of day or duration.
-pub fn optional_time<'de, D: Deserializer<'de>>(
-    deserializer: D,
-) -> Result<Option<Duration>, D::Error> {
-    let text = Option::<String>::deserialize(deserializer)?;
-    text.map(|text| parse_time(&text).map_err(serde::de::Error::custom))
-        .transpose()
-}
-
-fn parse_time(text: &str) -> anyhow::Result<Duration> {
-    let invalid = || anyhow!("invalid time `{text}`");
-    let parts: Vec<u64> = text
-        .split(':')
-        .map(str::parse)
-        .collect::<Result<_, _>>()
-        .map_err(|_| invalid())?;
-    let [hours, minutes, seconds] = parts[..] else {
-        return Err(invalid());
-    };
-    Ok(Duration::from_secs(hours * 3600 + minutes * 60 + seconds))
-}
-
-pub fn format_time(time: Duration) -> String {
-    let seconds = time.as_secs();
-    format!(
-        "{}:{:02}:{:02}",
-        seconds / 3600,
-        seconds / 60 % 60,
-        seconds % 60
-    )
+pub fn format_duration(duration: SignedDuration) -> String {
+    const PRINTER: SpanPrinter = SpanPrinter::new().hours_minutes_seconds(true);
+    PRINTER.duration_to_string(&duration)
 }
