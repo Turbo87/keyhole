@@ -31,6 +31,9 @@ pub struct RuleSetEdition {
     /// The time after a publication within which it can be challenged, in
     /// whole hours, which the suggested complaint deadline is based on.
     pub complaint_period: u32,
+    /// The longest interval between two fixes that the edition allows, in
+    /// whole seconds.
+    pub maximum_recording_interval: u32,
     /// The clauses that analysis log entries cite, by kind. Kinds without a
     /// clause in the edition are absent.
     pub clauses: &'static [(AnalysisLogKind, &'static str)],
@@ -76,6 +79,7 @@ pub static DAEC_SWO_2026: RuleSetEdition = RuleSetEdition {
     },
     countback_places: 0,
     complaint_period: 14,
+    maximum_recording_interval: 1,
     clauses: &[(AnalysisLogKind::FileFailedToParse, "5.9.8")],
     defaults: Rules {
         analysis: AnalysisParameters {
@@ -130,6 +134,7 @@ pub static FAI_ANNEX_A_2025A: RuleSetEdition = RuleSetEdition {
     },
     countback_places: 3,
     complaint_period: 14,
+    maximum_recording_interval: 1,
     clauses: &[],
     defaults: Rules {
         analysis: AnalysisParameters {
