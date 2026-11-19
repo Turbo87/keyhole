@@ -7,6 +7,8 @@ use std::ops::RangeInclusive;
 use sha2::{Digest, Sha256};
 
 use crate::day_scoring::ScoringParameters;
+use crate::flight_analysis::analysis_log::AnalysisLogKind;
+use crate::time::UtcTime;
 
 /// One dated version of a rule set, shipped as immutable data.
 ///
@@ -29,6 +31,12 @@ pub struct RuleSetEdition {
     /// The time after a publication within which it can be challenged, in
     /// whole hours, which the suggested complaint deadline is based on.
     pub complaint_period: u32,
+    /// The longest interval between two fixes that the edition allows, in
+    /// whole seconds.
+    pub maximum_recording_interval: u32,
+    /// The clauses that analysis log entries cite, by kind. Kinds without a
+    /// clause in the edition are absent.
+    pub clauses: &'static [(AnalysisLogKind, &'static str)],
     /// The effective parameters without any rule overrides. `Dm` and `D1`
     /// default to the lowest class's values, since the edition has no
     /// default of its own for them.
@@ -71,6 +79,11 @@ pub static DAEC_SWO_2026: RuleSetEdition = RuleSetEdition {
     },
     countback_places: 0,
     complaint_period: 14,
+    maximum_recording_interval: 1,
+    clauses: &[
+        (AnalysisLogKind::FileFailedToParse, "5.9.8"),
+        (AnalysisLogKind::RecordingIntervalExceeded, "5.9.3"),
+    ],
     defaults: Rules {
         analysis: AnalysisParameters {
             earth_model: EarthModel::Wgs84,
@@ -124,6 +137,8 @@ pub static FAI_ANNEX_A_2025A: RuleSetEdition = RuleSetEdition {
     },
     countback_places: 3,
     complaint_period: 14,
+    maximum_recording_interval: 1,
+    clauses: &[(AnalysisLogKind::RecordingIntervalExceeded, "5.3c")],
     defaults: Rules {
         analysis: AnalysisParameters {
             earth_model: EarthModel::Wgs84,
@@ -325,16 +340,19 @@ pub enum Altitude {
     FlightLevel(u16),
 }
 
-/// A point in time, in seconds since the Unix epoch.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct UtcTime(pub i64);
-
 impl RuleSetEdition {
     /// Looks up a built-in edition by its ID.
     pub fn find(id: &str) -> Option<&'static Self> {
         [&DAEC_SWO_2026, &FAI_ANNEX_A_2025A]
             .into_iter()
             .find(|edition| edition.id == id)
+    }
+
+    /// The clause of this edition that an analysis log entry of the given kind
+    /// cites.
+    pub fn clause(&self, kind: AnalysisLogKind) -> Option<&'static str> {
+        let mut clauses = self.clauses.iter();
+        clauses.find_map(|&(clause_kind, clause)| (clause_kind == kind).then_some(clause))
     }
 
     /// Resolves a class day's effective parameters by applying the override
