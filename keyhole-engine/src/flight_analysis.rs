@@ -15,8 +15,8 @@ const SECONDS_PER_DAY: i64 = 24 * 60 * 60;
 /// What the file stage extracted from one IGC file.
 #[derive(Debug)]
 pub struct FileAnalysis {
-    /// The parsed flight, or `None` if the file lacks its logger identity or
-    /// recorded date.
+    /// The parsed flight, or `None` if the file lacks its logger identity,
+    /// recorded date or a valid fix.
     pub flight: Option<Flight>,
     pub log: Vec<AnalysisLogEntry>,
 }
@@ -126,8 +126,13 @@ pub fn analyze_file(contents: Bytes) -> FileAnalysis {
     if recorded_date.is_none() {
         log.push(file_failure(FileFailure::MissingRecordedDate));
     }
+    let has_valid_fix = fixes.iter().any(|fix| fix.valid);
+    if !has_valid_fix {
+        log.push(file_failure(FileFailure::NoValidFixes));
+    }
 
-    let flight = logger.zip(recorded_date).map(|(logger, recorded_date)| {
+    let usable = logger.zip(recorded_date).filter(|_| has_valid_fix);
+    let flight = usable.map(|(logger, recorded_date)| {
         let midnight = recorded_date.midnight().0;
         fixes.iter_mut().for_each(|fix| fix.time.0 += midnight);
         Flight {

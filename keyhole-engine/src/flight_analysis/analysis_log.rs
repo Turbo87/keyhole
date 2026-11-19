@@ -49,6 +49,8 @@ pub enum FileFailure {
     MissingLoggerId,
     /// The `HFDTE` header is missing or does not hold a valid date.
     MissingRecordedDate,
+    /// No B record is marked as a valid fix.
+    NoValidFixes,
 }
 
 /// The part of the recording an entry refers to.

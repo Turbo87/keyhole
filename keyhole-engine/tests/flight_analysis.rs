@@ -153,3 +153,26 @@ fn accepts_a_leap_day_as_recorded_date() {
     fix    10:00:00 A 51.37108 6.85390 100 110
     ");
 }
+
+#[test]
+fn reports_a_file_without_fixes() {
+    let analysis = analyze("ALXVABC\nHFDTE160624\n");
+    assert_snapshot!(render(&analysis), @"
+    error   file_failed_to_parse   file   NoValidFixes
+    no flight
+    ");
+}
+
+#[test]
+fn reports_a_file_without_valid_fixes() {
+    let analysis = analyze(
+        "ALXVABC\n\
+         HFDTE160624\n\
+         B1000005122265N00651234EV0010000110\n\
+         B1000015122266N00651235EV0010100111\n",
+    );
+    assert_snapshot!(render(&analysis), @"
+    error   file_failed_to_parse   file   NoValidFixes
+    no flight
+    ");
+}
