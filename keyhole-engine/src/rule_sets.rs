@@ -4,7 +4,10 @@
 use std::fmt::{self, Display};
 use std::ops::RangeInclusive;
 
-use jiff::{SignedDuration, Timestamp};
+use jiff::SignedDuration;
+use jiff::civil::Time;
+use jiff::fmt::temporal::{DateTimePrinter, SpanPrinter};
+use jiff::tz::TimeZone;
 use sha2::{Digest, Sha256};
 
 use crate::day_scoring::ScoringParameters;
@@ -38,7 +41,8 @@ pub struct RuleSetEdition {
     pub clauses: &'static [(AnalysisLogKind, &'static str)],
     /// The effective parameters without any rule overrides. `Dm` and `D1`
     /// default to the lowest class's values, since the edition has no
-    /// default of its own for them.
+    /// default of its own for them, and the time zone is UTC until
+    /// resolution sets the competition time zone.
     pub defaults: Rules,
 }
 
@@ -86,6 +90,7 @@ pub static DAEC_SWO_2026: RuleSetEdition = RuleSetEdition {
     defaults: Rules {
         analysis: AnalysisParameters {
             earth_model: EarthModel::Wgs84,
+            time_zone: TimeZone::UTC,
             start_opening_time: None,
             start_closing_time: None,
             maximum_start_altitude: None,
@@ -141,6 +146,7 @@ pub static FAI_ANNEX_A_2025A: RuleSetEdition = RuleSetEdition {
     defaults: Rules {
         analysis: AnalysisParameters {
             earth_model: EarthModel::Wgs84,
+            time_zone: TimeZone::UTC,
             start_opening_time: None,
             start_closing_time: None,
             maximum_start_altitude: None,
@@ -243,8 +249,8 @@ pub struct RuleOverrides {
     pub earth_model: Option<EarthModel>,
     pub dm: Option<f64>,
     pub d1: Option<f64>,
-    pub start_opening_time: Option<Timestamp>,
-    pub start_closing_time: Option<Timestamp>,
+    pub start_opening_time: Option<Time>,
+    pub start_closing_time: Option<Time>,
     pub maximum_start_altitude: Option<f64>,
     pub maximum_start_ground_speed: Option<f64>,
     pub pev_start: Option<bool>,
@@ -254,7 +260,7 @@ pub struct RuleOverrides {
     pub delivery_period: Option<SignedDuration>,
     pub tow_altitude: Option<f64>,
     pub maximum_altitude: Option<Altitude>,
-    pub scoring_end_time: Option<Timestamp>,
+    pub scoring_end_time: Option<Time>,
 }
 
 /// The effective parameters a class day is analysed and scored with, split so
@@ -309,8 +315,11 @@ pub enum ObservationZone {
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnalysisParameters {
     pub earth_model: EarthModel,
-    pub start_opening_time: Option<Timestamp>,
-    pub start_closing_time: Option<Timestamp>,
+    /// The competition time zone, in which the start opening and closing
+    /// times and the scoring end time are local times of day.
+    pub time_zone: TimeZone,
+    pub start_opening_time: Option<Time>,
+    pub start_closing_time: Option<Time>,
     /// In m MSL.
     pub maximum_start_altitude: Option<f64>,
     /// In km/h.
@@ -326,7 +335,7 @@ pub struct AnalysisParameters {
     /// In m MSL.
     pub tow_altitude: Option<f64>,
     pub maximum_altitude: Option<Altitude>,
-    pub scoring_end_time: Option<Timestamp>,
+    pub scoring_end_time: Option<Time>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -351,12 +360,23 @@ impl RuleSetEdition {
         clauses.find_map(|&(clause_kind, clause)| (clause_kind == kind).then_some(clause))
     }
 
-    /// Resolves a class day's effective parameters by applying the override
-    /// layers in order to the edition's defaults, so that a later layer wins
-    /// over an earlier one.
-    pub fn resolve(&self, layers: &[RuleOverrides]) -> Rules {
+    /// Resolves a class day's effective parameters in the competition time
+    /// zone by applying the override layers in order to the edition's
+    /// defaults, so that a later layer wins over an earlier one.
+    ///
+    /// # Panics
+    ///
+    /// If the time zone has no IANA name, such as a fixed offset, which cannot
+    /// follow a change of daylight saving time during the competition.
+    pub fn resolve(&self, time_zone: TimeZone, layers: &[RuleOverrides]) -> Rules {
+        let is_iana = time_zone.iana_name().is_some();
+        assert!(
+            is_iana,
+            "the competition time zone must be an IANA time zone"
+        );
         let mut rules = self.defaults.clone();
         let Rules { analysis, scoring } = &mut rules;
+        analysis.time_zone = time_zone;
         for overrides in layers {
             let &RuleOverrides {
                 earth_model,
@@ -405,6 +425,7 @@ impl RuleSetEdition {
         let Rules { analysis, scoring } = rules;
         let AnalysisParameters {
             earth_model,
+            time_zone,
             start_opening_time,
             start_closing_time,
             maximum_start_altitude,
@@ -424,7 +445,12 @@ impl RuleSetEdition {
             EarthModel::Wgs84 => "wgs84",
             EarthModel::FaiSphere => "fai_sphere",
         };
-        let time = |time: &Option<Timestamp>| or_none(time.map(Timestamp::as_second));
+        const TIMES: DateTimePrinter = DateTimePrinter::new();
+        const DURATIONS: SpanPrinter = SpanPrinter::new();
+        let time_zone = time_zone.iana_name();
+        let time_zone = time_zone.expect("resolve() only accepts IANA time zones");
+        let time = |time: &Option<Time>| or_none(time.map(|time| TIMES.time_to_string(&time)));
+        let duration = |duration: &SignedDuration| DURATIONS.duration_to_string(duration);
         let maximum_altitude = maximum_altitude.map(|altitude| match altitude {
             Altitude::Msl(altitude) => format!("{altitude} m"),
             Altitude::FlightLevel(level) => format!("FL{level}"),
@@ -433,6 +459,7 @@ impl RuleSetEdition {
         [
             ("edition", self.id.to_string()),
             ("earth_model", earth_model.to_string()),
+            ("time_zone", time_zone.to_string()),
             ("start_opening_time", time(start_opening_time)),
             ("start_closing_time", time(start_closing_time)),
             ("maximum_start_altitude", or_none(*maximum_start_altitude)),
@@ -441,15 +468,15 @@ impl RuleSetEdition {
                 or_none(*maximum_start_ground_speed),
             ),
             ("pev_start", pev_start.to_string()),
-            ("pev_wait_time", pev_wait_time.as_mins().to_string()),
-            ("pev_start_window", pev_start_window.as_mins().to_string()),
+            ("pev_wait_time", duration(pev_wait_time)),
+            ("pev_start_window", duration(pev_start_window)),
             (
                 "subtract_finish_ring_radius",
                 subtract_finish_ring_radius.to_string(),
             ),
             (
                 "delivery_period",
-                or_none(delivery_period.map(|period| period.as_mins())),
+                or_none(delivery_period.as_ref().map(duration)),
             ),
             ("tow_altitude", or_none(*tow_altitude)),
             ("maximum_altitude", or_none(maximum_altitude)),

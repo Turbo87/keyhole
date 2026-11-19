@@ -1,5 +1,7 @@
 use insta::assert_snapshot;
-use jiff::{SignedDuration, Timestamp};
+use jiff::SignedDuration;
+use jiff::civil::{Time, time};
+use jiff::tz::TimeZone;
 use keyhole_engine::day_scoring::ScoringParameters;
 use keyhole_engine::flight_analysis::analysis_log::AnalysisLogKind;
 use keyhole_engine::rule_sets::{
@@ -8,8 +10,12 @@ use keyhole_engine::rule_sets::{
 };
 use keyhole_handicaps::HandicapList;
 
-fn utc(second: i64) -> Timestamp {
-    Timestamp::from_second(second).unwrap()
+fn berlin() -> TimeZone {
+    TimeZone::get("Europe/Berlin").unwrap()
+}
+
+fn time_of_day(hour: i8) -> Time {
+    time(hour, 0, 0, 0)
 }
 
 fn minutes(minutes: i64) -> SignedDuration {
@@ -46,7 +52,9 @@ fn analysis_log_kinds_cite_the_clauses_of_the_edition() {
 #[test]
 fn without_overrides_the_edition_defaults_apply() {
     for edition in [&DAEC_SWO_2026, &FAI_ANNEX_A_2025A] {
-        assert_eq!(edition.resolve(&[]), edition.defaults);
+        let mut expected = edition.defaults.clone();
+        expected.analysis.time_zone = berlin();
+        assert_eq!(edition.resolve(berlin(), &[]), expected);
     }
 }
 
@@ -56,7 +64,7 @@ fn later_layers_win_over_earlier_layers_and_edition_defaults() {
         earth_model: Some(EarthModel::FaiSphere),
         ..standard_class()
     };
-    let resolve = |layers: &[_]| FAI_ANNEX_A_2025A.resolve(layers);
+    let resolve = |layers: &[_]| FAI_ANNEX_A_2025A.resolve(berlin(), layers);
 
     let from_class = resolve(&[class.clone(), RuleOverrides::default()]);
     assert_eq!(from_class.analysis.earth_model, EarthModel::FaiSphere);
@@ -79,8 +87,8 @@ fn later_layers_win_over_earlier_layers_and_edition_defaults() {
 #[test]
 fn start_procedure_overrides_apply() {
     let start = RuleOverrides {
-        start_opening_time: Some(utc(1_659_348_000)),
-        start_closing_time: Some(utc(1_659_355_200)),
+        start_opening_time: Some(time_of_day(10)),
+        start_closing_time: Some(time_of_day(12)),
         maximum_start_altitude: Some(1500.),
         maximum_start_ground_speed: Some(170.),
         pev_start: Some(true),
@@ -89,17 +97,18 @@ fn start_procedure_overrides_apply() {
         ..Default::default()
     };
 
-    let analysis = FAI_ANNEX_A_2025A.resolve(&[start]).analysis;
+    let analysis = FAI_ANNEX_A_2025A.resolve(berlin(), &[start]).analysis;
 
     let expected = AnalysisParameters {
         earth_model: EarthModel::Wgs84,
-        start_opening_time: Some(utc(1_659_348_000)),
-        start_closing_time: Some(utc(1_659_355_200)),
+        start_opening_time: Some(time_of_day(10)),
+        start_closing_time: Some(time_of_day(12)),
         maximum_start_altitude: Some(1500.),
         maximum_start_ground_speed: Some(170.),
         pev_start: true,
         pev_wait_time: minutes(5),
         pev_start_window: minutes(8),
+        time_zone: berlin(),
         ..FAI_ANNEX_A_2025A.defaults.analysis.clone()
     };
     assert_eq!(analysis, expected);
@@ -112,18 +121,19 @@ fn finish_altitude_and_scoring_end_overrides_apply() {
         delivery_period: Some(minutes(30)),
         tow_altitude: Some(600.),
         maximum_altitude: Some(Altitude::FlightLevel(95)),
-        scoring_end_time: Some(utc(1_659_376_800)),
+        scoring_end_time: Some(time_of_day(18)),
         ..Default::default()
     };
 
-    let analysis = DAEC_SWO_2026.resolve(&[overrides]).analysis;
+    let analysis = DAEC_SWO_2026.resolve(berlin(), &[overrides]).analysis;
 
     let expected = AnalysisParameters {
         subtract_finish_ring_radius: false,
         delivery_period: Some(minutes(30)),
         tow_altitude: Some(600.),
         maximum_altitude: Some(Altitude::FlightLevel(95)),
-        scoring_end_time: Some(utc(1_659_376_800)),
+        scoring_end_time: Some(time_of_day(18)),
+        time_zone: berlin(),
         ..DAEC_SWO_2026.defaults.analysis.clone()
     };
     assert_eq!(analysis, expected);
@@ -131,7 +141,7 @@ fn finish_altitude_and_scoring_end_overrides_apply() {
 
 #[test]
 fn scoring_only_overrides_leave_the_analysis_parameters_equal() {
-    let resolve = |layers: &[_]| DAEC_SWO_2026.resolve(layers);
+    let resolve = |layers: &[_]| DAEC_SWO_2026.resolve(berlin(), layers);
     let lower_dm = RuleOverrides {
         dm: Some(50.),
         ..Default::default()
@@ -151,7 +161,7 @@ fn earth_models_the_edition_does_not_allow_still_apply() {
         ..Default::default()
     };
 
-    let parameters = DAEC_SWO_2026.resolve(&[fai_sphere]);
+    let parameters = DAEC_SWO_2026.resolve(berlin(), &[fai_sphere]);
 
     assert!(!DAEC_SWO_2026.earth_models.contains(&EarthModel::FaiSphere));
     assert_eq!(parameters.analysis.earth_model, EarthModel::FaiSphere);
@@ -188,8 +198,8 @@ fn canonical_rules_list_the_edition_and_every_parameter() {
         earth_model: Some(EarthModel::FaiSphere),
         dm: Some(50.),
         d1: Some(212.5),
-        start_opening_time: Some(utc(1_659_348_000)),
-        start_closing_time: Some(utc(1_659_355_200)),
+        start_opening_time: Some(time_of_day(10)),
+        start_closing_time: Some(time_of_day(12)),
         maximum_start_altitude: Some(1500.),
         maximum_start_ground_speed: Some(170.),
         pev_start: Some(true),
@@ -199,25 +209,26 @@ fn canonical_rules_list_the_edition_and_every_parameter() {
         delivery_period: Some(minutes(30)),
         tow_altitude: Some(600.),
         maximum_altitude: Some(Altitude::Msl(2999.9)),
-        scoring_end_time: Some(utc(1_659_376_800)),
+        scoring_end_time: Some(time_of_day(18)),
     };
-    let rules = DAEC_SWO_2026.resolve(&[overrides]);
+    let rules = DAEC_SWO_2026.resolve(berlin(), &[overrides]);
 
     assert_snapshot!(DAEC_SWO_2026.canonical_rules(&rules), @"
     edition=DAeC SWO 2026
     earth_model=fai_sphere
-    start_opening_time=1659348000
-    start_closing_time=1659355200
+    time_zone=Europe/Berlin
+    start_opening_time=10:00:00
+    start_closing_time=12:00:00
     maximum_start_altitude=1500
     maximum_start_ground_speed=170
     pev_start=true
-    pev_wait_time=5
-    pev_start_window=8
+    pev_wait_time=PT5M
+    pev_start_window=PT8M
     subtract_finish_ring_radius=false
-    delivery_period=30
+    delivery_period=PT30M
     tow_altitude=600
     maximum_altitude=2999.9 m
-    scoring_end_time=1659376800
+    scoring_end_time=18:00:00
     dm=50
     d1=212.5
     ");
@@ -225,15 +236,21 @@ fn canonical_rules_list_the_edition_and_every_parameter() {
 
 #[test]
 fn the_rules_hash_of_both_editions_defaults_does_not_change() {
-    let hash = |edition: &RuleSetEdition| edition.rules_hash(&edition.resolve(&[])).to_string();
+    let hash = |edition: &RuleSetEdition| {
+        let rules = edition.resolve(berlin(), &[]);
+        edition.rules_hash(&rules).to_string()
+    };
 
-    assert_snapshot!(hash(&DAEC_SWO_2026), @"eecc5f8e26d6cf10333e0e2aa27a631f531ad64dd2ab10a0ae485121e7b31ff5");
-    assert_snapshot!(hash(&FAI_ANNEX_A_2025A), @"b9278d8d3a93dd7d64c63e8b44aa9e36b8b9ca9d60af04a12cc5da23fa454290");
+    assert_snapshot!(hash(&DAEC_SWO_2026), @"31f4fd18c528ae8e5cd4ac7ce8d945f6322016e27f3c7ff5f17025f2afa5ab22");
+    assert_snapshot!(hash(&FAI_ANNEX_A_2025A), @"d70cf11bca531791eb664e31328a3d063b084b2924e09c7c6f4a3d7216b809d9");
 }
 
 #[test]
 fn changing_an_analysis_or_scoring_parameter_changes_the_rules_hash() {
-    let hash = |overrides| FAI_ANNEX_A_2025A.rules_hash(&FAI_ANNEX_A_2025A.resolve(&[overrides]));
+    let hash = |overrides| {
+        let rules = FAI_ANNEX_A_2025A.resolve(berlin(), &[overrides]);
+        FAI_ANNEX_A_2025A.rules_hash(&rules)
+    };
     let defaults = hash(RuleOverrides::default());
 
     let fai_sphere = RuleOverrides {
@@ -250,8 +267,23 @@ fn changing_an_analysis_or_scoring_parameter_changes_the_rules_hash() {
 }
 
 #[test]
+fn changing_the_time_zone_changes_the_rules_hash() {
+    let hash = |time_zone| FAI_ANNEX_A_2025A.rules_hash(&FAI_ANNEX_A_2025A.resolve(time_zone, &[]));
+
+    assert_ne!(hash(TimeZone::UTC), hash(berlin()));
+}
+
+#[test]
+#[should_panic(expected = "the competition time zone must be an IANA time zone")]
+fn a_time_zone_without_an_iana_name_is_rejected() {
+    let fixed_offset = TimeZone::fixed(jiff::tz::offset(2));
+
+    DAEC_SWO_2026.resolve(fixed_offset, &[]);
+}
+
+#[test]
 fn layerings_with_the_same_effective_parameters_have_the_same_rules_hash() {
-    let hash = |layers: &[_]| DAEC_SWO_2026.rules_hash(&DAEC_SWO_2026.resolve(layers));
+    let hash = |layers: &[_]| DAEC_SWO_2026.rules_hash(&DAEC_SWO_2026.resolve(berlin(), layers));
     let lower_dm = RuleOverrides {
         dm: Some(50.),
         ..Default::default()
@@ -269,7 +301,7 @@ fn layerings_with_the_same_effective_parameters_have_the_same_rules_hash() {
 
 #[test]
 fn the_same_parameters_under_another_edition_have_another_rules_hash() {
-    let rules = DAEC_SWO_2026.resolve(&[]);
+    let rules = DAEC_SWO_2026.resolve(berlin(), &[]);
 
     assert_ne!(
         DAEC_SWO_2026.rules_hash(&rules),

@@ -5,6 +5,7 @@ use std::collections::HashSet;
 use std::fmt;
 
 use anyhow::bail;
+use jiff::tz::TimeZone;
 use keyhole_engine::day_scoring::{ClassDay, DayResult, DayValidity, Rank, Row, score_class_day};
 use keyhole_engine::rule_sets::RuleSetEdition;
 use serde::{Deserialize, Serialize};
@@ -203,7 +204,8 @@ pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
     } else {
         1.
     };
-    let rules = edition.resolve(&[(&file.rule_overrides).into()]);
+    // Day scoring reads no local time of day, so the time zone has no effect.
+    let rules = edition.resolve(TimeZone::UTC, &[(&file.rule_overrides).into()]);
     let day = ClassDay {
         parameters: rules.scoring,
         minimum_task_time: fixture.minimum_task_time,
