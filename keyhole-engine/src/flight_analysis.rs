@@ -1,12 +1,18 @@
 //! The file stage of the flight analysis, which parses a raw IGC file
 //! leniently into a flight.
 
+use std::collections::BTreeMap;
+
 use bytes::Bytes;
 use igc::records::{ARecord, BRecord, FixValid, HRecord, Record};
+use igc::util::ParseError;
 
 use crate::time::UtcTime;
 
-use self::analysis_log::{AnalysisLogDetails, AnalysisLogEntry, Evidence, FileFailure};
+use self::analysis_log::{
+    AnalysisLogDetails, AnalysisLogEntry, Evidence, FileFailure, LineFailure, LineProblem,
+    RecordType,
+};
 
 pub mod analysis_log;
 
@@ -97,11 +103,31 @@ pub fn analyze_file(contents: Bytes) -> FileAnalysis {
     let mut recorded_date = None;
     let mut fixes = Vec::new();
     let mut has_igc_records = false;
+    let mut unreadable_lines = BTreeMap::<_, Vec<_>>::new();
 
-    for line in contents.split(|&byte| byte == b'\n') {
+    for (index, line) in contents.split(|&byte| byte == b'\n').enumerate() {
         let line = String::from_utf8_lossy(line.strip_suffix(b"\r").unwrap_or(line));
+        if line.trim().is_empty() {
+            continue;
+        }
+
         let record = Record::parse_line(&line);
-        has_igc_records |= !matches!(record, Ok(Record::Unrecognised(_)) | Err(_));
+        let problem = match &record {
+            Ok(Record::Unrecognised(_)) => Some(LineProblem::Malformed),
+            Ok(_) => None,
+            Err(ParseError::NumberOutOfRange) => Some(LineProblem::OutOfRange),
+            Err(_) => Some(LineProblem::Malformed),
+        };
+        has_igc_records |= problem.is_none();
+        if let Some(problem) = problem {
+            let record_type = record_type(&line);
+            let failure = LineFailure {
+                record_type,
+                problem,
+            };
+            unreadable_lines.entry(failure).or_default().push(index + 1);
+        }
+
         match record {
             Ok(Record::A(record)) if logger.is_none() => {
                 logger = Some(logger_id(&line, &record));
@@ -131,6 +157,11 @@ pub fn analyze_file(contents: Bytes) -> FileAnalysis {
         log.push(file_failure(FileFailure::NoValidFixes));
     }
 
+    for (reason, lines) in unreadable_lines {
+        let details = AnalysisLogDetails::UnreadableLines { reason, lines };
+        log.push(file_entry(details));
+    }
+
     let usable = logger.zip(recorded_date).filter(|_| has_valid_fix);
     let flight = usable.map(|(logger, recorded_date)| {
         let midnight = recorded_date.midnight().0;
@@ -152,6 +183,24 @@ fn file_failure(reason: FileFailure) -> AnalysisLogEntry {
 fn file_entry(details: AnalysisLogDetails) -> AnalysisLogEntry {
     let evidence = Evidence::File;
     AnalysisLogEntry { details, evidence }
+}
+
+fn record_type(line: &str) -> RecordType {
+    match line.as_bytes()[0] {
+        b'A' => RecordType::A,
+        b'B' => RecordType::B,
+        b'C' => RecordType::C,
+        b'D' => RecordType::D,
+        b'E' => RecordType::E,
+        b'F' => RecordType::F,
+        b'G' => RecordType::G,
+        b'H' => RecordType::H,
+        b'I' => RecordType::I,
+        b'J' => RecordType::J,
+        b'K' => RecordType::K,
+        b'L' => RecordType::L,
+        _ => RecordType::Unknown,
+    }
 }
 
 fn logger_id(line: &str, record: &ARecord) -> LoggerId {

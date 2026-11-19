@@ -22,6 +22,14 @@ fn render(analysis: &FileAnalysis) -> String {
             AnalysisLogDetails::FileFailedToParse { reason } => {
                 ("file_failed_to_parse", format!("{reason:?}"))
             }
+            AnalysisLogDetails::UnreadableLines { reason, lines } => {
+                let lines = lines.iter().map(ToString::to_string).collect::<Vec<_>>();
+                let reason = format!("{:?} {:?}", reason.record_type, reason.problem);
+                (
+                    "unreadable_lines",
+                    format!("{reason}: {}", lines.join(", ")),
+                )
+            }
         };
         let evidence = match entry.evidence {
             Evidence::File => "file",
@@ -173,6 +181,44 @@ fn reports_a_file_without_valid_fixes() {
     );
     assert_snapshot!(render(&analysis), @"
     error   file_failed_to_parse   file   NoValidFixes
+    no flight
+    ");
+}
+
+#[test]
+fn reports_unreadable_lines_grouped_by_record_type_and_problem() {
+    let analysis = analyze(
+        "ALXVABC\n\
+         HFDTE160624\n\
+         B1000005122265N00651234EA0010000110\n\
+         B100001\n\
+         B1000025122267N00651236EA00102\n\
+         B9900035122265N00651234EA0010000110\n\
+         \n\
+         just some text\n\
+         B1000045122265N00651234EA0010000110\n\
+         \t \n\
+         E100004PEV\n\
+         E1000\n",
+    );
+    assert_snapshot!(render(&analysis), @"
+    error   unreadable_lines       file   B Malformed: 4, 5
+    error   unreadable_lines       file   B OutOfRange: 6
+    error   unreadable_lines       file   E Malformed: 12
+    error   unreadable_lines       file   Unknown Malformed: 8
+    logger LXV ABC
+    date   2024-06-16
+    fix    10:00:00 A 51.37108 6.85390 100 110
+    fix    10:00:04 A 51.37108 6.85390 100 110
+    ");
+}
+
+#[test]
+fn reports_unreadable_lines_of_files_that_fail_to_parse() {
+    let analysis = analyze(&format!("ALXVABC\nHFDTE\n{FIX}"));
+    assert_snapshot!(render(&analysis), @"
+    error   file_failed_to_parse   file   MissingRecordedDate
+    error   unreadable_lines       file   H Malformed: 2
     no flight
     ");
 }

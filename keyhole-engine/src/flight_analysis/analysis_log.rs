@@ -12,12 +12,13 @@ pub struct AnalysisLogEntry {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnalysisLogKind {
     FileFailedToParse,
+    UnreadableLines,
 }
 
 impl AnalysisLogKind {
     pub fn level(self) -> Level {
         match self {
-            Self::FileFailedToParse => Level::Error,
+            Self::FileFailedToParse | Self::UnreadableLines => Level::Error,
         }
     }
 }
@@ -31,12 +32,19 @@ pub enum Level {
 pub enum AnalysisLogDetails {
     /// The file has no usable flight.
     FileFailedToParse { reason: FileFailure },
+    /// Lines that could not be read for the same reason, by 1-based line
+    /// number.
+    UnreadableLines {
+        reason: LineFailure,
+        lines: Vec<usize>,
+    },
 }
 
 impl AnalysisLogDetails {
     pub fn kind(&self) -> AnalysisLogKind {
         match self {
             Self::FileFailedToParse { .. } => AnalysisLogKind::FileFailedToParse,
+            Self::UnreadableLines { .. } => AnalysisLogKind::UnreadableLines,
         }
     }
 }
@@ -51,6 +59,38 @@ pub enum FileFailure {
     MissingRecordedDate,
     /// No B record is marked as a valid fix.
     NoValidFixes,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct LineFailure {
+    pub record_type: RecordType,
+    pub problem: LineProblem,
+}
+
+/// The IGC record type that a line starts with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RecordType {
+    A,
+    B,
+    C,
+    D,
+    E,
+    F,
+    G,
+    H,
+    I,
+    J,
+    K,
+    L,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum LineProblem {
+    /// The line does not match the layout of its record type.
+    Malformed,
+    /// A number in the line is outside its valid range.
+    OutOfRange,
 }
 
 /// The part of the recording an entry refers to.
