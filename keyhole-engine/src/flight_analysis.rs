@@ -33,6 +33,8 @@ pub struct Flight {
     pub logger: LoggerId,
     /// The UTC date the recording started on, from its `HFDTE` header.
     pub recorded_date: Date,
+    /// The B records in file order, without those whose time does not advance
+    /// past the fixes before them.
     pub fixes: Vec<Fix>,
 }
 
@@ -102,6 +104,7 @@ pub fn analyze_file(contents: Bytes) -> FileAnalysis {
     let mut logger = None;
     let mut recorded_date = None;
     let mut fixes = Vec::new();
+    let mut fix_lines = Vec::new();
     let mut has_igc_records = false;
     let mut unreadable_lines = BTreeMap::<_, Vec<_>>::new();
 
@@ -135,7 +138,10 @@ pub fn analyze_file(contents: Bytes) -> FileAnalysis {
             Ok(Record::H(record)) if record.mnemonic == "DTE" => {
                 recorded_date = recorded_date.or_else(|| parse_date(&record));
             }
-            Ok(Record::B(record)) => fixes.push(fix(&record)),
+            Ok(Record::B(record)) => {
+                fixes.push(fix(&record));
+                fix_lines.push(index + 1);
+            }
             _ => {}
         }
     }
@@ -165,6 +171,10 @@ pub fn analyze_file(contents: Bytes) -> FileAnalysis {
     let usable = logger.zip(recorded_date).zip(first_valid_fix);
     let flight = usable.map(|((logger, recorded_date), first_valid_fix)| {
         date_fixes(&mut fixes, recorded_date, first_valid_fix);
+        let (fixes, lines) = drop_out_of_order_fixes(fixes, &fix_lines, first_valid_fix);
+        if !lines.is_empty() {
+            log.push(file_entry(AnalysisLogDetails::TimestampErrors { lines }));
+        }
         Flight {
             logger,
             recorded_date,
@@ -196,6 +206,33 @@ fn date_near(time_of_day: i64, reference: UtcTime) -> UtcTime {
     let offset = time_of_day - reference.0.rem_euclid(SECONDS_PER_DAY);
     let offset = (offset + half_day).rem_euclid(SECONDS_PER_DAY) - half_day;
     UtcTime(reference.0 + offset)
+}
+
+/// Keeps the fixes whose time advances past the fixes kept before them and
+/// returns them with the line numbers of the dropped ones. The first valid fix
+/// anchors the recorded date, so it is always kept and leading fixes are kept
+/// only if they precede it.
+fn drop_out_of_order_fixes(
+    fixes: Vec<Fix>,
+    lines: &[usize],
+    first_valid_fix: usize,
+) -> (Vec<Fix>, Vec<usize>) {
+    let anchor = fixes[first_valid_fix].time;
+    let mut latest = None;
+    let mut kept = Vec::with_capacity(fixes.len());
+    let mut dropped = Vec::new();
+    for (index, (fix, &line)) in fixes.into_iter().zip(lines).enumerate() {
+        let is_leading = index < first_valid_fix;
+        let is_in_order =
+            latest.is_none_or(|latest| fix.time > latest) && (!is_leading || fix.time < anchor);
+        if is_in_order {
+            latest = Some(fix.time);
+            kept.push(fix);
+        } else {
+            dropped.push(line);
+        }
+    }
+    (kept, dropped)
 }
 
 fn file_failure(reason: FileFailure) -> AnalysisLogEntry {

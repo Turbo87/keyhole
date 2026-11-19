@@ -17,17 +17,21 @@ fn render(analysis: &FileAnalysis) -> String {
     for entry in &analysis.log {
         let level = match entry.details.kind().level() {
             Level::Error => "error",
+            Level::Warning => "warning",
         };
         let (kind, data) = match &entry.details {
             AnalysisLogDetails::FileFailedToParse { reason } => {
                 ("file_failed_to_parse", format!("{reason:?}"))
             }
             AnalysisLogDetails::UnreadableLines { reason, lines } => {
-                let lines = lines.iter().map(ToString::to_string).collect::<Vec<_>>();
                 let reason = format!("{:?} {:?}", reason.record_type, reason.problem);
+                ("unreadable_lines", format!("{reason}: {}", join(lines)))
+            }
+            AnalysisLogDetails::TimestampErrors { lines } => {
+                let count = lines.len();
                 (
-                    "unreadable_lines",
-                    format!("{reason}: {}", lines.join(", ")),
+                    "timestamp_errors",
+                    format!("{count} fixes: {}", join(lines)),
                 )
             }
         };
@@ -67,6 +71,11 @@ fn render(analysis: &FileAnalysis) -> String {
     }
 
     out
+}
+
+fn join(lines: &[usize]) -> String {
+    let lines = lines.iter().map(ToString::to_string).collect::<Vec<_>>();
+    lines.join(", ")
 }
 
 #[test]
@@ -258,9 +267,9 @@ fn keeps_leading_invalid_fixes_up_to_12_hours_later_on_the_recorded_date() {
          B0100005122265N00651234EA0010000110\n",
     );
     assert_snapshot!(render(&analysis), @"
+    warning timestamp_errors       file   1 fixes: 3
     logger LXV ABC
     date   2024-06-16
-    fix    13:00:00 V 51.37108 6.85390 100 110
     fix    01:00:00 A 51.37108 6.85390 100 110
     ");
 }
@@ -276,11 +285,11 @@ fn dates_stale_fixes_after_midnight_on_the_previous_day() {
          B0000025122265N00651234EA0010000110\n",
     );
     assert_snapshot!(render(&analysis), @"
+    warning timestamp_errors       file   1 fixes: 5
     logger LXV ABC
     date   2024-06-16
     fix    23:59:58 A 51.37108 6.85390 100 110
     fix    00:00:01 +1d A 51.37108 6.85390 100 110
-    fix    23:59:59 A 51.37108 6.85390 100 110
     fix    00:00:02 +1d A 51.37108 6.85390 100 110
     ");
 }
@@ -300,5 +309,26 @@ fn dates_fixes_after_midnight_on_the_next_day() {
     fix    23:59:59 A 51.37108 6.85390 100 110
     fix    00:00:00 +1d A 51.37108 6.85390 100 110
     fix    00:00:01 +1d A 51.37108 6.85390 100 110
+    ");
+}
+
+#[test]
+fn drops_fixes_with_repeated_or_decreasing_timestamps() {
+    let analysis = analyze(
+        "ALXVABC\n\
+         HFDTE160624\n\
+         B1000005122265N00651234EA0010000110\n\
+         B1000015122265N00651234EA0010000110\n\
+         B1000015122266N00651234EA0010000110\n\
+         B1000005122267N00651234EA0010000110\n\
+         B1000025122268N00651234EA0010000110\n",
+    );
+    assert_snapshot!(render(&analysis), @"
+    warning timestamp_errors       file   2 fixes: 5, 6
+    logger LXV ABC
+    date   2024-06-16
+    fix    10:00:00 A 51.37108 6.85390 100 110
+    fix    10:00:01 A 51.37108 6.85390 100 110
+    fix    10:00:02 A 51.37113 6.85390 100 110
     ");
 }

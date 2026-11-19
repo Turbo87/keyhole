@@ -13,12 +13,14 @@ pub struct AnalysisLogEntry {
 pub enum AnalysisLogKind {
     FileFailedToParse,
     UnreadableLines,
+    TimestampErrors,
 }
 
 impl AnalysisLogKind {
     pub fn level(self) -> Level {
         match self {
             Self::FileFailedToParse | Self::UnreadableLines => Level::Error,
+            Self::TimestampErrors => Level::Warning,
         }
     }
 }
@@ -26,6 +28,7 @@ impl AnalysisLogKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Level {
     Error,
+    Warning,
 }
 
 #[derive(Debug)]
@@ -38,6 +41,9 @@ pub enum AnalysisLogDetails {
         reason: LineFailure,
         lines: Vec<usize>,
     },
+    /// Fixes that were dropped because their timestamp did not advance, by
+    /// 1-based line number.
+    TimestampErrors { lines: Vec<usize> },
 }
 
 impl AnalysisLogDetails {
@@ -45,6 +51,7 @@ impl AnalysisLogDetails {
         match self {
             Self::FileFailedToParse { .. } => AnalysisLogKind::FileFailedToParse,
             Self::UnreadableLines { .. } => AnalysisLogKind::UnreadableLines,
+            Self::TimestampErrors { .. } => AnalysisLogKind::TimestampErrors,
         }
     }
 }
