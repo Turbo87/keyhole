@@ -6,6 +6,10 @@ use igc::records::{ARecord, BRecord, FixValid, HRecord, Record};
 
 use crate::time::UtcTime;
 
+use self::analysis_log::{AnalysisLogDetails, AnalysisLogEntry, Evidence, FileFailure};
+
+pub mod analysis_log;
+
 const SECONDS_PER_DAY: i64 = 24 * 60 * 60;
 
 /// What the file stage extracted from one IGC file.
@@ -14,6 +18,7 @@ pub struct FileAnalysis {
     /// The parsed flight, or `None` if the file lacks its logger identity or
     /// recorded date.
     pub flight: Option<Flight>,
+    pub log: Vec<AnalysisLogEntry>,
 }
 
 #[derive(Debug)]
@@ -76,10 +81,13 @@ pub fn analyze_file(contents: Bytes) -> FileAnalysis {
     let mut logger = None;
     let mut recorded_date = None;
     let mut fixes = Vec::new();
+    let mut has_igc_records = false;
 
     for line in contents.split(|&byte| byte == b'\n') {
         let line = String::from_utf8_lossy(line.strip_suffix(b"\r").unwrap_or(line));
-        match Record::parse_line(&line) {
+        let record = Record::parse_line(&line);
+        has_igc_records |= !matches!(record, Ok(Record::Unrecognised(_)) | Err(_));
+        match record {
             Ok(Record::A(record)) if logger.is_none() => {
                 logger = Some(logger_id(&line, &record));
             }
@@ -89,6 +97,18 @@ pub fn analyze_file(contents: Bytes) -> FileAnalysis {
             Ok(Record::B(record)) => fixes.push(fix(&record)),
             _ => {}
         }
+    }
+
+    if !has_igc_records {
+        return FileAnalysis {
+            flight: None,
+            log: vec![AnalysisLogEntry {
+                details: AnalysisLogDetails::FileFailedToParse {
+                    reason: FileFailure::NotIgc,
+                },
+                evidence: Evidence::File,
+            }],
+        };
     }
 
     let flight = logger.zip(recorded_date).map(|(logger, recorded_date)| {
@@ -101,7 +121,10 @@ pub fn analyze_file(contents: Bytes) -> FileAnalysis {
         }
     });
 
-    FileAnalysis { flight }
+    FileAnalysis {
+        flight,
+        log: Vec::new(),
+    }
 }
 
 fn logger_id(line: &str, record: &ARecord) -> LoggerId {

@@ -2,6 +2,7 @@ use std::fmt::Write;
 
 use bytes::Bytes;
 use insta::assert_snapshot;
+use keyhole_engine::flight_analysis::analysis_log::{AnalysisLogDetails, Evidence, Level};
 use keyhole_engine::flight_analysis::{Date, FileAnalysis, analyze_file};
 use keyhole_engine::time::UtcTime;
 
@@ -9,10 +10,25 @@ fn analyze(contents: &str) -> FileAnalysis {
     analyze_file(Bytes::copy_from_slice(contents.as_bytes()))
 }
 
-/// Renders the flight with fix times relative to midnight of the recorded
-/// date, so that the snapshots stay readable.
+/// Renders the analysis log, then the flight with fix times relative to
+/// midnight of the recorded date, so that the snapshots stay readable.
 fn render(analysis: &FileAnalysis) -> String {
     let mut out = String::new();
+    for entry in &analysis.log {
+        let level = match entry.details.kind().level() {
+            Level::Error => "error",
+        };
+        let (kind, data) = match &entry.details {
+            AnalysisLogDetails::FileFailedToParse { reason } => {
+                ("file_failed_to_parse", format!("{reason:?}"))
+            }
+        };
+        let evidence = match entry.evidence {
+            Evidence::File => "file",
+        };
+        writeln!(out, "{level:<7} {kind:<22} {evidence:<6} {data}").unwrap();
+    }
+
     let Some(flight) = &analysis.flight else {
         out.push_str("no flight\n");
         return out;
@@ -66,4 +82,16 @@ fn dates_start_at_utc_midnight() {
     assert_eq!(midnight(2024, 2, 29), UtcTime(1_709_164_800));
     assert_eq!(midnight(2024, 3, 1), UtcTime(1_709_251_200));
     assert_eq!(midnight(2024, 6, 16), UtcTime(1_718_496_000));
+}
+
+#[test]
+fn reports_a_file_without_igc_records() {
+    let mut contents = "_".repeat(1000).into_bytes();
+    contents.extend_from_slice(b"\n\x00\x9f\xff\x07\nB\xc3\x28\xfe\n\r\n");
+    let analysis = analyze_file(Bytes::from(contents));
+
+    assert_snapshot!(render(&analysis), @"
+    error   file_failed_to_parse   file   NotIgc
+    no flight
+    ");
 }
