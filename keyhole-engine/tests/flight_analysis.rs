@@ -463,3 +463,13 @@ fn warns_about_each_stretch_of_intervals_over_the_limit() {
     fix    10:00:20 V 51.37108 6.85390 100 110
     ");
 }
+
+#[test]
+fn ignores_a_byte_order_mark() {
+    let analysis = analyze(&format!("\u{feff}ALXVABC\nHFDTE160624\n{FIX}"));
+    assert_snapshot!(render(&analysis), @"
+    logger LXV ABC
+    date   2024-06-16
+    fix    10:00:00 A 51.37108 6.85390 100 110
+    ");
+}

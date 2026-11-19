@@ -154,6 +154,10 @@ pub struct FileAnalysisOptions {
 /// Parses an IGC file, skipping what it cannot read, and checks the
 /// recording against the given limits.
 pub fn analyze_file(contents: Bytes, options: FileAnalysisOptions) -> FileAnalysis {
+    let contents = match contents.strip_prefix(b"\xEF\xBB\xBF") {
+        Some(rest) => contents.slice_ref(rest),
+        None => contents,
+    };
     let mut logger = None;
     let mut recorded_date = None;
     let mut fixes = Vec::new();
