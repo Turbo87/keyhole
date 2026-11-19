@@ -62,12 +62,18 @@ fn render(analysis: &FileAnalysis) -> String {
             format!(" {days:+}d")
         };
         let validity = if fix.valid { 'A' } else { 'V' };
-        writeln!(
+        write!(
             out,
             "fix    {hours:02}:{minutes:02}:{seconds:02}{days} {validity} {:.5} {:.5} {} {}",
             fix.latitude, fix.longitude, fix.pressure_altitude, fix.gnss_altitude,
         )
         .unwrap();
+        for code in ["ENL", "FXA", "SIU"] {
+            if let Some(value) = fix.extension(code) {
+                write!(out, " {code}={value}").unwrap();
+            }
+        }
+        out.push('\n');
     }
 
     out
@@ -330,5 +336,49 @@ fn drops_fixes_with_repeated_or_decreasing_timestamps() {
     fix    10:00:00 A 51.37108 6.85390 100 110
     fix    10:00:01 A 51.37108 6.85390 100 110
     fix    10:00:02 A 51.37113 6.85390 100 110
+    ");
+}
+
+#[test]
+fn decodes_extensions_with_the_latest_i_record() {
+    let analysis = analyze(
+        "ALXVABC\n\
+         HFDTE160624\n\
+         B1000005122265N00651234EA0010000110012\n\
+         I023638FXA3940SIU\n\
+         B1000015122265N00651234EA001000011001208\n\
+         B1000025122265N00651234EA00100001100120\n\
+         B1000035122265N00651234EA001000011001\n\
+         I013638ENL\n\
+         B1000045122265N00651234EA0010000110123\n",
+    );
+    assert_snapshot!(render(&analysis), @"
+    logger LXV ABC
+    date   2024-06-16
+    fix    10:00:00 A 51.37108 6.85390 100 110
+    fix    10:00:01 A 51.37108 6.85390 100 110 FXA=012 SIU=08
+    fix    10:00:02 A 51.37108 6.85390 100 110 FXA=012
+    fix    10:00:03 A 51.37108 6.85390 100 110
+    fix    10:00:04 A 51.37108 6.85390 100 110 ENL=123
+    ");
+}
+
+#[test]
+fn decodes_extensions_of_an_i_record_after_the_task_declaration() {
+    let analysis = analyze(
+        "ALXVABC\n\
+         HFDTEDATE:160624,01\n\
+         HFPLTPilotInCharge:Jane Doe\n\
+         HFGTYGliderType:LS8\n\
+         C160624092044000000000202Task\n\
+         C5122265N00651234ETakeoff\n\
+         C5122265N00651234ELanding\n\
+         I013638ENL\n\
+         B1000005122265N00651234EA0010000110042\n",
+    );
+    assert_snapshot!(render(&analysis), @"
+    logger LXV ABC
+    date   2024-06-16
+    fix    10:00:00 A 51.37108 6.85390 100 110 ENL=042
     ");
 }

@@ -2,9 +2,10 @@
 //! leniently into a flight.
 
 use std::collections::BTreeMap;
+use std::ops::Range;
 
 use bytes::Bytes;
-use igc::records::{ARecord, BRecord, FixValid, HRecord, Record};
+use igc::records::{self, ARecord, BRecord, FixValid, HRecord, Record};
 use igc::util::ParseError;
 
 use crate::time::UtcTime;
@@ -97,6 +98,47 @@ pub struct Fix {
     pub pressure_altitude: i32,
     /// In m, as recorded.
     pub gnss_altitude: i32,
+    /// The values of the extensions that the latest I record defines, without
+    /// those that the B record is too short for.
+    pub extensions: Vec<Extension>,
+}
+
+impl Fix {
+    /// The value of the extension with the given three-letter code, such as
+    /// `ENL`.
+    pub fn extension(&self, code: &str) -> Option<&str> {
+        let extension = self.extensions.iter().find(|e| e.code == code.as_bytes())?;
+        std::str::from_utf8(&extension.value).ok()
+    }
+}
+
+/// The raw value of one B record extension.
+#[derive(Debug)]
+pub struct Extension {
+    code: [u8; 3],
+    value: Bytes,
+}
+
+/// Where an extension that an I record defines lies in each B record.
+struct ExtensionDefinition {
+    code: [u8; 3],
+    bytes: Range<usize>,
+}
+
+impl ExtensionDefinition {
+    fn new(extension: &records::Extension) -> Option<Self> {
+        let code = extension.mnemonic.as_bytes().try_into().ok()?;
+        // The I record counts bytes from 1, including both ends.
+        let start = usize::from(extension.start_byte).checked_sub(1)?;
+        let bytes = start..usize::from(extension.end_byte);
+        Some(Self { code, bytes })
+    }
+
+    fn decode(&self, line: &Bytes) -> Option<Extension> {
+        let value = line.slice_ref(line.get(self.bytes.clone())?);
+        let code = self.code;
+        Some(Extension { code, value })
+    }
 }
 
 /// Parses an IGC file, skipping what it cannot read.
@@ -105,11 +147,13 @@ pub fn analyze_file(contents: Bytes) -> FileAnalysis {
     let mut recorded_date = None;
     let mut fixes = Vec::new();
     let mut fix_lines = Vec::new();
+    let mut extension_definitions = Vec::new();
     let mut has_igc_records = false;
     let mut unreadable_lines = BTreeMap::<_, Vec<_>>::new();
 
     for (index, line) in contents.split(|&byte| byte == b'\n').enumerate() {
-        let line = String::from_utf8_lossy(line.strip_suffix(b"\r").unwrap_or(line));
+        let raw_line = line.strip_suffix(b"\r").unwrap_or(line);
+        let line = String::from_utf8_lossy(raw_line);
         if line.trim().is_empty() {
             continue;
         }
@@ -138,8 +182,15 @@ pub fn analyze_file(contents: Bytes) -> FileAnalysis {
             Ok(Record::H(record)) if record.mnemonic == "DTE" => {
                 recorded_date = recorded_date.or_else(|| parse_date(&record));
             }
+            Ok(Record::I(record)) => {
+                let definitions = record.0.extensions.iter();
+                extension_definitions = definitions.filter_map(ExtensionDefinition::new).collect();
+            }
             Ok(Record::B(record)) => {
-                fixes.push(fix(&record));
+                let raw_line = contents.slice_ref(raw_line);
+                let definitions = extension_definitions.iter();
+                let extensions = definitions.filter_map(|d| d.decode(&raw_line)).collect();
+                fixes.push(fix(&record, extensions));
                 fix_lines.push(index + 1);
             }
             _ => {}
@@ -280,7 +331,7 @@ fn parse_date(record: &HRecord) -> Option<Date> {
 
 /// Converts a B record into a fix whose time is still the time of day, until
 /// `date_fixes()` dates all fixes at once.
-fn fix(record: &BRecord) -> Fix {
+fn fix(record: &BRecord, extensions: Vec<Extension>) -> Fix {
     Fix {
         time: UtcTime(record.timestamp.seconds_since_midnight().into()),
         latitude: record.pos.lat.0.into(),
@@ -288,5 +339,6 @@ fn fix(record: &BRecord) -> Fix {
         valid: record.fix_valid == FixValid::Valid,
         pressure_altitude: record.pressure_alt.into(),
         gnss_altitude: record.gps_alt.into(),
+        extensions,
     }
 }
