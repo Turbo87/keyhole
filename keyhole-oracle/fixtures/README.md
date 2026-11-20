@@ -4,9 +4,10 @@ Each directory `<competition>/<class>/<date>/` holds one SoaringSpot class day a
 
 - `task.json` is copied unchanged.
 - `results.csv` replaces `contestant` with `Crew <CN>`, and a non-empty `club` or `team` with `Club <CN>` or `Team <CN>`. Every remark is reviewed by hand for personal data before committing.
+- IGC files have names removed from their H records and appended `LCU::HP` records, except Tobias Bieniek's own flights.
 - `fixture.toml` is written by hand.
 
-`task.html`, `results.html` and IGC files are never committed, since they name people.
+`task.html` and `results.html` are never committed, since they name people.
 
 ## `fixture.toml`
 
