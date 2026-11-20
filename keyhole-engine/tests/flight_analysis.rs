@@ -2,11 +2,11 @@ use std::fmt::Write;
 
 use bytes::Bytes;
 use insta::assert_snapshot;
-use jiff::civil::Date;
+use jiff::civil::{Date, Time};
 use jiff::tz::Offset;
 use jiff::{SignedDuration, Timestamp};
 use keyhole_engine::flight_analysis::analysis_log::{AnalysisLogDetails, Evidence, Level};
-use keyhole_engine::flight_analysis::{FileAnalysis, FileAnalysisOptions, analyze_file};
+use keyhole_engine::flight_analysis::{FileAnalysis, FileAnalysisOptions, IgcFile, analyze_file};
 
 const OPTIONS: FileAnalysisOptions = FileAnalysisOptions {
     maximum_recording_interval: SignedDuration::from_secs(1),
@@ -16,47 +16,45 @@ fn analyze(contents: &str) -> FileAnalysis {
     analyze_file(Bytes::copy_from_slice(contents.as_bytes()), OPTIONS)
 }
 
+/// Analyses an excerpt from `tests/fixtures`. The excerpts leave out most of
+/// each flight, so no recording interval limit applies.
+fn analyze_excerpt(contents: &[u8]) -> FileAnalysis {
+    let maximum_recording_interval = SignedDuration::MAX;
+    let options = FileAnalysisOptions {
+        maximum_recording_interval,
+    };
+    analyze_file(Bytes::copy_from_slice(contents), options)
+}
+
+/// Writes a B record per second from 10:00:00 for each pair of ground speed
+/// from the fix before, in km/h, and altitude, in m. The glider flies north
+/// from 51°N.
+fn profile(fixes: &[(f64, i32)]) -> Vec<String> {
+    // One thousandth of a minute of latitude, in m.
+    const LATITUDE_STEP: f64 = 6_371_000.0 * std::f64::consts::PI / 180.0 / 60_000.0;
+    let mut distance = 0.0;
+    let records = fixes
+        .iter()
+        .enumerate()
+        .map(|(second, &(speed, altitude))| {
+            distance += speed / 3.6;
+            let latitude = (distance / LATITUDE_STEP).round() as u32;
+            let (minutes, thousandths) = (latitude / 1000, latitude % 1000);
+            let time = Time::constant(10, 0, 0, 0) + SignedDuration::from_secs(second as i64);
+            let time = time.strftime("%H%M%S");
+            format!("B{time}51{minutes:02}{thousandths:03}N00700000EA{altitude:05}{altitude:05}")
+        });
+    records.collect()
+}
+
+fn analyze_profile(records: &[String]) -> FileAnalysis {
+    analyze(&format!("ALXVABC\nHFDTE160624\n{}\n", records.join("\n")))
+}
+
 /// Renders the analysis log, then the IGC file with times as time of day and
 /// days after the recorded date, so that the snapshots stay readable.
 fn render(analysis: &FileAnalysis) -> String {
-    let mut out = String::new();
-    for entry in &analysis.log {
-        let level = match entry.details.kind().level() {
-            Level::Error => "error",
-            Level::Warning => "warning",
-        };
-        let (kind, data) = match &entry.details {
-            AnalysisLogDetails::FileFailedToParse { reason } => {
-                ("file_failed_to_parse", format!("{reason:?}"))
-            }
-            AnalysisLogDetails::UnreadableLines { reason, lines } => {
-                let reason = format!("{:?} {:?}", reason.record_type, reason.problem);
-                ("unreadable_lines", format!("{reason}: {}", join(lines)))
-            }
-            AnalysisLogDetails::TimestampErrors { lines } => {
-                let count = lines.len();
-                (
-                    "timestamp_errors",
-                    format!("{count} fixes: {}", join(lines)),
-                )
-            }
-            AnalysisLogDetails::RecordingIntervalExceeded { longest_interval } => {
-                ("interval_exceeded", format!("longest {longest_interval:#}"))
-            }
-            AnalysisLogDetails::NoPressureAltitude => ("no_pressure_altitude", String::new()),
-        };
-        let evidence = match entry.evidence {
-            Evidence::File => "file".into(),
-            Evidence::Interval(start, end) => {
-                let igc_file = analysis.igc_file.as_ref().unwrap();
-                let date = igc_file.recorded_date;
-                format!("{} to {}", time(date, start), time(date, end))
-            }
-        };
-        let line = format!("{level:<7} {kind:<22} {evidence:<6} {data}");
-        writeln!(out, "{}", line.trim_end()).unwrap();
-    }
-
+    let mut out = render_log(analysis);
     let Some(igc_file) = &analysis.igc_file else {
         out.push_str("no igc file\n");
         return out;
@@ -66,6 +64,7 @@ fn render(analysis: &FileAnalysis) -> String {
     writeln!(out, "logger {} {}", logger.manufacturer, logger.serial).unwrap();
     writeln!(out, "date   {}", igc_file.recorded_date).unwrap();
     writeln!(out, "alt    {:?}", igc_file.altitude_source).unwrap();
+    write_flights(&mut out, igc_file);
 
     for fix in &igc_file.fixes {
         let time = time(igc_file.recorded_date, fix.time);
@@ -88,6 +87,68 @@ fn render(analysis: &FileAnalysis) -> String {
     }
 
     out
+}
+
+fn render_log(analysis: &FileAnalysis) -> String {
+    let mut out = String::new();
+    for entry in &analysis.log {
+        let level = match entry.details.kind().level() {
+            Level::Error => "error",
+            Level::Warning => "warning",
+            Level::Info => "info",
+        };
+        let (kind, data) = match &entry.details {
+            AnalysisLogDetails::FileFailedToParse { reason } => {
+                ("file_failed_to_parse", format!("{reason:?}"))
+            }
+            AnalysisLogDetails::UnreadableLines { reason, lines } => {
+                let reason = format!("{:?} {:?}", reason.record_type, reason.problem);
+                ("unreadable_lines", format!("{reason}: {}", join(lines)))
+            }
+            AnalysisLogDetails::TimestampErrors { lines } => {
+                let count = lines.len();
+                (
+                    "timestamp_errors",
+                    format!("{count} fixes: {}", join(lines)),
+                )
+            }
+            AnalysisLogDetails::RecordingIntervalExceeded { longest_interval } => {
+                ("interval_exceeded", format!("longest {longest_interval:#}"))
+            }
+            AnalysisLogDetails::NoPressureAltitude => ("no_pressure_altitude", String::new()),
+            AnalysisLogDetails::TakeOff => ("take_off", String::new()),
+            AnalysisLogDetails::Landing => ("landing", String::new()),
+        };
+        let date = || analysis.igc_file.as_ref().unwrap().recorded_date;
+        let evidence = match entry.evidence {
+            Evidence::File => "file".into(),
+            Evidence::Interval(start, end) => {
+                format!("{} to {}", time(date(), start), time(date(), end))
+            }
+            Evidence::Fix(fix) => time(date(), fix),
+        };
+        let line = format!("{level:<7} {kind:<22} {evidence:<6} {data}");
+        writeln!(out, "{}", line.trim_end()).unwrap();
+    }
+    out
+}
+
+/// Renders the analysis log and the flights, for recordings too long to list
+/// their fixes.
+fn render_flights(analysis: &FileAnalysis) -> String {
+    let mut out = render_log(analysis);
+    write_flights(&mut out, analysis.igc_file.as_ref().unwrap());
+    out
+}
+
+fn write_flights(out: &mut String, igc_file: &IgcFile) {
+    let time = |time: Option<Timestamp>| {
+        time.map_or("-".into(), |t| self::time(igc_file.recorded_date, t))
+    };
+    for flight in &igc_file.flights {
+        let (take_off, landing) = (time(flight.take_off_time), time(flight.landing_time));
+        writeln!(out, "flight {take_off} to {landing}").unwrap();
+    }
 }
 
 /// Formats a time as time of day, with the days after the recorded date
@@ -533,5 +594,161 @@ fn keeps_pressure_altitude_when_some_fixes_read_zero() {
     fix    10:00:00 A 51.37108 6.85390 0 110
     fix    10:00:01 A 51.37108 6.85390 -1 111
     fix    10:00:02 A 51.37108 6.85390 1 112
+    ");
+}
+
+#[test]
+fn detects_the_take_off_and_landing_of_a_flight() {
+    let analysis = analyze_excerpt(include_bytes!("fixtures/normal.igc"));
+    assert_snapshot!(render_flights(&analysis), @"
+    info    take_off               12:19:23
+    info    landing                16:39:47
+    flight 12:19:23 to 16:39:47
+    ");
+}
+
+#[test]
+fn detects_every_take_off_and_landing_of_several_flights() {
+    let analysis = analyze_excerpt(include_bytes!("fixtures/two-winch-launches.igc"));
+    assert_snapshot!(render_flights(&analysis), @"
+    warning timestamp_errors       file   2 fixes: 110, 617
+    info    take_off               10:44:50
+    info    landing                10:53:00
+    info    take_off               11:12:20
+    info    landing                15:18:43
+    flight 10:44:50 to 10:53:00
+    flight 11:12:20 to 15:18:43
+    ");
+}
+
+/// The logger starts the file with the minutes before the take-off, which here
+/// hold the end of a short earlier flight. The glider lands, is turned around
+/// and is towed out again 70 s after it stopped.
+#[test]
+fn detects_a_take_off_shortly_after_a_landing() {
+    let analysis = analyze_excerpt(include_bytes!("fixtures/take-off-after-short-stop.igc"));
+    assert_snapshot!(render_flights(&analysis), @"
+    info    landing                13:44:51
+    info    take_off               13:46:09
+    info    landing                14:55:36
+    flight - to 13:44:51
+    flight 13:46:09 to 14:55:36
+    ");
+}
+
+#[test]
+fn detects_no_take_off_for_a_file_that_starts_in_the_take_off_run() {
+    let analysis = analyze_excerpt(include_bytes!("fixtures/starts-airborne.igc"));
+    assert_snapshot!(render_flights(&analysis), @"
+    info    landing                15:22:57
+    flight - to 15:22:57
+    ");
+}
+
+#[test]
+fn detects_no_landing_for_a_file_that_ends_in_flight() {
+    let analysis = analyze_excerpt(include_bytes!("fixtures/ends-airborne.igc"));
+    assert_snapshot!(render_flights(&analysis), @"
+    info    take_off               12:07:03
+    flight 12:07:03 to -
+    ");
+}
+
+#[test]
+fn detects_no_landing_while_hovering_in_wave() {
+    let analysis = analyze_excerpt(include_bytes!("fixtures/wave-hover.igc"));
+    assert_snapshot!(render_flights(&analysis), @"
+    info    take_off               11:21:52
+    info    landing                18:03:40
+    flight 11:21:52 to 18:03:40
+    ");
+}
+
+#[test]
+fn detects_an_outlanding_far_above_the_take_off() {
+    let analysis = analyze_excerpt(include_bytes!("fixtures/outlanding-on-higher-ground.igc"));
+    assert_snapshot!(render_flights(&analysis), @"
+    info    take_off               10:22:48
+    info    landing                14:52:20
+    flight 10:22:48 to 14:52:20
+    ");
+}
+
+#[test]
+fn detects_no_take_off_for_a_ground_tow() {
+    let analysis = analyze_excerpt(include_bytes!("fixtures/ground-tow.igc"));
+    assert_snapshot!(render_flights(&analysis), @"
+    info    take_off               11:36:26
+    info    landing                14:48:00
+    flight 11:36:26 to 14:48:00
+    ");
+}
+
+#[test]
+fn detects_a_landing_on_pressure_altitudes_around_zero() {
+    let analysis = analyze_excerpt(include_bytes!("fixtures/sea-level.igc"));
+    assert_snapshot!(render_flights(&analysis), @"
+    info    take_off               12:00:49
+    info    landing                15:37:05
+    flight 12:00:49 to 15:37:05
+    ");
+}
+
+#[test]
+fn detects_flights_on_gnss_altitude() {
+    // Bytes 26 to 30 of a B record hold its pressure altitude.
+    let lines = include_str!("fixtures/normal.igc").lines();
+    let contents = lines.map(|line| {
+        if line.starts_with('B') {
+            format!("{}00000{}\n", &line[..25], &line[30..])
+        } else {
+            format!("{line}\n")
+        }
+    });
+    let analysis = analyze_excerpt(contents.collect::<String>().as_bytes());
+    assert_snapshot!(render_flights(&analysis), @"
+    warning no_pressure_altitude   file
+    info    take_off               12:19:23
+    info    landing                16:39:47
+    flight 12:19:23 to 16:39:47
+    ");
+}
+
+#[test]
+fn detects_a_landing_despite_an_altitude_spike_and_an_invalid_fix() {
+    let standing = (0..60).map(|_| (0.0, 100));
+    let climbing = (1..=30).map(|second| (72.0, 100 + 5 * second));
+    let descending = (1..=30).map(|second| (72.0, 250 - 5 * second));
+    let stopped = (0..20).map(|_| (0.0, 100));
+    let fixes = standing.chain(climbing).chain(descending).chain(stopped);
+    let mut records = profile(&fixes.collect::<Vec<_>>());
+    // Every 30 s window of the ground period holds an invalid fix at 999 m and
+    // a 15 m altitude spike.
+    records[136] = records[136].replace("EA0010000100", "EV0099900999");
+    records[138] = records[138].replace("EA0010000100", "EA0011500115");
+    let analysis = analyze_profile(&records);
+    assert_snapshot!(render_flights(&analysis), @"
+    info    take_off               10:01:00
+    info    landing                10:01:59
+    flight 10:01:00 to 10:01:59
+    ");
+}
+
+#[test]
+fn detects_a_take_off_run_from_the_second_fix() {
+    let standing = [(0.0, 100), (0.0, 100)];
+    let climbing = (1..30).map(|second| (72.0, 100 + 5 * second));
+    let descending = (1..=30).map(|second| (72.0, 245 - 5 * second));
+    let stopped = (0..40).map(|_| (0.0, 100));
+    let fixes = standing
+        .into_iter()
+        .chain(climbing)
+        .chain(descending)
+        .chain(stopped);
+    let analysis = analyze_profile(&profile(&fixes.collect::<Vec<_>>()));
+    assert_snapshot!(render_flights(&analysis), @"
+    info    take_off               10:00:02
+    info    landing                10:01:00
+    flight 10:00:02 to 10:01:00
     ");
 }

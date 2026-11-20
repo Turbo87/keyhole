@@ -18,6 +18,8 @@ pub enum AnalysisLogKind {
     TimestampErrors,
     RecordingIntervalExceeded,
     NoPressureAltitude,
+    TakeOff,
+    Landing,
 }
 
 impl AnalysisLogKind {
@@ -27,6 +29,7 @@ impl AnalysisLogKind {
             Self::TimestampErrors | Self::RecordingIntervalExceeded | Self::NoPressureAltitude => {
                 Level::Warning
             }
+            Self::TakeOff | Self::Landing => Level::Info,
         }
     }
 }
@@ -35,6 +38,7 @@ impl AnalysisLogKind {
 pub enum Level {
     Error,
     Warning,
+    Info,
 }
 
 #[derive(Debug)]
@@ -55,6 +59,10 @@ pub enum AnalysisLogDetails {
     /// No fix has a pressure altitude, so the analysis uses GNSS altitude,
     /// which neither rule set provides for.
     NoPressureAltitude,
+    /// A flight starts its take-off run at the fix.
+    TakeOff,
+    /// A flight's roll-out stays slow from the fix on.
+    Landing,
 }
 
 impl AnalysisLogDetails {
@@ -65,6 +73,8 @@ impl AnalysisLogDetails {
             Self::TimestampErrors { .. } => AnalysisLogKind::TimestampErrors,
             Self::RecordingIntervalExceeded { .. } => AnalysisLogKind::RecordingIntervalExceeded,
             Self::NoPressureAltitude => AnalysisLogKind::NoPressureAltitude,
+            Self::TakeOff => AnalysisLogKind::TakeOff,
+            Self::Landing => AnalysisLogKind::Landing,
         }
     }
 }
@@ -119,4 +129,6 @@ pub enum Evidence {
     File,
     /// The span from the first time to the second.
     Interval(Timestamp, Timestamp),
+    /// The fix at the time.
+    Fix(Timestamp),
 }
