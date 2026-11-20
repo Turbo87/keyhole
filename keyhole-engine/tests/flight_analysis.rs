@@ -16,7 +16,7 @@ fn analyze(contents: &str) -> FileAnalysis {
     analyze_file(Bytes::copy_from_slice(contents.as_bytes()), OPTIONS)
 }
 
-/// Renders the analysis log, then the flight with times as time of day and
+/// Renders the analysis log, then the IGC file with times as time of day and
 /// days after the recorded date, so that the snapshots stay readable.
 fn render(analysis: &FileAnalysis) -> String {
     let mut out = String::new();
@@ -47,25 +47,25 @@ fn render(analysis: &FileAnalysis) -> String {
         let evidence = match entry.evidence {
             Evidence::File => "file".into(),
             Evidence::Interval(start, end) => {
-                let flight = analysis.flight.as_ref().unwrap();
-                let date = flight.recorded_date;
+                let igc_file = analysis.igc_file.as_ref().unwrap();
+                let date = igc_file.recorded_date;
                 format!("{} to {}", time(date, start), time(date, end))
             }
         };
         writeln!(out, "{level:<7} {kind:<22} {evidence:<6} {data}").unwrap();
     }
 
-    let Some(flight) = &analysis.flight else {
-        out.push_str("no flight\n");
+    let Some(igc_file) = &analysis.igc_file else {
+        out.push_str("no igc file\n");
         return out;
     };
 
-    let logger = &flight.logger;
+    let logger = &igc_file.logger;
     writeln!(out, "logger {} {}", logger.manufacturer, logger.serial).unwrap();
-    writeln!(out, "date   {}", flight.recorded_date).unwrap();
+    writeln!(out, "date   {}", igc_file.recorded_date).unwrap();
 
-    for fix in &flight.fixes {
-        let time = time(flight.recorded_date, fix.time);
+    for fix in &igc_file.fixes {
+        let time = time(igc_file.recorded_date, fix.time);
         let validity = if fix.valid { 'A' } else { 'V' };
         write!(
             out,
@@ -80,8 +80,8 @@ fn render(analysis: &FileAnalysis) -> String {
         }
         out.push('\n');
     }
-    for &pev in &flight.pevs {
-        writeln!(out, "pev    {}", time(flight.recorded_date, pev)).unwrap();
+    for &pev in &igc_file.pevs {
+        writeln!(out, "pev    {}", time(igc_file.recorded_date, pev)).unwrap();
     }
 
     out
@@ -132,7 +132,7 @@ fn reports_a_file_without_igc_records() {
 
     assert_snapshot!(render(&analysis), @"
     error   file_failed_to_parse   file   NotIgc
-    no flight
+    no igc file
     ");
 }
 
@@ -143,7 +143,7 @@ fn reports_a_file_without_a_logger_identity() {
     let analysis = analyze(&format!("HFDTE160624\n{FIX}"));
     assert_snapshot!(render(&analysis), @"
     error   file_failed_to_parse   file   MissingLoggerId
-    no flight
+    no igc file
     ");
 }
 
@@ -152,7 +152,7 @@ fn reports_a_file_without_a_recorded_date() {
     let analysis = analyze(&format!("ALXVABC\n{FIX}"));
     assert_snapshot!(render(&analysis), @"
     error   file_failed_to_parse   file   MissingRecordedDate
-    no flight
+    no igc file
     ");
 }
 
@@ -162,7 +162,7 @@ fn reports_a_file_without_logger_identity_and_recorded_date() {
     assert_snapshot!(render(&analysis), @"
     error   file_failed_to_parse   file   MissingLoggerId
     error   file_failed_to_parse   file   MissingRecordedDate
-    no flight
+    no igc file
     ");
 }
 
@@ -171,7 +171,7 @@ fn reports_an_unreadable_recorded_date() {
     let analysis = analyze(&format!("ALXVABC\nHFDTEDATE:16O624,01\n{FIX}"));
     assert_snapshot!(render(&analysis), @"
     error   file_failed_to_parse   file   MissingRecordedDate
-    no flight
+    no igc file
     ");
 }
 
@@ -180,7 +180,7 @@ fn reports_a_recorded_date_that_does_not_exist() {
     let analysis = analyze(&format!("ALXVABC\nHFDTE300224\n{FIX}"));
     assert_snapshot!(render(&analysis), @"
     error   file_failed_to_parse   file   MissingRecordedDate
-    no flight
+    no igc file
     ");
 }
 
@@ -199,7 +199,7 @@ fn reports_a_file_without_fixes() {
     let analysis = analyze("ALXVABC\nHFDTE160624\n");
     assert_snapshot!(render(&analysis), @"
     error   file_failed_to_parse   file   NoValidFixes
-    no flight
+    no igc file
     ");
 }
 
@@ -213,7 +213,7 @@ fn reports_a_file_without_valid_fixes() {
     );
     assert_snapshot!(render(&analysis), @"
     error   file_failed_to_parse   file   NoValidFixes
-    no flight
+    no igc file
     ");
 }
 
@@ -253,7 +253,7 @@ fn reports_unreadable_lines_of_files_that_fail_to_parse() {
     assert_snapshot!(render(&analysis), @"
     error   file_failed_to_parse   file   MissingRecordedDate
     error   unreadable_lines       file   H Malformed: 2
-    no flight
+    no igc file
     ");
 }
 

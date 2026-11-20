@@ -45,8 +45,8 @@ proptest! {
     fn fix_times_strictly_increase_in_any_file(lines in prop::collection::vec(line(), 0..60)) {
         let contents = [HEADER.as_bytes().to_vec(), lines.concat()].concat();
         let analysis = analyze(contents);
-        if let Some(flight) = analysis.flight {
-            let times = flight.fixes.iter().map(|fix| fix.time).collect::<Vec<_>>();
+        if let Some(igc_file) = analysis.igc_file {
+            let times = igc_file.fixes.iter().map(|fix| fix.time).collect::<Vec<_>>();
             prop_assert!(times.windows(2).all(|pair| pair[0] < pair[1]), "{times:?}");
         }
     }
@@ -65,8 +65,8 @@ proptest! {
         stale_records.insert(insert_at, b_record(stale_time));
 
         let fix_times = |records: Vec<String>| {
-            let flight = analyze(HEADER.to_owned() + &records.concat()).flight.unwrap();
-            flight.fixes.iter().map(|fix| fix.time).collect::<Vec<_>>()
+            let igc_file = analyze(HEADER.to_owned() + &records.concat()).igc_file.unwrap();
+            igc_file.fixes.iter().map(|fix| fix.time).collect::<Vec<_>>()
         };
         prop_assert_eq!(fix_times(stale_records), fix_times(records));
     }
