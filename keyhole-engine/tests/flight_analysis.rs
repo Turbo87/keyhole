@@ -43,6 +43,7 @@ fn render(analysis: &FileAnalysis) -> String {
             AnalysisLogDetails::RecordingIntervalExceeded { longest_interval } => {
                 ("interval_exceeded", format!("longest {longest_interval:#}"))
             }
+            AnalysisLogDetails::NoPressureAltitude => ("no_pressure_altitude", String::new()),
         };
         let evidence = match entry.evidence {
             Evidence::File => "file".into(),
@@ -52,7 +53,8 @@ fn render(analysis: &FileAnalysis) -> String {
                 format!("{} to {}", time(date, start), time(date, end))
             }
         };
-        writeln!(out, "{level:<7} {kind:<22} {evidence:<6} {data}").unwrap();
+        let line = format!("{level:<7} {kind:<22} {evidence:<6} {data}");
+        writeln!(out, "{}", line.trim_end()).unwrap();
     }
 
     let Some(igc_file) = &analysis.igc_file else {
@@ -63,6 +65,7 @@ fn render(analysis: &FileAnalysis) -> String {
     let logger = &igc_file.logger;
     writeln!(out, "logger {} {}", logger.manufacturer, logger.serial).unwrap();
     writeln!(out, "date   {}", igc_file.recorded_date).unwrap();
+    writeln!(out, "alt    {:?}", igc_file.altitude_source).unwrap();
 
     for fix in &igc_file.fixes {
         let time = time(igc_file.recorded_date, fix.time);
@@ -118,6 +121,7 @@ fn parses_a_well_formed_file_into_a_flight() {
     assert_snapshot!(render(&analysis), @"
     logger LXV ABC
     date   2024-06-16
+    alt    Pressure
     fix    10:00:00 V 51.37108 6.85390 100 110
     fix    10:00:01 A -51.37110 -6.85392 -10 -5
     fix    10:00:02 A 51.37112 6.85393 102 112
@@ -190,6 +194,7 @@ fn accepts_a_leap_day_as_recorded_date() {
     assert_snapshot!(render(&analysis), @"
     logger LXV ABC
     date   2024-02-29
+    alt    Pressure
     fix    10:00:00 A 51.37108 6.85390 100 110
     ");
 }
@@ -241,6 +246,7 @@ fn reports_unreadable_lines_grouped_by_record_type_and_problem() {
     warning interval_exceeded      10:00:00 to 10:00:04 longest 4s
     logger LXV ABC
     date   2024-06-16
+    alt    Pressure
     fix    10:00:00 A 51.37108 6.85390 100 110
     fix    10:00:04 A 51.37108 6.85390 100 110
     pev    10:00:04
@@ -271,6 +277,7 @@ fn dates_leading_invalid_fixes_before_midnight_on_the_previous_day() {
     warning interval_exceeded      23:59:59 -1d to 00:00:01 longest 2s
     logger LXV ABC
     date   2024-06-16
+    alt    Pressure
     fix    23:59:58 -1d V 51.37108 6.85390 100 110
     fix    23:59:59 -1d V 51.37108 6.85390 100 110
     fix    00:00:01 A 51.37108 6.85390 100 110
@@ -290,6 +297,7 @@ fn keeps_leading_invalid_fixes_up_to_12_hours_later_on_the_recorded_date() {
     warning timestamp_errors       file   1 fixes: 3
     logger LXV ABC
     date   2024-06-16
+    alt    Pressure
     fix    01:00:00 A 51.37108 6.85390 100 110
     ");
 }
@@ -309,6 +317,7 @@ fn dates_stale_fixes_after_midnight_on_the_previous_day() {
     warning interval_exceeded      23:59:58 to 00:00:01 +1d longest 3s
     logger LXV ABC
     date   2024-06-16
+    alt    Pressure
     fix    23:59:58 A 51.37108 6.85390 100 110
     fix    00:00:01 +1d A 51.37108 6.85390 100 110
     fix    00:00:02 +1d A 51.37108 6.85390 100 110
@@ -327,6 +336,7 @@ fn dates_fixes_after_midnight_on_the_next_day() {
     assert_snapshot!(render(&analysis), @"
     logger LXV ABC
     date   2024-06-16
+    alt    Pressure
     fix    23:59:59 A 51.37108 6.85390 100 110
     fix    00:00:00 +1d A 51.37108 6.85390 100 110
     fix    00:00:01 +1d A 51.37108 6.85390 100 110
@@ -345,6 +355,7 @@ fn dates_times_past_the_end_of_the_day_on_the_next_day() {
     assert_snapshot!(render(&analysis), @"
     logger LXV ABC
     date   2024-06-16
+    alt    Pressure
     fix    23:59:59 A 51.37108 6.85390 100 110
     fix    00:00:00 +1d A 51.37108 6.85390 100 110
     fix    00:00:01 +1d A 51.37108 6.85390 100 110
@@ -366,6 +377,7 @@ fn drops_fixes_with_repeated_or_decreasing_timestamps() {
     warning timestamp_errors       file   2 fixes: 5, 6
     logger LXV ABC
     date   2024-06-16
+    alt    Pressure
     fix    10:00:00 A 51.37108 6.85390 100 110
     fix    10:00:01 A 51.37108 6.85390 100 110
     fix    10:00:02 A 51.37113 6.85390 100 110
@@ -388,6 +400,7 @@ fn decodes_extensions_with_the_latest_i_record() {
     assert_snapshot!(render(&analysis), @"
     logger LXV ABC
     date   2024-06-16
+    alt    Pressure
     fix    10:00:00 A 51.37108 6.85390 100 110
     fix    10:00:01 A 51.37108 6.85390 100 110 FXA=012 SIU=08
     fix    10:00:02 A 51.37108 6.85390 100 110 FXA=012
@@ -412,6 +425,7 @@ fn decodes_extensions_of_an_i_record_after_the_task_declaration() {
     assert_snapshot!(render(&analysis), @"
     logger LXV ABC
     date   2024-06-16
+    alt    Pressure
     fix    10:00:00 A 51.37108 6.85390 100 110 ENL=042
     ");
 }
@@ -434,6 +448,7 @@ fn dates_pilot_events_by_the_preceding_fix() {
     warning interval_exceeded      23:59:58 to 00:00:01 +1d longest 3s
     logger LXV ABC
     date   2024-06-16
+    alt    Pressure
     fix    23:59:58 A 51.37108 6.85390 100 110
     fix    00:00:01 +1d A 51.37108 6.85390 100 110
     pev    23:59:57
@@ -462,6 +477,7 @@ fn warns_about_each_stretch_of_intervals_over_the_limit() {
     warning interval_exceeded      10:00:08 to 10:00:20 longest 12s
     logger LXV ABC
     date   2024-06-16
+    alt    Pressure
     fix    10:00:00 A 51.37108 6.85390 100 110
     fix    10:00:01 A 51.37108 6.85390 100 110
     fix    10:00:03 A 51.37108 6.85390 100 110
@@ -478,6 +494,44 @@ fn ignores_a_byte_order_mark() {
     assert_snapshot!(render(&analysis), @"
     logger LXV ABC
     date   2024-06-16
+    alt    Pressure
     fix    10:00:00 A 51.37108 6.85390 100 110
+    ");
+}
+
+#[test]
+fn uses_gnss_altitude_when_every_pressure_altitude_reads_zero() {
+    let analysis = analyze(
+        "ALXVABC\n\
+         HFDTE160624\n\
+         B1000005122265N00651234EA0000000110\n\
+         B1000015122265N00651234EA0000000111\n",
+    );
+    assert_snapshot!(render(&analysis), @"
+    warning no_pressure_altitude   file
+    logger LXV ABC
+    date   2024-06-16
+    alt    Gnss
+    fix    10:00:00 A 51.37108 6.85390 0 110
+    fix    10:00:01 A 51.37108 6.85390 0 111
+    ");
+}
+
+#[test]
+fn keeps_pressure_altitude_when_some_fixes_read_zero() {
+    let analysis = analyze(
+        "ALXVABC\n\
+         HFDTE160624\n\
+         B1000005122265N00651234EA0000000110\n\
+         B1000015122265N00651234EA-000100111\n\
+         B1000025122265N00651234EA0000100112\n",
+    );
+    assert_snapshot!(render(&analysis), @"
+    logger LXV ABC
+    date   2024-06-16
+    alt    Pressure
+    fix    10:00:00 A 51.37108 6.85390 0 110
+    fix    10:00:01 A 51.37108 6.85390 -1 111
+    fix    10:00:02 A 51.37108 6.85390 1 112
     ");
 }

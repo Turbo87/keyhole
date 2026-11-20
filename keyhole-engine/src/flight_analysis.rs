@@ -38,6 +38,15 @@ pub struct IgcFile {
     pub fixes: Vec<Fix>,
     /// The pilot event markers, in file order.
     pub pevs: Vec<Timestamp>,
+    /// Which recorded altitude the analysis uses for every fix.
+    pub altitude_source: AltitudeSource,
+}
+
+/// The recorded altitude of a fix, pressure or GNSS.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AltitudeSource {
+    Pressure,
+    Gnss,
 }
 
 /// A logger's manufacturer and serial, as written in the A record.
@@ -226,11 +235,20 @@ pub fn analyze_file(contents: Bytes, options: FileAnalysisOptions) -> FileAnalys
             log.push(file_entry(AnalysisLogDetails::TimestampErrors { lines }));
         }
         log.extend(exceeded_recording_intervals(&fixes, options));
+        // A pressure altitude of zero on some fixes is a real value near sea
+        // level, so only zero on every fix means the logger recorded none.
+        let altitude_source = if fixes.iter().all(|fix| fix.pressure_altitude == 0) {
+            log.push(file_entry(AnalysisLogDetails::NoPressureAltitude));
+            AltitudeSource::Gnss
+        } else {
+            AltitudeSource::Pressure
+        };
         IgcFile {
             logger,
             recorded_date,
             fixes,
             pevs,
+            altitude_source,
         }
     });
 

@@ -17,13 +17,16 @@ pub enum AnalysisLogKind {
     UnreadableLines,
     TimestampErrors,
     RecordingIntervalExceeded,
+    NoPressureAltitude,
 }
 
 impl AnalysisLogKind {
     pub fn level(self) -> Level {
         match self {
             Self::FileFailedToParse | Self::UnreadableLines => Level::Error,
-            Self::TimestampErrors | Self::RecordingIntervalExceeded => Level::Warning,
+            Self::TimestampErrors | Self::RecordingIntervalExceeded | Self::NoPressureAltitude => {
+                Level::Warning
+            }
         }
     }
 }
@@ -49,6 +52,9 @@ pub enum AnalysisLogDetails {
     TimestampErrors { lines: Vec<usize> },
     /// Consecutive fixes lie further apart than the edition allows.
     RecordingIntervalExceeded { longest_interval: SignedDuration },
+    /// No fix has a pressure altitude, so the analysis uses GNSS altitude,
+    /// which neither rule set provides for.
+    NoPressureAltitude,
 }
 
 impl AnalysisLogDetails {
@@ -58,6 +64,7 @@ impl AnalysisLogDetails {
             Self::UnreadableLines { .. } => AnalysisLogKind::UnreadableLines,
             Self::TimestampErrors { .. } => AnalysisLogKind::TimestampErrors,
             Self::RecordingIntervalExceeded { .. } => AnalysisLogKind::RecordingIntervalExceeded,
+            Self::NoPressureAltitude => AnalysisLogKind::NoPressureAltitude,
         }
     }
 }
