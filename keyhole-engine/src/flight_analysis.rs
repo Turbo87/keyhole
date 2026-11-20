@@ -21,14 +21,14 @@ pub mod analysis_log;
 /// What the file stage extracted from one IGC file.
 #[derive(Debug)]
 pub struct FileAnalysis {
-    /// The parsed flight, or `None` if the file lacks its logger identity,
+    /// The parsed IGC file, or `None` if the file lacks its logger identity,
     /// recorded date or a valid fix.
-    pub flight: Option<Flight>,
+    pub igc_file: Option<IgcFile>,
     pub log: Vec<AnalysisLogEntry>,
 }
 
 #[derive(Debug)]
-pub struct Flight {
+pub struct IgcFile {
     /// The logger that wrote the file, from its A record.
     pub logger: LoggerId,
     /// The UTC date the recording started on, from its `HFDTE` header.
@@ -193,7 +193,8 @@ pub fn analyze_file(contents: Bytes, options: FileAnalysisOptions) -> FileAnalys
 
     if !has_igc_records {
         let log = vec![file_failure(FileFailure::NotIgc)];
-        return FileAnalysis { flight: None, log };
+        let igc_file = None;
+        return FileAnalysis { igc_file, log };
     }
 
     let mut log = Vec::new();
@@ -214,7 +215,7 @@ pub fn analyze_file(contents: Bytes, options: FileAnalysisOptions) -> FileAnalys
     }
 
     let usable = logger.zip(recorded_date).zip(first_valid_fix);
-    let flight = usable.map(|((logger, recorded_date), first_valid_fix)| {
+    let igc_file = usable.map(|((logger, recorded_date), first_valid_fix)| {
         let fixes = date_fixes(fixes, recorded_date, first_valid_fix);
         let pevs = pevs
             .iter()
@@ -225,7 +226,7 @@ pub fn analyze_file(contents: Bytes, options: FileAnalysisOptions) -> FileAnalys
             log.push(file_entry(AnalysisLogDetails::TimestampErrors { lines }));
         }
         log.extend(exceeded_recording_intervals(&fixes, options));
-        Flight {
+        IgcFile {
             logger,
             recorded_date,
             fixes,
@@ -233,7 +234,7 @@ pub fn analyze_file(contents: Bytes, options: FileAnalysisOptions) -> FileAnalys
         }
     });
 
-    FileAnalysis { flight, log }
+    FileAnalysis { igc_file, log }
 }
 
 /// Turns the fixes' times of day into points in time. Each fix lies within

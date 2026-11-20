@@ -324,6 +324,14 @@ _Avoid_: Temporary airspace, day airspace, additional airspace
 
 ### Flights and results
 
+**IGC file**:
+One recording of a logger in the IGC format: its logger identity, recorded date, fixes and pilot event markers. It can hold several flights.
+_Avoid_: Flight, track
+
+**Flight**:
+The part of an IGC file from a take-off to the following landing. A flight that starts airborne has no take-off, and one that ends airborne has no landing.
+_Avoid_: Airborne period, launch
+
 **Flight analysis**:
 Working out from a flight's IGC file what the pilot achieved on the day's task.
 _Avoid_: Evaluation, check
