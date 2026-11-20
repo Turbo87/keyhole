@@ -118,6 +118,7 @@ fn render_log(analysis: &FileAnalysis) -> String {
             AnalysisLogDetails::NoPressureAltitude => ("no_pressure_altitude", String::new()),
             AnalysisLogDetails::TakeOff => ("take_off", String::new()),
             AnalysisLogDetails::Landing => ("landing", String::new()),
+            AnalysisLogDetails::Airborne { end } => ("airborne", format!("{end:?}")),
         };
         let date = || analysis.igc_file.as_ref().unwrap().recorded_date;
         let evidence = match entry.evidence {
@@ -628,6 +629,7 @@ fn detects_every_take_off_and_landing_of_several_flights() {
 fn detects_a_take_off_shortly_after_a_landing() {
     let analysis = analyze_excerpt(include_bytes!("fixtures/take-off-after-short-stop.igc"));
     assert_snapshot!(render_flights(&analysis), @"
+    warning airborne               13:41:16 Start
     info    landing                13:44:51
     info    take_off               13:46:09
     info    landing                14:55:36
@@ -637,19 +639,21 @@ fn detects_a_take_off_shortly_after_a_landing() {
 }
 
 #[test]
-fn detects_no_take_off_for_a_file_that_starts_in_the_take_off_run() {
+fn warns_about_a_file_that_starts_in_the_take_off_run() {
     let analysis = analyze_excerpt(include_bytes!("fixtures/starts-airborne.igc"));
     assert_snapshot!(render_flights(&analysis), @"
+    warning airborne               11:58:59 Start
     info    landing                15:22:57
     flight - to 15:22:57
     ");
 }
 
 #[test]
-fn detects_no_landing_for_a_file_that_ends_in_flight() {
+fn warns_about_a_file_that_ends_in_flight() {
     let analysis = analyze_excerpt(include_bytes!("fixtures/ends-airborne.igc"));
     assert_snapshot!(render_flights(&analysis), @"
     info    take_off               12:07:03
+    warning airborne               13:46:09 End
     flight 12:07:03 to -
     ");
 }
@@ -731,6 +735,20 @@ fn detects_a_landing_despite_an_altitude_spike_and_an_invalid_fix() {
     info    take_off               10:01:00
     info    landing                10:01:59
     flight 10:01:00 to 10:01:59
+    ");
+}
+
+#[test]
+fn warns_about_a_take_off_run_from_the_first_fix() {
+    let climbing = (0..30).map(|second| (72.0, 100 + 5 * second));
+    let descending = (1..=30).map(|second| (72.0, 245 - 5 * second));
+    let stopped = (0..40).map(|_| (0.0, 100));
+    let fixes = climbing.chain(descending).chain(stopped);
+    let analysis = analyze_profile(&profile(&fixes.collect::<Vec<_>>()));
+    assert_snapshot!(render_flights(&analysis), @"
+    warning airborne               10:00:00 Start
+    info    landing                10:00:59
+    flight - to 10:00:59
     ");
 }
 

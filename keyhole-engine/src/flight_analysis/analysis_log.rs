@@ -20,15 +20,17 @@ pub enum AnalysisLogKind {
     NoPressureAltitude,
     TakeOff,
     Landing,
+    Airborne,
 }
 
 impl AnalysisLogKind {
     pub fn level(self) -> Level {
         match self {
             Self::FileFailedToParse | Self::UnreadableLines => Level::Error,
-            Self::TimestampErrors | Self::RecordingIntervalExceeded | Self::NoPressureAltitude => {
-                Level::Warning
-            }
+            Self::TimestampErrors
+            | Self::RecordingIntervalExceeded
+            | Self::NoPressureAltitude
+            | Self::Airborne => Level::Warning,
             Self::TakeOff | Self::Landing => Level::Info,
         }
     }
@@ -63,6 +65,9 @@ pub enum AnalysisLogDetails {
     TakeOff,
     /// A flight's roll-out stays slow from the fix on.
     Landing,
+    /// A flight lacks its take-off or landing because the recording starts or
+    /// ends with it in progress.
+    Airborne { end: RecordingEnd },
 }
 
 impl AnalysisLogDetails {
@@ -75,8 +80,16 @@ impl AnalysisLogDetails {
             Self::NoPressureAltitude => AnalysisLogKind::NoPressureAltitude,
             Self::TakeOff => AnalysisLogKind::TakeOff,
             Self::Landing => AnalysisLogKind::Landing,
+            Self::Airborne { .. } => AnalysisLogKind::Airborne,
         }
     }
+}
+
+/// One end of the recording.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RecordingEnd {
+    Start,
+    End,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

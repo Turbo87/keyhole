@@ -13,7 +13,7 @@ use jiff::{SignedDuration, Timestamp};
 
 use self::analysis_log::{
     AnalysisLogDetails, AnalysisLogEntry, Evidence, FileFailure, LineFailure, LineProblem,
-    RecordType,
+    RecordType, RecordingEnd,
 };
 
 pub mod analysis_log;
@@ -266,13 +266,7 @@ pub fn analyze_file(contents: Bytes, options: FileAnalysisOptions) -> FileAnalys
             AltitudeSource::Pressure
         };
         let flights = flight_detection::detect_flights(&fixes, altitude_source);
-        let events = flights.iter().flat_map(|flight| {
-            [
-                (AnalysisLogDetails::TakeOff, flight.take_off_time),
-                (AnalysisLogDetails::Landing, flight.landing_time),
-            ]
-        });
-        log.extend(events.filter_map(|(details, time)| Some(fix_entry(details, time?))));
+        log.extend(flight_entries(&flights, &fixes));
         IgcFile {
             logger,
             recorded_date,
@@ -375,6 +369,27 @@ fn drop_out_of_order_fixes(
         }
     }
     (kept, dropped)
+}
+
+/// Reports each take-off and landing, or the end of the recording that a
+/// flight lacks one at.
+fn flight_entries(flights: &[Flight], fixes: &[Fix]) -> Vec<AnalysisLogEntry> {
+    let mut valid_fixes = fixes.iter().filter(|fix| fix.valid).map(|fix| fix.time);
+    let first_fix = valid_fixes.next().expect("an IGC file has a valid fix");
+    let last_fix = valid_fixes.next_back().unwrap_or(first_fix);
+    let airborne = |end| AnalysisLogDetails::Airborne { end };
+    let entries = flights.iter().flat_map(|flight| {
+        let take_off = match flight.take_off_time {
+            Some(time) => fix_entry(AnalysisLogDetails::TakeOff, time),
+            None => fix_entry(airborne(RecordingEnd::Start), first_fix),
+        };
+        let landing = match flight.landing_time {
+            Some(time) => fix_entry(AnalysisLogDetails::Landing, time),
+            None => fix_entry(airborne(RecordingEnd::End), last_fix),
+        };
+        [take_off, landing]
+    });
+    entries.collect()
 }
 
 fn file_failure(reason: FileFailure) -> AnalysisLogEntry {
