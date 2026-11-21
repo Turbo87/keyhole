@@ -7,7 +7,8 @@ use jiff::tz::Offset;
 use jiff::{SignedDuration, Timestamp};
 use keyhole_engine::flight_analysis::analysis_log::{AnalysisLogDetails, Evidence, Level};
 use keyhole_engine::flight_analysis::{
-    AnalysedIgcFile, FileAnalysis, FileAnalysisOptions, RecordKind, analyze_file,
+    AnalysedIgcFile, FileAnalysis, FileAnalysisOptions, IgcFile, RecordKind, TimeWarning,
+    analyze_file,
 };
 
 const OPTIONS: FileAnalysisOptions = FileAnalysisOptions {
@@ -175,6 +176,32 @@ fn time(recorded_date: Date, time: Timestamp) -> String {
     } else {
         format!("{time} {days:+}d")
     }
+}
+
+/// Parses a file and resolves the times of its records on the given date.
+fn resolve_times(contents: &str, date: Date) -> (IgcFile, Vec<TimeWarning>) {
+    let contents = Bytes::copy_from_slice(contents.as_bytes());
+    let (igc_file, _) = IgcFile::parse(contents).unwrap();
+    igc_file.resolve_times(date).unwrap()
+}
+
+/// Renders the time warnings, the recorded date and each record with its
+/// line number and point in time.
+fn render_dated((igc_file, warnings): &(IgcFile, Vec<TimeWarning>)) -> String {
+    let mut out = String::new();
+    for warning in warnings {
+        writeln!(out, "warning {warning:?}").unwrap();
+    }
+    writeln!(out, "date    {}", igc_file.date).unwrap();
+    for record in &igc_file.records {
+        let kind = match &record.kind {
+            RecordKind::Fix(fix) if fix.valid => "fix A".into(),
+            RecordKind::Fix(_) => "fix V".into(),
+            RecordKind::Event(event) => format!("event {}", event.code),
+        };
+        writeln!(out, "line {:<2} {} {kind}", record.line, record.time).unwrap();
+    }
+    out
 }
 
 fn join(lines: &[usize]) -> String {
@@ -367,7 +394,7 @@ fn dates_leading_invalid_fixes_before_midnight_on_the_previous_day() {
 }
 
 #[test]
-fn keeps_leading_invalid_fixes_up_to_12_hours_later_on_the_recorded_date() {
+fn dates_a_leading_invalid_fix_12_hours_away_on_the_previous_day() {
     let analysis = analyze(
         "ALXVABC\n\
          HFDTE160624\n\
@@ -375,10 +402,11 @@ fn keeps_leading_invalid_fixes_up_to_12_hours_later_on_the_recorded_date() {
          B0100005122265N00651234EA0010000110\n",
     );
     assert_snapshot!(render(&analysis), @"
-    warning timestamp_errors       file   1 fixes: 3
+    warning interval_exceeded      13:00:00 -1d to 01:00:00 longest 12h
     logger LXV ABC
     date   2024-06-16
     alt    Pressure
+    fix    13:00:00 -1d V 51.37108 6.85390 100 110
     fix    01:00:00 A 51.37108 6.85390 100 110
     ");
 }
@@ -440,6 +468,86 @@ fn dates_times_past_the_end_of_the_day_on_the_next_day() {
     fix    23:59:59 A 51.37108 6.85390 100 110
     fix    00:00:00 +1d A 51.37108 6.85390 100 110
     fix    00:00:01 +1d A 51.37108 6.85390 100 110
+    ");
+}
+
+#[test]
+fn dates_the_records_on_a_date_override() {
+    let contents = "ALXVABC\n\
+                    HFDTE160624\n\
+                    B2359595122265N00651234EA0010000110\n\
+                    E000000PEV\n\
+                    B0000015122265N00651234EA0010000110\n";
+    let resolved = resolve_times(contents, Date::constant(2024, 7, 1));
+    assert_snapshot!(render_dated(&resolved), @"
+    date    2024-07-01
+    line 3  2024-07-01T23:59:59Z fix A
+    line 4  2024-07-02T00:00:00Z event PEV
+    line 5  2024-07-02T00:00:01Z fix A
+    ");
+}
+
+#[test]
+fn drops_leading_fixes_that_do_not_come_before_the_fixes_after_them() {
+    let contents = "ALXVABC\n\
+                    HFDTE160624\n\
+                    B1000005122265N00651234EV0010000110\n\
+                    B0900005122265N00651234EV0010000110\n\
+                    E103000PEV\n\
+                    B1030005122265N00651234EV0010000110\n\
+                    B1100005122265N00651234EA0010000110\n";
+    let resolved = resolve_times(contents, Date::constant(2024, 6, 16));
+    assert_snapshot!(render_dated(&resolved), @"
+    warning OutOfOrderFixes { lines: [3] }
+    date    2024-06-16
+    line 4  2024-06-16T09:00:00Z fix V
+    line 5  2024-06-16T10:30:00Z event PEV
+    line 6  2024-06-16T10:30:00Z fix V
+    line 7  2024-06-16T11:00:00Z fix A
+    ");
+}
+
+#[test]
+fn fails_to_date_records_outside_the_supported_range() {
+    let contents = "ALXVABC\nHFDTE160624\nB2300005122265N00651234EA0010000110\n";
+    let (igc_file, _) = IgcFile::parse(Bytes::from_static(contents.as_bytes())).unwrap();
+    assert!(igc_file.resolve_times(Date::MAX).is_err());
+}
+
+#[test]
+fn dates_a_file_without_a_valid_fix_from_its_first_fix() {
+    let contents = "ALXVABC\n\
+                    HFDTE160624\n\
+                    E235958PEV\n\
+                    B2359595122265N00651234EV0010000110\n\
+                    B0000015122265N00651234EV0010000110\n";
+    let resolved = resolve_times(contents, Date::constant(2024, 6, 16));
+    assert_snapshot!(render_dated(&resolved), @"
+    warning NoValidFix
+    date    2024-06-16
+    line 3  2024-06-16T23:59:58Z event PEV
+    line 4  2024-06-16T23:59:59Z fix V
+    line 5  2024-06-17T00:00:01Z fix V
+    ");
+}
+
+#[test]
+fn dates_a_file_without_fixes_from_its_first_record() {
+    let contents = "ALXVABC\nHFDTE160624\nE100000PEV\n";
+    let resolved = resolve_times(contents, Date::constant(2024, 6, 16));
+    assert_snapshot!(render_dated(&resolved), @"
+    warning NoValidFix
+    date    2024-06-16
+    line 3  2024-06-16T10:00:00Z event PEV
+    ");
+}
+
+#[test]
+fn dates_a_file_without_records() {
+    let resolved = resolve_times("ALXVABC\nHFDTE160624\n", Date::constant(2024, 6, 16));
+    assert_snapshot!(render_dated(&resolved), @"
+    warning NoValidFix
+    date    2024-06-16
     ");
 }
 

@@ -1,12 +1,13 @@
 //! The file stage of the flight analysis, which parses a raw IGC file
 //! leniently into a flight.
 
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::ops::Range;
 
 use bytes::Bytes;
 use igc::records::{self, ARecord, BRecord, FixValid, HRecord};
-use jiff::civil::{Date, Time};
+use jiff::civil::{Date, DateTime, Time};
 use jiff::tz::Offset;
 use jiff::{SignedDuration, Timestamp};
 
@@ -48,7 +49,8 @@ pub struct AnalysedIgcFile {
 pub struct IgcFile<T = Timestamp> {
     /// The logger that wrote the file, from its `A` record.
     pub logger: LoggerId,
-    /// The UTC date the recording started on, from its `HFDTE` header.
+    /// The UTC date of the recording, from the `HFDTE` header until
+    /// `resolve_times()` dates the records on another date.
     pub date: Date,
     /// The `B` and `E` records in file order.
     pub records: Vec<Record<T>>,
@@ -70,6 +72,17 @@ pub enum ParseError {
 pub struct UnreadableLines {
     pub reason: LineFailure,
     pub lines: Vec<usize>,
+}
+
+/// A problem with the times of an IGC file's records.
+#[derive(Debug)]
+pub enum TimeWarning {
+    /// Fixes that were dropped because their time is out of order with the
+    /// fixes around them, by 1-based line number.
+    OutOfOrderFixes { lines: Vec<usize> },
+    /// No fix is valid, so the records are dated from the first fix, or from
+    /// the first record of a file without fixes.
+    NoValidFix,
 }
 
 /// One `B` or `E` record.
@@ -103,9 +116,15 @@ impl<T> Record<T> {
 }
 
 impl Record<Time> {
-    fn dated(self, time: Timestamp) -> Record {
+    /// The record at `dt`, a UTC date and time with the record's time of day.
+    fn at(self, dt: DateTime) -> Result<Record, jiff::Error> {
+        let ts = Offset::UTC.to_timestamp(dt)?;
         let Self { line, kind, .. } = self;
-        Record { line, time, kind }
+        Ok(Record {
+            line,
+            time: ts,
+            kind,
+        })
     }
 }
 
@@ -296,6 +315,57 @@ impl IgcFile<Time> {
         };
         Ok((igc_file, warnings.collect()))
     }
+
+    /// Turns the records' UTC times of day into points in time and drops the
+    /// fixes whose time is out of order. The first valid fix, or the first
+    /// fix or record of a file without one, lies on the given UTC date, which
+    /// becomes the date of the IGC file. It fails if that date puts a record
+    /// outside the supported range of points in time.
+    pub fn resolve_times(self, date: Date) -> Result<(IgcFile, Vec<TimeWarning>), jiff::Error> {
+        let Self {
+            logger,
+            mut records,
+            ..
+        } = self;
+        let mut warnings = Vec::new();
+        let first_valid_fix = records.iter().position(Record::is_valid_fix);
+        if first_valid_fix.is_none() {
+            warnings.push(TimeWarning::NoValidFix);
+        }
+        let first_fix = || records.iter().position(|record| record.fix().is_some());
+        let anchor_index = first_valid_fix.or_else(first_fix).unwrap_or(0);
+
+        let mut following = records.split_off(anchor_index).into_iter();
+        let leading = records;
+        let Some(anchor) = following.next() else {
+            let records = Vec::new();
+            let igc_file = IgcFile {
+                logger,
+                date,
+                records,
+            };
+            return Ok((igc_file, warnings));
+        };
+
+        let anchor_dt = date.to_datetime(anchor.time);
+        let leading = leading.into_iter().rev();
+        let (mut leading, mut lines) = date_outward(leading, anchor_dt, Ordering::Less)?;
+        leading.reverse();
+        lines.reverse();
+        let (following, dropped) = date_outward(following, anchor_dt, Ordering::Greater)?;
+        lines.extend(dropped);
+        if !lines.is_empty() {
+            warnings.push(TimeWarning::OutOfOrderFixes { lines });
+        }
+        let anchor = anchor.at(anchor_dt)?;
+        let records = leading.into_iter().chain([anchor]).chain(following);
+        let igc_file = IgcFile {
+            logger,
+            date,
+            records: records.collect(),
+        };
+        Ok((igc_file, warnings))
+    }
 }
 
 /// The limits that the file stage checks the recording against.
@@ -321,15 +391,9 @@ pub fn analyze_file(contents: Bytes, options: FileAnalysisOptions) -> FileAnalys
             return FileAnalysis { igc_file, log };
         }
     };
-    let IgcFile {
-        logger,
-        date: recorded_date,
-        records,
-    } = igc_file;
-
     let mut log = Vec::new();
-    let first_valid_fix = records.iter().position(Record::is_valid_fix);
-    if first_valid_fix.is_none() {
+    let has_valid_fix = igc_file.records.iter().any(Record::is_valid_fix);
+    if !has_valid_fix {
         log.push(file_failure(FileFailure::NoValidFixes));
     }
 
@@ -338,12 +402,20 @@ pub fn analyze_file(contents: Bytes, options: FileAnalysisOptions) -> FileAnalys
         log.push(file_entry(details));
     }
 
-    let igc_file = first_valid_fix.map(|first_valid_fix| {
-        let records = date_records(records, recorded_date, first_valid_fix);
-        let (records, lines) = drop_out_of_order_fixes(records, first_valid_fix);
-        if !lines.is_empty() {
-            log.push(file_entry(AnalysisLogDetails::TimestampErrors { lines }));
+    let igc_file = has_valid_fix.then(|| {
+        let recorded_date = igc_file.date;
+        let resolved = igc_file.resolve_times(recorded_date);
+        let (igc_file, warnings) = resolved.expect("recorded dates lie in the 21st century");
+        for warning in warnings {
+            if let TimeWarning::OutOfOrderFixes { lines } = warning {
+                log.push(file_entry(AnalysisLogDetails::TimestampErrors { lines }));
+            }
         }
+        let IgcFile {
+            logger,
+            date: recorded_date,
+            records,
+        } = igc_file;
         log.extend(exceeded_recording_intervals(&records, options));
         // A pressure altitude of zero on some fixes is a real value near sea
         // level, so only zero on every fix means the logger recorded none.
@@ -368,58 +440,45 @@ pub fn analyze_file(contents: Bytes, options: FileAnalysisOptions) -> FileAnalys
     FileAnalysis { igc_file, log }
 }
 
-/// Turns the records' times of day into points in time. Each fix lies within
-/// 12 h of the latest fix before it, so a step back by more than 12 h crosses
-/// midnight, and each event lies within 12 h of the fix before it, or of the
-/// first fix if none comes before it. The recorded date is the date of the
-/// first valid fix.
-fn date_records(
-    records: Vec<Record<Time>>,
-    recorded_date: Date,
-    first_valid_fix: usize,
-) -> Vec<Record> {
-    let first_fix = records.iter().find(|record| record.fix().is_some());
-    let first_fix = first_fix.expect("a file with a valid fix has a fix");
-    let mut latest = utc_timestamp(recorded_date, first_fix.time);
-    let mut previous = latest;
-    let mut records = records
-        .into_iter()
-        .map(|record| {
-            if record.fix().is_none() {
-                let time = date_near(record.time, previous);
-                return record.dated(time);
+/// Dates the records walking away from the anchor, backwards for
+/// `Ordering::Less` and forwards for `Ordering::Greater`. Each record lies the
+/// shorter way around the clock from the anchor or the last fix kept since,
+/// and a fix that does not lie in the walk's `direction` from it is dropped.
+fn date_outward(
+    records: impl IntoIterator<Item = Record<Time>>,
+    anchor_dt: DateTime,
+    direction: Ordering,
+) -> Result<(Vec<Record>, Vec<usize>), jiff::Error> {
+    let mut fix_dt = anchor_dt;
+    let mut kept = Vec::new();
+    let mut dropped = Vec::new();
+    for record in records {
+        let dt = fix_dt.checked_add(clock_step(fix_dt.time(), record.time))?;
+        match record.kind {
+            RecordKind::Fix(_) if dt.cmp(&fix_dt) != direction => dropped.push(record.line),
+            RecordKind::Fix(_) => {
+                fix_dt = dt;
+                kept.push(record.at(dt)?);
             }
-            let time = date_near(record.time, latest);
-            latest = latest.max(time);
-            previous = time;
-            record.dated(time)
-        })
-        .collect::<Vec<_>>();
-
-    let first_valid_time = Offset::UTC.to_datetime(records[first_valid_fix].time);
-    let offset = recorded_date.duration_since(first_valid_time.date());
-    records.iter_mut().for_each(|record| record.time += offset);
-    records
+            RecordKind::Event(_) => kept.push(record.at(dt)?),
+        }
+    }
+    Ok((kept, dropped))
 }
 
-/// Dates a time of day within 12 h of the given time.
-fn date_near(time_of_day: Time, reference: Timestamp) -> Timestamp {
+/// The time from one time of day to another the shorter way around the
+/// clock, so from 23:59:59 to 00:00:01 is 2 s and back is -2 s.
+fn clock_step(from: Time, to: Time) -> SignedDuration {
     const DAY: SignedDuration = SignedDuration::from_hours(24);
     const HALF_DAY: SignedDuration = SignedDuration::from_hours(12);
-    let reference_time = Offset::UTC.to_datetime(reference).time();
-    let offset = match time_of_day.duration_since(reference_time) {
-        offset if offset >= HALF_DAY => offset - DAY,
-        offset if offset < -HALF_DAY => offset + DAY,
-        offset => offset,
-    };
-    reference + offset
-}
-
-/// The point in time of a time of day on a UTC date.
-fn utc_timestamp(date: Date, time: Time) -> Timestamp {
-    let datetime = date.to_datetime(time);
-    let timestamp = Offset::UTC.to_timestamp(datetime);
-    timestamp.expect("IGC dates lie within the supported range")
+    let step = to.duration_since(from);
+    if step >= HALF_DAY {
+        step - DAY
+    } else if step < -HALF_DAY {
+        step + DAY
+    } else {
+        step
+    }
 }
 
 /// Warns about each stretch of consecutive intervals between fixes that
@@ -446,36 +505,6 @@ fn exceeded_recording_intervals(
         AnalysisLogEntry { details, evidence }
     });
     entries.collect()
-}
-
-/// Keeps the events and the fixes whose time advances past the fixes kept
-/// before them, and returns them with the line numbers of the dropped fixes.
-/// The first valid fix anchors the recorded date, so it is always kept and
-/// leading fixes are kept only if they precede it.
-fn drop_out_of_order_fixes(
-    records: Vec<Record>,
-    first_valid_fix: usize,
-) -> (Vec<Record>, Vec<usize>) {
-    let anchor = records[first_valid_fix].time;
-    let mut latest = None;
-    let mut kept = Vec::with_capacity(records.len());
-    let mut dropped = Vec::new();
-    for (index, record) in records.into_iter().enumerate() {
-        if record.fix().is_none() {
-            kept.push(record);
-            continue;
-        }
-        let is_leading = index < first_valid_fix;
-        let is_in_order = latest.is_none_or(|latest| record.time > latest)
-            && (!is_leading || record.time < anchor);
-        if is_in_order {
-            latest = Some(record.time);
-            kept.push(record);
-        } else {
-            dropped.push(record.line);
-        }
-    }
-    (kept, dropped)
 }
 
 /// Reports each take-off and landing, or the end of the recording that a
