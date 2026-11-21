@@ -6,7 +6,9 @@ use jiff::civil::{Date, Time};
 use jiff::tz::Offset;
 use jiff::{SignedDuration, Timestamp};
 use keyhole_engine::flight_analysis::analysis_log::{AnalysisLogDetails, Evidence, Level};
-use keyhole_engine::flight_analysis::{FileAnalysis, FileAnalysisOptions, IgcFile, analyze_file};
+use keyhole_engine::flight_analysis::{
+    AnalysedIgcFile, FileAnalysis, FileAnalysisOptions, RecordKind, analyze_file,
+};
 
 const OPTIONS: FileAnalysisOptions = FileAnalysisOptions {
     maximum_recording_interval: SignedDuration::from_secs(1),
@@ -66,8 +68,18 @@ fn render(analysis: &FileAnalysis) -> String {
     writeln!(out, "alt    {:?}", igc_file.altitude_source).unwrap();
     write_flights(&mut out, igc_file);
 
-    for fix in &igc_file.fixes {
-        let time = time(igc_file.recorded_date, fix.time);
+    let mut pevs = Vec::new();
+    for record in &igc_file.records {
+        let time = time(igc_file.recorded_date, record.time);
+        let fix = match &record.kind {
+            RecordKind::Fix(fix) => fix,
+            RecordKind::Event(event) => {
+                if event.code == "PEV" {
+                    pevs.push(time);
+                }
+                continue;
+            }
+        };
         let validity = if fix.valid { 'A' } else { 'V' };
         write!(
             out,
@@ -82,8 +94,8 @@ fn render(analysis: &FileAnalysis) -> String {
         }
         out.push('\n');
     }
-    for &pev in &igc_file.pevs {
-        writeln!(out, "pev    {}", time(igc_file.recorded_date, pev)).unwrap();
+    for pev in pevs {
+        writeln!(out, "pev    {pev}").unwrap();
     }
 
     out
@@ -142,7 +154,7 @@ fn render_flights(analysis: &FileAnalysis) -> String {
     out
 }
 
-fn write_flights(out: &mut String, igc_file: &IgcFile) {
+fn write_flights(out: &mut String, igc_file: &AnalysedIgcFile) {
     let time = |time: Option<Timestamp>| {
         time.map_or("-".into(), |t| self::time(igc_file.recorded_date, t))
     };

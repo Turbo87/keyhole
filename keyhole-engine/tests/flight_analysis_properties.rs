@@ -46,7 +46,8 @@ proptest! {
         let contents = [HEADER.as_bytes().to_vec(), lines.concat()].concat();
         let analysis = analyze(contents);
         if let Some(igc_file) = analysis.igc_file {
-            let times = igc_file.fixes.iter().map(|fix| fix.time).collect::<Vec<_>>();
+            let fixes = igc_file.records.iter().filter(|record| record.fix().is_some());
+            let times = fixes.map(|record| record.time).collect::<Vec<_>>();
             prop_assert!(times.windows(2).all(|pair| pair[0] < pair[1]), "{times:?}");
         }
     }
@@ -66,7 +67,8 @@ proptest! {
 
         let fix_times = |records: Vec<String>| {
             let igc_file = analyze(HEADER.to_owned() + &records.concat()).igc_file.unwrap();
-            igc_file.fixes.iter().map(|fix| fix.time).collect::<Vec<_>>()
+            let fixes = igc_file.records.iter().filter(|record| record.fix().is_some());
+            fixes.map(|record| record.time).collect::<Vec<_>>()
         };
         prop_assert_eq!(fix_times(stale_records), fix_times(records));
     }
