@@ -7,6 +7,7 @@ use jiff::tz::Offset;
 use jiff::{SignedDuration, Timestamp};
 use keyhole_engine::flight_analysis::{
     AltitudeSource, Flight, IgcFile, ParseError, RecordKind, TimeWarning, UnreadableLines,
+    fix_gaps, recording_interval,
 };
 
 /// The outputs of the steps for one IGC file, dated on its recorded date.
@@ -172,6 +173,16 @@ fn render_dated((igc_file, warnings): &(IgcFile, Vec<TimeWarning>)) -> String {
         writeln!(out, "line {:<2} {} {kind}", record.line, record.time).unwrap();
     }
     out
+}
+
+/// Dates a file with a `B` record at each UTC time of day, written as
+/// `HHMMSS`, and fix validity.
+fn recording(fixes: &[(&str, char)]) -> IgcFile {
+    let records = fixes
+        .iter()
+        .map(|(time, validity)| format!("B{time}5122265N00651234E{validity}0010000110\n"));
+    let contents = format!("ALXVABC\nHFDTE160624\n{}", records.collect::<String>());
+    resolve_times(&contents, Date::constant(2024, 6, 16)).0
 }
 
 fn join(lines: &[usize]) -> String {
@@ -513,6 +524,65 @@ fn returns_the_records_between_two_times() {
     assert_eq!(lines_between("10:00:00.5", "10:00:01.5"), [4, 5]);
     assert!(lines_between("10:00:04", "11:00:00").is_empty());
     assert!(lines_between("10:00:02", "10:00:01").is_empty());
+}
+
+#[test]
+fn measures_the_recording_interval_despite_a_dropout() {
+    let igc_file = recording(&[
+        ("100000", 'A'),
+        ("100001", 'V'),
+        ("100002", 'A'),
+        ("100003", 'V'),
+        ("100004", 'A'),
+        ("100007", 'A'),
+        ("100008", 'A'),
+    ]);
+    let interval = recording_interval(&igc_file.records);
+    assert_eq!(interval, Some(SignedDuration::from_secs(1)));
+}
+
+#[test]
+fn measures_the_recording_interval_the_logger_is_set_to() {
+    let igc_file = recording(&[("100000", 'A'), ("100004", 'A'), ("100008", 'A')]);
+    let interval = recording_interval(&igc_file.records);
+    assert_eq!(interval, Some(SignedDuration::from_secs(4)));
+}
+
+#[test]
+fn measures_the_shorter_of_equally_common_intervals() {
+    let igc_file = recording(&[("100000", 'A'), ("100002", 'A'), ("100003", 'A')]);
+    let interval = recording_interval(&igc_file.records);
+    assert_eq!(interval, Some(SignedDuration::from_secs(1)));
+}
+
+#[test]
+fn measures_no_recording_interval_without_two_fixes() {
+    let igc_file = recording(&[("100000", 'A')]);
+    assert_eq!(recording_interval(&igc_file.records), None);
+}
+
+#[test]
+fn lists_the_gaps_between_valid_fixes_from_a_given_length_on() {
+    let igc_file = recording(&[
+        ("100000", 'A'),
+        ("100001", 'A'),
+        ("100003", 'V'),
+        ("100005", 'A'),
+        ("100006", 'A'),
+        ("100008", 'A'),
+        ("100009", 'A'),
+    ]);
+    let gaps = |minimum| {
+        let gaps = fix_gaps(&igc_file.records, SignedDuration::from_secs(minimum));
+        let gaps = gaps.iter().map(|gap| {
+            let (start, end) = (time(igc_file.date, gap.start), time(igc_file.date, gap.end));
+            format!("{start} to {end}")
+        });
+        gaps.collect::<Vec<_>>()
+    };
+    assert_eq!(gaps(2), ["10:00:01 to 10:00:05", "10:00:06 to 10:00:08"]);
+    assert_eq!(gaps(3), ["10:00:01 to 10:00:05"]);
+    assert!(gaps(5).is_empty());
 }
 
 #[test]

@@ -2,7 +2,7 @@
 //! calls in order: parsing it leniently, resolving the times of its records
 //! and analysing the dated records.
 
-use std::cmp::Ordering;
+use std::cmp::{Ordering, Reverse};
 use std::collections::BTreeMap;
 use std::ops::Range;
 
@@ -399,6 +399,44 @@ impl IgcFile {
         let end = self.records.partition_point(|record| record.time <= end);
         self.records.get(start..end).unwrap_or_default()
     }
+}
+
+/// The stretch between two consecutive valid fixes.
+#[derive(Debug)]
+pub struct FixGap {
+    /// The time of the valid fix before the gap.
+    pub start: Timestamp,
+    /// The time of the valid fix after the gap.
+    pub end: Timestamp,
+}
+
+/// The interval that the logger records fixes at, as the most common
+/// interval between consecutive fixes, valid or not, and the shorter of
+/// equally common ones. `None` with fewer than two fixes.
+pub fn recording_interval(records: &[Record]) -> Option<SignedDuration> {
+    let fixes = records.iter().filter(|record| record.fix().is_some());
+    let times = fixes.map(|record| record.time).collect::<Vec<_>>();
+    let mut counts = BTreeMap::<_, usize>::new();
+    for pair in times.windows(2) {
+        *counts.entry(pair[1].duration_since(pair[0])).or_default() += 1;
+    }
+    let most_common = counts
+        .into_iter()
+        .min_by_key(|&(interval, count)| (Reverse(count), interval));
+    most_common.map(|(interval, _)| interval)
+}
+
+/// The gaps between consecutive valid fixes that last at least `minimum`,
+/// in time order.
+pub fn fix_gaps(records: &[Record], minimum: SignedDuration) -> Vec<FixGap> {
+    let valid_fixes = records.iter().filter(|record| record.is_valid_fix());
+    let times = valid_fixes.map(|record| record.time).collect::<Vec<_>>();
+    let gaps = times.windows(2).map(|pair| FixGap {
+        start: pair[0],
+        end: pair[1],
+    });
+    let gaps = gaps.filter(|gap| gap.end.duration_since(gap.start) >= minimum);
+    gaps.collect()
 }
 
 /// Dates the records walking away from the anchor, backwards for

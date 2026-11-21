@@ -33,7 +33,7 @@ pub struct RuleSetEdition {
     /// The time after a publication within which it can be challenged, which
     /// the suggested complaint deadline is based on.
     pub complaint_period: SignedDuration,
-    /// The longest interval between two fixes that the edition allows.
+    /// The longest recording interval that the edition allows.
     pub maximum_recording_interval: SignedDuration,
     /// The effective parameters without any rule overrides. `Dm` and `D1`
     /// default to the lowest class's values, since the edition has no
@@ -342,6 +342,12 @@ impl RuleSetEdition {
         [&DAEC_SWO_2026, &FAI_ANNEX_A_2025A]
             .into_iter()
             .find(|edition| edition.id == id)
+    }
+
+    /// Whether a logger's recording interval, as `recording_interval()`
+    /// measures it, stays within the edition's limit.
+    pub fn allows_recording_interval(&self, interval: SignedDuration) -> bool {
+        interval <= self.maximum_recording_interval
     }
 
     /// Resolves a class day's effective parameters in the competition time
