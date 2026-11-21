@@ -17,9 +17,9 @@
 
 use std::ops::RangeInclusive;
 
-use jiff::SignedDuration;
+use jiff::{SignedDuration, Timestamp};
 
-use super::{AltitudeSource, Fix, Flight};
+use super::{AltitudeSource, Fix, Flight, Record};
 
 /// How long after a fix the glider has to stand still for the fix to count
 /// as still.
@@ -54,8 +54,16 @@ const REST_TIME: SignedDuration = SignedDuration::from_secs(20);
 /// Finds the flights in a recording. A flight whose take-off run is already
 /// under way at the first fix has no take-off, and one that reaches the last
 /// fix has no landing.
-pub fn detect_flights(fixes: &[Fix], altitude_source: AltitudeSource) -> Vec<Flight> {
-    let fixes = fixes.iter().filter(|fix| fix.valid).collect();
+pub fn detect_flights(records: &[Record], altitude_source: AltitudeSource) -> Vec<Flight> {
+    let fixes = records.iter().filter_map(|record| {
+        let fix = record.fix().filter(|fix| fix.valid)?;
+        let time = record.time;
+        Some(TimedFix { time, fix })
+    });
+    let fixes = fixes.collect::<Vec<_>>();
+    if fixes.is_empty() {
+        return Vec::new();
+    }
     let recording = Recording {
         fixes,
         altitude_source,
@@ -64,8 +72,15 @@ pub fn detect_flights(fixes: &[Fix], altitude_source: AltitudeSource) -> Vec<Fli
 }
 
 struct Recording<'a> {
-    fixes: Vec<&'a Fix>,
+    fixes: Vec<TimedFix<'a>>,
     altitude_source: AltitudeSource,
+}
+
+/// A fix with the time of its record.
+#[derive(Clone, Copy)]
+struct TimedFix<'a> {
+    time: Timestamp,
+    fix: &'a Fix,
 }
 
 /// The fixes between two ground periods, or between one and an end of the
@@ -185,7 +200,7 @@ impl Recording<'_> {
             // The rest from a fix lasts until the glider first moves farther
             // than the rest radius away from it.
             let rest_end = (from..=end)
-                .take_while(|&to| distance(self.fixes[from], self.fixes[to]) <= REST_RADIUS)
+                .take_while(|&to| distance(self.fixes[from].fix, self.fixes[to].fix) <= REST_RADIUS)
                 .last()
                 .unwrap_or(from);
             self.duration(from..=rest_end) >= REST_TIME
@@ -264,7 +279,7 @@ impl Recording<'_> {
     }
 
     fn altitude(&self, index: usize) -> i32 {
-        self.fixes[index].altitude(self.altitude_source)
+        self.fixes[index].fix.altitude(self.altitude_source)
     }
 
     /// The ground speed from the fix before, in km/h.
@@ -279,9 +294,9 @@ impl Recording<'_> {
 }
 
 /// The ground speed between two fixes, in km/h.
-fn speed(from: &Fix, to: &Fix) -> f64 {
+fn speed(from: TimedFix, to: TimedFix) -> f64 {
     let seconds = to.time.duration_since(from.time).as_secs_f64();
-    distance(from, to) / seconds * 3.6
+    distance(from.fix, to.fix) / seconds * 3.6
 }
 
 /// The great circle distance between two fixes, in m.

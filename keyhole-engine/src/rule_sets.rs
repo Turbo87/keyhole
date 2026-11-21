@@ -11,7 +11,6 @@ use jiff::tz::TimeZone;
 use sha2::{Digest, Sha256};
 
 use crate::day_scoring::ScoringParameters;
-use crate::flight_analysis::analysis_log::AnalysisLogKind;
 
 /// One dated version of a rule set, shipped as immutable data.
 ///
@@ -34,11 +33,8 @@ pub struct RuleSetEdition {
     /// The time after a publication within which it can be challenged, which
     /// the suggested complaint deadline is based on.
     pub complaint_period: SignedDuration,
-    /// The longest interval between two fixes that the edition allows.
+    /// The longest recording interval that the edition allows.
     pub maximum_recording_interval: SignedDuration,
-    /// The clauses that analysis log entries cite, by kind. Kinds without a
-    /// clause in the edition are absent.
-    pub clauses: &'static [(AnalysisLogKind, &'static str)],
     /// The effective parameters without any rule overrides. `Dm` and `D1`
     /// default to the lowest class's values, since the edition has no
     /// default of its own for them, and the time zone is UTC until
@@ -83,10 +79,6 @@ pub static DAEC_SWO_2026: RuleSetEdition = RuleSetEdition {
     countback_places: 0,
     complaint_period: SignedDuration::from_hours(14),
     maximum_recording_interval: SignedDuration::from_secs(1),
-    clauses: &[
-        (AnalysisLogKind::FileFailedToParse, "5.9.8"),
-        (AnalysisLogKind::RecordingIntervalExceeded, "5.9.3"),
-    ],
     defaults: Rules {
         analysis: AnalysisParameters {
             earth_model: EarthModel::Wgs84,
@@ -142,7 +134,6 @@ pub static FAI_ANNEX_A_2025A: RuleSetEdition = RuleSetEdition {
     countback_places: 3,
     complaint_period: SignedDuration::from_hours(14),
     maximum_recording_interval: SignedDuration::from_secs(1),
-    clauses: &[(AnalysisLogKind::RecordingIntervalExceeded, "5.3c")],
     defaults: Rules {
         analysis: AnalysisParameters {
             earth_model: EarthModel::Wgs84,
@@ -353,11 +344,10 @@ impl RuleSetEdition {
             .find(|edition| edition.id == id)
     }
 
-    /// The clause of this edition that an analysis log entry of the given kind
-    /// cites.
-    pub fn clause(&self, kind: AnalysisLogKind) -> Option<&'static str> {
-        let mut clauses = self.clauses.iter();
-        clauses.find_map(|&(clause_kind, clause)| (clause_kind == kind).then_some(clause))
+    /// Whether a logger's recording interval, as `recording_interval()`
+    /// measures it, stays within the edition's limit.
+    pub fn allows_recording_interval(&self, interval: SignedDuration) -> bool {
+        interval <= self.maximum_recording_interval
     }
 
     /// Resolves a class day's effective parameters in the competition time

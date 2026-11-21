@@ -8,7 +8,7 @@ An engine stage takes the narrow inputs it reads, such as an options struct, rat
 
 ## Required data
 
-Data that the rules or the IGC specification require is a non-optional field. When an input lacks it, the stage reports an error in the analysis log, so later stages never handle its absence.
+Data that the rules or the IGC specification require is a non-optional field. When an input lacks it, the step returns an error, so later steps never handle its absence.
 
 ## Doc comments
 

@@ -1,48 +1,135 @@
-//! The file stage of the flight analysis, which parses a raw IGC file
-//! leniently into a flight.
+//! The steps of the flight analysis of one IGC file, which the platform
+//! calls in order: parsing it leniently, resolving the times of its records
+//! and analysing the dated records.
 
+use std::cmp::{Ordering, Reverse};
 use std::collections::BTreeMap;
 use std::ops::Range;
 
 use bytes::Bytes;
-use igc::records::{self, ARecord, BRecord, FixValid, HRecord, Record};
-use igc::util::ParseError;
-use jiff::civil::{Date, Time};
+use igc::records::{self, ARecord, BRecord, FixValid, HRecord};
+use jiff::civil::{Date, DateTime, Time};
 use jiff::tz::Offset;
 use jiff::{SignedDuration, Timestamp};
 
-use self::analysis_log::{
-    AnalysisLogDetails, AnalysisLogEntry, Evidence, FileFailure, LineFailure, LineProblem,
-    RecordType, RecordingEnd,
-};
-
-pub mod analysis_log;
 mod flight_detection;
 
-/// What the file stage extracted from one IGC file.
+/// One recording of a logger. The times of its records are times of day
+/// until they are resolved to points in time.
 #[derive(Debug)]
-pub struct FileAnalysis {
-    /// The parsed IGC file, or `None` if the file lacks its logger identity,
-    /// recorded date or a valid fix.
-    pub igc_file: Option<IgcFile>,
-    pub log: Vec<AnalysisLogEntry>,
+pub struct IgcFile<T = Timestamp> {
+    /// The logger that wrote the file, from its `A` record.
+    pub logger: LoggerId,
+    /// The UTC date of the recording, from the `HFDTE` header until
+    /// `resolve_times()` dates the records on another date.
+    pub date: Date,
+    /// The `B` and `E` records in file order, until `resolve_times()` orders
+    /// them by time and line number.
+    pub records: Vec<Record<T>>,
+}
+
+/// Why a file is not an IGC file that the analysis can read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParseError {
+    /// No line of the file is an IGC record.
+    NotIgc,
+    /// The `A` record is missing or unreadable.
+    MissingLoggerId,
+    /// The `HFDTE` header is missing or does not hold a valid date.
+    MissingRecordedDate,
+}
+
+/// Lines that could not be read for the same reason, by 1-based line number.
+#[derive(Debug)]
+pub struct UnreadableLines {
+    pub reason: LineFailure,
+    pub lines: Vec<usize>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct LineFailure {
+    pub record_type: RecordType,
+    pub problem: LineProblem,
+}
+
+/// The IGC record type that a line starts with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RecordType {
+    A,
+    B,
+    C,
+    D,
+    E,
+    F,
+    G,
+    H,
+    I,
+    J,
+    K,
+    L,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum LineProblem {
+    /// The line does not match the layout of its record type.
+    Malformed,
+    /// A number in the line is outside its valid range.
+    OutOfRange,
+}
+
+/// A problem with the times of an IGC file's records.
+#[derive(Debug)]
+pub enum TimeWarning {
+    /// Fixes that were dropped because their time is out of order with the
+    /// fixes around them, by 1-based line number.
+    OutOfOrderFixes { lines: Vec<usize> },
+    /// No fix is valid, so the records are dated from the first fix, or from
+    /// the first record of a file without fixes.
+    NoValidFix,
+}
+
+/// One `B` or `E` record.
+#[derive(Debug)]
+pub struct Record<T = Timestamp> {
+    /// The 1-based line number in the file.
+    pub line: usize,
+    pub time: T,
+    pub kind: RecordKind,
 }
 
 #[derive(Debug)]
-pub struct IgcFile {
-    /// The logger that wrote the file, from its A record.
-    pub logger: LoggerId,
-    /// The UTC date the recording started on, from its `HFDTE` header.
-    pub recorded_date: Date,
-    /// The B records in file order, without those whose time does not advance
-    /// past the fixes before them.
-    pub fixes: Vec<Fix>,
-    /// The pilot event markers, in file order.
-    pub pevs: Vec<Timestamp>,
-    /// Which recorded altitude the analysis uses for every fix.
-    pub altitude_source: AltitudeSource,
-    /// The flights in the recording, in time order.
-    pub flights: Vec<Flight>,
+pub enum RecordKind {
+    /// A `B` record.
+    Fix(Fix),
+    /// An `E` record.
+    Event(Event),
+}
+
+impl<T> Record<T> {
+    pub fn fix(&self) -> Option<&Fix> {
+        match &self.kind {
+            RecordKind::Fix(fix) => Some(fix),
+            RecordKind::Event(_) => None,
+        }
+    }
+
+    fn is_valid_fix(&self) -> bool {
+        self.fix().is_some_and(|fix| fix.valid)
+    }
+}
+
+impl Record<Time> {
+    /// The record at `dt`, a UTC date and time with the record's time of day.
+    fn at(self, dt: DateTime) -> Result<Record, jiff::Error> {
+        let ts = Offset::UTC.to_timestamp(dt)?;
+        let Self { line, kind, .. } = self;
+        Ok(Record {
+            line,
+            time: ts,
+            kind,
+        })
+    }
 }
 
 /// The recorded altitude of a fix, pressure or GNSS.
@@ -63,18 +150,16 @@ pub struct Flight {
     pub landing_time: Option<Timestamp>,
 }
 
-/// A logger's manufacturer and serial, as written in the A record.
+/// A logger's manufacturer and serial, as written in the `A` record.
 #[derive(Debug)]
 pub struct LoggerId {
     pub manufacturer: String,
     pub serial: String,
 }
 
-/// One B record. Its time is a time of day until the file stage dates the
-/// fixes.
+/// The position and altitudes of one `B` record.
 #[derive(Debug)]
-pub struct Fix<T = Timestamp> {
-    pub time: T,
+pub struct Fix {
     /// In degrees, positive to the north.
     pub latitude: f64,
     /// In degrees, positive to the east.
@@ -85,23 +170,9 @@ pub struct Fix<T = Timestamp> {
     pub pressure_altitude: i32,
     /// In m, as recorded.
     pub gnss_altitude: i32,
-    /// The values of the extensions that the latest I record defines, without
-    /// those that the B record is too short for.
+    /// The values of the extensions that the latest `I` record defines, without
+    /// those that the `B` record is too short for.
     pub extensions: Vec<Extension>,
-}
-
-impl Fix<Time> {
-    fn dated(self, time: Timestamp) -> Fix {
-        Fix {
-            time,
-            latitude: self.latitude,
-            longitude: self.longitude,
-            valid: self.valid,
-            pressure_altitude: self.pressure_altitude,
-            gnss_altitude: self.gnss_altitude,
-            extensions: self.extensions,
-        }
-    }
 }
 
 impl Fix {
@@ -121,14 +192,21 @@ impl Fix {
     }
 }
 
-/// The raw value of one B record extension.
+/// One `E` record, such as a pilot event marker.
+#[derive(Debug)]
+pub struct Event {
+    /// The three-letter code, such as `PEV`.
+    pub code: String,
+}
+
+/// The raw value of one `B` record extension.
 #[derive(Debug)]
 pub struct Extension {
     code: [u8; 3],
     value: Bytes,
 }
 
-/// Where an extension that an I record defines lies in each B record.
+/// Where an extension that an `I` record defines lies in each `B` record.
 struct ExtensionDefinition {
     code: [u8; 3],
     bytes: Range<usize>,
@@ -137,7 +215,7 @@ struct ExtensionDefinition {
 impl ExtensionDefinition {
     fn new(extension: &records::Extension) -> Option<Self> {
         let code = extension.mnemonic.as_bytes().try_into().ok()?;
-        // The I record counts bytes from 1, including both ends.
+        // The `I` record counts bytes from 1, including both ends.
         let start = usize::from(extension.start_byte).checked_sub(1)?;
         let bytes = start..usize::from(extension.end_byte);
         Some(Self { code, bytes })
@@ -150,260 +228,256 @@ impl ExtensionDefinition {
     }
 }
 
-/// The limits that the file stage checks the recording against.
-#[derive(Debug, Clone, Copy)]
-pub struct FileAnalysisOptions {
-    /// The longest interval between two fixes that does not warrant a warning.
-    pub maximum_recording_interval: SignedDuration,
+impl IgcFile<Time> {
+    /// Parses an IGC file, skipping the lines of unknown record types. It also
+    /// skips the lines it cannot read and returns them grouped by reason.
+    pub fn parse(contents: Bytes) -> Result<(Self, Vec<UnreadableLines>), ParseError> {
+        let contents = match contents.strip_prefix(b"\xEF\xBB\xBF") {
+            Some(rest) => contents.slice_ref(rest),
+            None => contents,
+        };
+        let mut logger = None;
+        let mut recorded_date = None;
+        let mut records = Vec::new();
+        let mut extension_definitions = Vec::new();
+        let mut has_igc_records = false;
+        let mut unreadable_lines = BTreeMap::<_, Vec<_>>::new();
+
+        for (index, line) in contents.split(|&byte| byte == b'\n').enumerate() {
+            let raw_line = line.strip_suffix(b"\r").unwrap_or(line);
+            let line = String::from_utf8_lossy(raw_line);
+            if line.trim().is_empty() {
+                continue;
+            }
+
+            let line_number = index + 1;
+            let record = records::Record::parse_line(&line);
+            let problem = match &record {
+                Ok(records::Record::Unrecognised(_)) => continue,
+                Ok(_) => None,
+                Err(igc::util::ParseError::NumberOutOfRange) => Some(LineProblem::OutOfRange),
+                Err(_) => Some(LineProblem::Malformed),
+            };
+            has_igc_records |= problem.is_none();
+            if let Some(problem) = problem {
+                let record_type = record_type(&line);
+                let failure = LineFailure {
+                    record_type,
+                    problem,
+                };
+                unreadable_lines
+                    .entry(failure)
+                    .or_default()
+                    .push(line_number);
+            }
+
+            match record {
+                Ok(records::Record::A(record)) if logger.is_none() => {
+                    logger = Some(logger_id(&line, &record));
+                }
+                Ok(records::Record::H(record)) if record.mnemonic == "DTE" => {
+                    recorded_date = recorded_date.or_else(|| parse_date(&record));
+                }
+                Ok(records::Record::E(record)) => {
+                    let code = record.mnemonic.into();
+                    records.push(Record {
+                        line: line_number,
+                        time: time_of_day(record.time),
+                        kind: RecordKind::Event(Event { code }),
+                    });
+                }
+                Ok(records::Record::I(record)) => {
+                    let definitions = record.0.extensions.iter();
+                    extension_definitions =
+                        definitions.filter_map(ExtensionDefinition::new).collect();
+                }
+                Ok(records::Record::B(record)) => {
+                    let raw_line = contents.slice_ref(raw_line);
+                    let definitions = extension_definitions.iter();
+                    let extensions = definitions.filter_map(|d| d.decode(&raw_line)).collect();
+                    records.push(Record {
+                        line: line_number,
+                        time: time_of_day(record.timestamp),
+                        kind: RecordKind::Fix(fix(&record, extensions)),
+                    });
+                }
+                _ => {}
+            }
+        }
+
+        if !has_igc_records {
+            return Err(ParseError::NotIgc);
+        }
+        let logger = logger.ok_or(ParseError::MissingLoggerId)?;
+        let recorded_date = recorded_date.ok_or(ParseError::MissingRecordedDate)?;
+        let unreadable_lines = unreadable_lines.into_iter();
+        let warnings = unreadable_lines.map(|(reason, lines)| UnreadableLines { reason, lines });
+        let igc_file = IgcFile {
+            logger,
+            date: recorded_date,
+            records,
+        };
+        Ok((igc_file, warnings.collect()))
+    }
+
+    /// Turns the records' UTC times of day into points in time, drops the
+    /// fixes whose time is out of order and orders the records by time and
+    /// line number. The first valid fix, or the first fix or record of a file
+    /// without one, lies on the given UTC date, which becomes the date of the
+    /// IGC file. It fails if that date puts a record outside the supported
+    /// range of points in time.
+    pub fn resolve_times(self, date: Date) -> Result<(IgcFile, Vec<TimeWarning>), jiff::Error> {
+        let Self {
+            logger,
+            mut records,
+            ..
+        } = self;
+        let mut warnings = Vec::new();
+        let first_valid_fix = records.iter().position(Record::is_valid_fix);
+        if first_valid_fix.is_none() {
+            warnings.push(TimeWarning::NoValidFix);
+        }
+        let first_fix = || records.iter().position(|record| record.fix().is_some());
+        let anchor_index = first_valid_fix.or_else(first_fix).unwrap_or(0);
+
+        let mut following = records.split_off(anchor_index).into_iter();
+        let leading = records;
+        let Some(anchor) = following.next() else {
+            let records = Vec::new();
+            let igc_file = IgcFile {
+                logger,
+                date,
+                records,
+            };
+            return Ok((igc_file, warnings));
+        };
+
+        let anchor_dt = date.to_datetime(anchor.time);
+        let leading = leading.into_iter().rev();
+        let (mut leading, mut lines) = date_outward(leading, anchor_dt, Ordering::Less)?;
+        leading.reverse();
+        lines.reverse();
+        let (following, dropped) = date_outward(following, anchor_dt, Ordering::Greater)?;
+        lines.extend(dropped);
+        if !lines.is_empty() {
+            warnings.push(TimeWarning::OutOfOrderFixes { lines });
+        }
+        let anchor = anchor.at(anchor_dt)?;
+        let records = leading.into_iter().chain([anchor]).chain(following);
+        let mut records: Vec<_> = records.collect();
+        records.sort_unstable_by_key(|record| (record.time, record.line));
+        let igc_file = IgcFile {
+            logger,
+            date,
+            records,
+        };
+        Ok((igc_file, warnings))
+    }
 }
 
-/// Parses an IGC file, skipping what it cannot read, and checks the
-/// recording against the given limits.
-pub fn analyze_file(contents: Bytes, options: FileAnalysisOptions) -> FileAnalysis {
-    let contents = match contents.strip_prefix(b"\xEF\xBB\xBF") {
-        Some(rest) => contents.slice_ref(rest),
-        None => contents,
-    };
-    let mut logger = None;
-    let mut recorded_date = None;
-    let mut fixes = Vec::new();
-    let mut fix_lines = Vec::new();
-    let mut extension_definitions = Vec::new();
-    let mut pevs = Vec::new();
-    let mut has_igc_records = false;
-    let mut unreadable_lines = BTreeMap::<_, Vec<_>>::new();
-
-    for (index, line) in contents.split(|&byte| byte == b'\n').enumerate() {
-        let raw_line = line.strip_suffix(b"\r").unwrap_or(line);
-        let line = String::from_utf8_lossy(raw_line);
-        if line.trim().is_empty() {
-            continue;
-        }
-
-        let record = Record::parse_line(&line);
-        let problem = match &record {
-            Ok(Record::Unrecognised(_)) => Some(LineProblem::Malformed),
-            Ok(_) => None,
-            Err(ParseError::NumberOutOfRange) => Some(LineProblem::OutOfRange),
-            Err(_) => Some(LineProblem::Malformed),
-        };
-        has_igc_records |= problem.is_none();
-        if let Some(problem) = problem {
-            let record_type = record_type(&line);
-            let failure = LineFailure {
-                record_type,
-                problem,
-            };
-            unreadable_lines.entry(failure).or_default().push(index + 1);
-        }
-
-        match record {
-            Ok(Record::A(record)) if logger.is_none() => {
-                logger = Some(logger_id(&line, &record));
-            }
-            Ok(Record::H(record)) if record.mnemonic == "DTE" => {
-                recorded_date = recorded_date.or_else(|| parse_date(&record));
-            }
-            Ok(Record::E(record)) if record.mnemonic == "PEV" => {
-                pevs.push((time_of_day(record.time), fixes.len().saturating_sub(1)));
-            }
-            Ok(Record::I(record)) => {
-                let definitions = record.0.extensions.iter();
-                extension_definitions = definitions.filter_map(ExtensionDefinition::new).collect();
-            }
-            Ok(Record::B(record)) => {
-                let raw_line = contents.slice_ref(raw_line);
-                let definitions = extension_definitions.iter();
-                let extensions = definitions.filter_map(|d| d.decode(&raw_line)).collect();
-                fixes.push(fix(&record, extensions));
-                fix_lines.push(index + 1);
-            }
-            _ => {}
-        }
-    }
-
-    if !has_igc_records {
-        let log = vec![file_failure(FileFailure::NotIgc)];
-        let igc_file = None;
-        return FileAnalysis { igc_file, log };
-    }
-
-    let mut log = Vec::new();
-    if logger.is_none() {
-        log.push(file_failure(FileFailure::MissingLoggerId));
-    }
-    if recorded_date.is_none() {
-        log.push(file_failure(FileFailure::MissingRecordedDate));
-    }
-    let first_valid_fix = fixes.iter().position(|fix| fix.valid);
-    if first_valid_fix.is_none() {
-        log.push(file_failure(FileFailure::NoValidFixes));
-    }
-
-    for (reason, lines) in unreadable_lines {
-        let details = AnalysisLogDetails::UnreadableLines { reason, lines };
-        log.push(file_entry(details));
-    }
-
-    let usable = logger.zip(recorded_date).zip(first_valid_fix);
-    let igc_file = usable.map(|((logger, recorded_date), first_valid_fix)| {
-        let fixes = date_fixes(fixes, recorded_date, first_valid_fix);
-        let pevs = pevs
-            .iter()
-            .map(|&(time, fix)| date_near(time, fixes[fix].time))
-            .collect();
-        let (fixes, lines) = drop_out_of_order_fixes(fixes, &fix_lines, first_valid_fix);
-        if !lines.is_empty() {
-            log.push(file_entry(AnalysisLogDetails::TimestampErrors { lines }));
-        }
-        log.extend(exceeded_recording_intervals(&fixes, options));
-        // A pressure altitude of zero on some fixes is a real value near sea
-        // level, so only zero on every fix means the logger recorded none.
-        let altitude_source = if fixes.iter().all(|fix| fix.pressure_altitude == 0) {
-            log.push(file_entry(AnalysisLogDetails::NoPressureAltitude));
+impl IgcFile {
+    /// Which recorded altitude the flights are detected with, GNSS when every
+    /// fix records a pressure altitude of zero. Zero on only some fixes is a
+    /// real pressure altitude near sea level.
+    pub fn altitude_source(&self) -> AltitudeSource {
+        let mut fixes = self.records.iter().filter_map(Record::fix);
+        if fixes.all(|fix| fix.pressure_altitude == 0) {
             AltitudeSource::Gnss
         } else {
             AltitudeSource::Pressure
-        };
-        let flights = flight_detection::detect_flights(&fixes, altitude_source);
-        log.extend(flight_entries(&flights, &fixes));
-        IgcFile {
-            logger,
-            recorded_date,
-            fixes,
-            pevs,
-            altitude_source,
-            flights,
-        }
-    });
-
-    FileAnalysis { igc_file, log }
-}
-
-/// Turns the fixes' times of day into points in time. Each fix lies within
-/// 12 h of the latest fix before it, so a step back by more than 12 h crosses
-/// midnight. The recorded date is the date of the first valid fix.
-fn date_fixes(fixes: Vec<Fix<Time>>, recorded_date: Date, first_valid_fix: usize) -> Vec<Fix> {
-    let mut latest = utc_timestamp(recorded_date, fixes[0].time);
-    let mut fixes = fixes
-        .into_iter()
-        .map(|fix| {
-            let time = date_near(fix.time, latest);
-            latest = latest.max(time);
-            fix.dated(time)
-        })
-        .collect::<Vec<_>>();
-
-    let anchor = Offset::UTC.to_datetime(fixes[first_valid_fix].time).date();
-    let offset = recorded_date.duration_since(anchor);
-    fixes.iter_mut().for_each(|fix| fix.time += offset);
-    fixes
-}
-
-/// Dates a time of day within 12 h of the given time.
-fn date_near(time_of_day: Time, reference: Timestamp) -> Timestamp {
-    const DAY: SignedDuration = SignedDuration::from_hours(24);
-    const HALF_DAY: SignedDuration = SignedDuration::from_hours(12);
-    let reference_time = Offset::UTC.to_datetime(reference).time();
-    let offset = match time_of_day.duration_since(reference_time) {
-        offset if offset >= HALF_DAY => offset - DAY,
-        offset if offset < -HALF_DAY => offset + DAY,
-        offset => offset,
-    };
-    reference + offset
-}
-
-/// The point in time of a time of day on a UTC date.
-fn utc_timestamp(date: Date, time: Time) -> Timestamp {
-    let datetime = date.to_datetime(time);
-    let timestamp = Offset::UTC.to_timestamp(datetime);
-    timestamp.expect("IGC dates lie within the supported range")
-}
-
-/// Warns about each stretch of consecutive intervals between fixes that
-/// exceed the limit.
-fn exceeded_recording_intervals(
-    fixes: &[Fix],
-    options: FileAnalysisOptions,
-) -> Vec<AnalysisLogEntry> {
-    let limit = options.maximum_recording_interval;
-    let length = |&(start, end): &(Timestamp, Timestamp)| end.duration_since(start);
-    let intervals = fixes.windows(2).map(|pair| (pair[0].time, pair[1].time));
-    let intervals = intervals.collect::<Vec<_>>();
-    let exceeds = |interval: &(Timestamp, Timestamp)| length(interval) > limit;
-
-    let stretches = intervals.chunk_by(|a, b| exceeds(a) == exceeds(b));
-    let stretches = stretches.filter(|stretch| exceeds(&stretch[0]));
-    let entries = stretches.map(|stretch| {
-        let intervals = stretch.iter().map(length);
-        let longest_interval = intervals.max().unwrap_or_default();
-        let details = AnalysisLogDetails::RecordingIntervalExceeded { longest_interval };
-        let evidence = Evidence::Interval(stretch[0].0, stretch[stretch.len() - 1].1);
-        AnalysisLogEntry { details, evidence }
-    });
-    entries.collect()
-}
-
-/// Keeps the fixes whose time advances past the fixes kept before them and
-/// returns them with the line numbers of the dropped ones. The first valid fix
-/// anchors the recorded date, so it is always kept and leading fixes are kept
-/// only if they precede it.
-fn drop_out_of_order_fixes(
-    fixes: Vec<Fix>,
-    lines: &[usize],
-    first_valid_fix: usize,
-) -> (Vec<Fix>, Vec<usize>) {
-    let anchor = fixes[first_valid_fix].time;
-    let mut latest = None;
-    let mut kept = Vec::with_capacity(fixes.len());
-    let mut dropped = Vec::new();
-    for (index, (fix, &line)) in fixes.into_iter().zip(lines).enumerate() {
-        let is_leading = index < first_valid_fix;
-        let is_in_order =
-            latest.is_none_or(|latest| fix.time > latest) && (!is_leading || fix.time < anchor);
-        if is_in_order {
-            latest = Some(fix.time);
-            kept.push(fix);
-        } else {
-            dropped.push(line);
         }
     }
-    (kept, dropped)
+
+    /// The flights in the recording, in time order.
+    pub fn flights(&self) -> Vec<Flight> {
+        flight_detection::detect_flights(&self.records, self.altitude_source())
+    }
+
+    /// The records from `start` to `end`, including both ends.
+    pub fn records_between(&self, start: Timestamp, end: Timestamp) -> &[Record] {
+        let start = self.records.partition_point(|record| record.time < start);
+        let end = self.records.partition_point(|record| record.time <= end);
+        self.records.get(start..end).unwrap_or_default()
+    }
 }
 
-/// Reports each take-off and landing, or the end of the recording that a
-/// flight lacks one at.
-fn flight_entries(flights: &[Flight], fixes: &[Fix]) -> Vec<AnalysisLogEntry> {
-    let mut valid_fixes = fixes.iter().filter(|fix| fix.valid).map(|fix| fix.time);
-    let first_fix = valid_fixes.next().expect("an IGC file has a valid fix");
-    let last_fix = valid_fixes.next_back().unwrap_or(first_fix);
-    let airborne = |end| AnalysisLogDetails::Airborne { end };
-    let entries = flights.iter().flat_map(|flight| {
-        let take_off = match flight.take_off_time {
-            Some(time) => fix_entry(AnalysisLogDetails::TakeOff, time),
-            None => fix_entry(airborne(RecordingEnd::Start), first_fix),
-        };
-        let landing = match flight.landing_time {
-            Some(time) => fix_entry(AnalysisLogDetails::Landing, time),
-            None => fix_entry(airborne(RecordingEnd::End), last_fix),
-        };
-        [take_off, landing]
+/// The stretch between two consecutive valid fixes.
+#[derive(Debug)]
+pub struct FixGap {
+    /// The time of the valid fix before the gap.
+    pub start: Timestamp,
+    /// The time of the valid fix after the gap.
+    pub end: Timestamp,
+}
+
+/// The interval that the logger records fixes at, as the most common
+/// interval between consecutive fixes, valid or not, and the shorter of
+/// equally common ones. `None` with fewer than two fixes.
+pub fn recording_interval(records: &[Record]) -> Option<SignedDuration> {
+    let fixes = records.iter().filter(|record| record.fix().is_some());
+    let times = fixes.map(|record| record.time).collect::<Vec<_>>();
+    let mut counts = BTreeMap::<_, usize>::new();
+    for pair in times.windows(2) {
+        *counts.entry(pair[1].duration_since(pair[0])).or_default() += 1;
+    }
+    let most_common = counts
+        .into_iter()
+        .min_by_key(|&(interval, count)| (Reverse(count), interval));
+    most_common.map(|(interval, _)| interval)
+}
+
+/// The gaps between consecutive valid fixes that last at least `minimum`,
+/// in time order.
+pub fn fix_gaps(records: &[Record], minimum: SignedDuration) -> Vec<FixGap> {
+    let valid_fixes = records.iter().filter(|record| record.is_valid_fix());
+    let times = valid_fixes.map(|record| record.time).collect::<Vec<_>>();
+    let gaps = times.windows(2).map(|pair| FixGap {
+        start: pair[0],
+        end: pair[1],
     });
-    entries.collect()
+    let gaps = gaps.filter(|gap| gap.end.duration_since(gap.start) >= minimum);
+    gaps.collect()
 }
 
-fn file_failure(reason: FileFailure) -> AnalysisLogEntry {
-    file_entry(AnalysisLogDetails::FileFailedToParse { reason })
+/// Dates the records walking away from the anchor, backwards for
+/// `Ordering::Less` and forwards for `Ordering::Greater`. Each record lies the
+/// shorter way around the clock from the anchor or the last fix kept since,
+/// and a fix that does not lie in the walk's `direction` from it is dropped.
+fn date_outward(
+    records: impl IntoIterator<Item = Record<Time>>,
+    anchor_dt: DateTime,
+    direction: Ordering,
+) -> Result<(Vec<Record>, Vec<usize>), jiff::Error> {
+    let mut fix_dt = anchor_dt;
+    let mut kept = Vec::new();
+    let mut dropped = Vec::new();
+    for record in records {
+        let dt = fix_dt.checked_add(clock_step(fix_dt.time(), record.time))?;
+        match record.kind {
+            RecordKind::Fix(_) if dt.cmp(&fix_dt) != direction => dropped.push(record.line),
+            RecordKind::Fix(_) => {
+                fix_dt = dt;
+                kept.push(record.at(dt)?);
+            }
+            RecordKind::Event(_) => kept.push(record.at(dt)?),
+        }
+    }
+    Ok((kept, dropped))
 }
 
-fn file_entry(details: AnalysisLogDetails) -> AnalysisLogEntry {
-    let evidence = Evidence::File;
-    AnalysisLogEntry { details, evidence }
-}
-
-fn fix_entry(details: AnalysisLogDetails, time: Timestamp) -> AnalysisLogEntry {
-    let evidence = Evidence::Fix(time);
-    AnalysisLogEntry { details, evidence }
+/// The time from one time of day to another the shorter way around the
+/// clock, so from 23:59:59 to 00:00:01 is 2 s and back is -2 s.
+fn clock_step(from: Time, to: Time) -> SignedDuration {
+    const DAY: SignedDuration = SignedDuration::from_hours(24);
+    const HALF_DAY: SignedDuration = SignedDuration::from_hours(12);
+    let step = to.duration_since(from);
+    if step >= HALF_DAY {
+        step - DAY
+    } else if step < -HALF_DAY {
+        step + DAY
+    } else {
+        step
+    }
 }
 
 fn record_type(line: &str) -> RecordType {
@@ -443,10 +517,8 @@ fn parse_date(record: &HRecord) -> Option<Date> {
     Date::new(year, month, day).ok()
 }
 
-/// Converts a B record into a fix that `date_fixes()` dates later.
-fn fix(record: &BRecord, extensions: Vec<Extension>) -> Fix<Time> {
+fn fix(record: &BRecord, extensions: Vec<Extension>) -> Fix {
     Fix {
-        time: time_of_day(record.timestamp),
         latitude: record.pos.lat.0.into(),
         longitude: record.pos.lon.0.into(),
         valid: record.fix_valid == FixValid::Valid,

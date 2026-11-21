@@ -1,6 +1,6 @@
 # Rule Texts
 
-The built-in rule set editions in `keyhole-engine/src/rule_sets.rs` cite clauses of these documents.
+The built-in rule set editions in `keyhole-engine/src/rule_sets.rs` implement these documents.
 
 | Edition ID | Document |
 | --- | --- |

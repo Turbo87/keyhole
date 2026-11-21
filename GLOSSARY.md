@@ -328,6 +328,10 @@ _Avoid_: Temporary airspace, day airspace, additional airspace
 One recording of a logger in the IGC format: its logger identity, recorded date, fixes and pilot event markers. It can hold several flights.
 _Avoid_: Flight, track
 
+**Recording interval**:
+The time between fixes that a logger is set to record at, measured as the most common interval between consecutive fixes, valid or not.
+_Avoid_: Fix rate, logging interval
+
 **Flight**:
 The part of an IGC file from a take-off to the following landing. A flight that starts airborne has no take-off, and one that ends airborne has no landing.
 _Avoid_: Airborne period, launch
