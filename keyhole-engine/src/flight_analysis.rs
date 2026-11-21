@@ -34,8 +34,8 @@ pub struct AnalysedIgcFile {
     pub logger: LoggerId,
     /// The UTC date the recording started on, from its `HFDTE` header.
     pub recorded_date: Date,
-    /// The records in file order, without the fixes whose time does not
-    /// advance past the fixes before them.
+    /// The records in order of time and line number, without the fixes whose
+    /// time does not advance past the fixes before them.
     pub records: Vec<Record>,
     /// Which recorded altitude the analysis uses for every fix.
     pub altitude_source: AltitudeSource,
@@ -52,7 +52,8 @@ pub struct IgcFile<T = Timestamp> {
     /// The UTC date of the recording, from the `HFDTE` header until
     /// `resolve_times()` dates the records on another date.
     pub date: Date,
-    /// The `B` and `E` records in file order.
+    /// The `B` and `E` records in file order, until `resolve_times()` orders
+    /// them by time and line number.
     pub records: Vec<Record<T>>,
 }
 
@@ -316,11 +317,12 @@ impl IgcFile<Time> {
         Ok((igc_file, warnings.collect()))
     }
 
-    /// Turns the records' UTC times of day into points in time and drops the
-    /// fixes whose time is out of order. The first valid fix, or the first
-    /// fix or record of a file without one, lies on the given UTC date, which
-    /// becomes the date of the IGC file. It fails if that date puts a record
-    /// outside the supported range of points in time.
+    /// Turns the records' UTC times of day into points in time, drops the
+    /// fixes whose time is out of order and orders the records by time and
+    /// line number. The first valid fix, or the first fix or record of a file
+    /// without one, lies on the given UTC date, which becomes the date of the
+    /// IGC file. It fails if that date puts a record outside the supported
+    /// range of points in time.
     pub fn resolve_times(self, date: Date) -> Result<(IgcFile, Vec<TimeWarning>), jiff::Error> {
         let Self {
             logger,
@@ -359,10 +361,12 @@ impl IgcFile<Time> {
         }
         let anchor = anchor.at(anchor_dt)?;
         let records = leading.into_iter().chain([anchor]).chain(following);
+        let mut records: Vec<_> = records.collect();
+        records.sort_unstable_by_key(|record| (record.time, record.line));
         let igc_file = IgcFile {
             logger,
             date,
-            records: records.collect(),
+            records,
         };
         Ok((igc_file, warnings))
     }

@@ -508,6 +508,24 @@ fn drops_leading_fixes_that_do_not_come_before_the_fixes_after_them() {
 }
 
 #[test]
+fn orders_the_records_by_time_and_line_number() {
+    let contents = "ALXVABC\n\
+                    HFDTE160624\n\
+                    B1000015122265N00651234EA0010000110\n\
+                    E100000PEV\n\
+                    E100001PEV\n\
+                    B1000025122265N00651234EA0010000110\n";
+    let resolved = resolve_times(contents, Date::constant(2024, 6, 16));
+    assert_snapshot!(render_dated(&resolved), @"
+    date    2024-06-16
+    line 4  2024-06-16T10:00:00Z event PEV
+    line 3  2024-06-16T10:00:01Z fix A
+    line 5  2024-06-16T10:00:01Z event PEV
+    line 6  2024-06-16T10:00:02Z fix A
+    ");
+}
+
+#[test]
 fn fails_to_date_records_outside_the_supported_range() {
     let contents = "ALXVABC\nHFDTE160624\nB2300005122265N00651234EA0010000110\n";
     let (igc_file, _) = IgcFile::parse(Bytes::from_static(contents.as_bytes())).unwrap();
@@ -642,8 +660,8 @@ fn dates_pilot_events_by_the_preceding_fix() {
     fix    00:00:01 +1d A 51.37108 6.85390 100 110
     pev    23:59:57
     pev    23:59:59
-    pev    00:00:00 +1d
     pev    23:59:59
+    pev    00:00:00 +1d
     pev    00:00:02 +1d
     ");
 }
