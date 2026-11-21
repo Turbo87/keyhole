@@ -223,11 +223,10 @@ fn reports_a_file_without_a_recorded_date() {
 }
 
 #[test]
-fn reports_a_file_without_logger_identity_and_recorded_date() {
+fn reports_only_the_first_failure_of_a_file() {
     let analysis = analyze(&format!("HFPLTPILOT:Jane Doe\n{FIX}"));
     assert_snapshot!(render(&analysis), @"
     error   file_failed_to_parse   file   MissingLoggerId
-    error   file_failed_to_parse   file   MissingRecordedDate
     no igc file
     ");
 }
@@ -316,11 +315,10 @@ fn reports_unreadable_lines_grouped_by_record_type_and_problem() {
 }
 
 #[test]
-fn reports_unreadable_lines_of_files_that_fail_to_parse() {
+fn reports_no_unreadable_lines_of_files_that_fail_to_parse() {
     let analysis = analyze(&format!("ALXVABC\nHFDTE\n{FIX}"));
     assert_snapshot!(render(&analysis), @"
     error   file_failed_to_parse   file   MissingRecordedDate
-    error   unreadable_lines       file   H Malformed: 2
     no igc file
     ");
 }

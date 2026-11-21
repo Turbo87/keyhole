@@ -222,19 +222,22 @@ pub fn analyze_file(contents: Bytes, options: FileAnalysisOptions) -> FileAnalys
         }
     }
 
-    if !has_igc_records {
-        let log = vec![file_failure(FileFailure::NotIgc)];
+    let unparsed = |reason| {
+        let log = vec![file_failure(reason)];
         let igc_file = None;
-        return FileAnalysis { igc_file, log };
+        FileAnalysis { igc_file, log }
+    };
+    if !has_igc_records {
+        return unparsed(FileFailure::NotIgc);
     }
+    let Some(logger) = logger else {
+        return unparsed(FileFailure::MissingLoggerId);
+    };
+    let Some(recorded_date) = recorded_date else {
+        return unparsed(FileFailure::MissingRecordedDate);
+    };
 
     let mut log = Vec::new();
-    if logger.is_none() {
-        log.push(file_failure(FileFailure::MissingLoggerId));
-    }
-    if recorded_date.is_none() {
-        log.push(file_failure(FileFailure::MissingRecordedDate));
-    }
     let first_valid_fix = fixes.iter().position(|fix| fix.valid);
     if first_valid_fix.is_none() {
         log.push(file_failure(FileFailure::NoValidFixes));
@@ -245,8 +248,7 @@ pub fn analyze_file(contents: Bytes, options: FileAnalysisOptions) -> FileAnalys
         log.push(file_entry(details));
     }
 
-    let usable = logger.zip(recorded_date).zip(first_valid_fix);
-    let igc_file = usable.map(|((logger, recorded_date), first_valid_fix)| {
+    let igc_file = first_valid_fix.map(|first_valid_fix| {
         let fixes = date_fixes(fixes, recorded_date, first_valid_fix);
         let pevs = pevs
             .iter()
