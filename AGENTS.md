@@ -14,4 +14,4 @@ Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents
 
 ## Rule texts
 
-The rule set documents that the editions cite, with download links: `docs/rules.md`.
+The rule set documents that the editions implement, with download links: `docs/rules.md`.

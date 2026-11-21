@@ -1,5 +1,6 @@
-//! The file stage of the flight analysis, which parses a raw IGC file
-//! leniently into a flight.
+//! The steps of the flight analysis of one IGC file, which the platform
+//! calls in order: parsing it leniently, resolving the times of its records
+//! and analysing the dated records.
 
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
@@ -11,37 +12,7 @@ use jiff::civil::{Date, DateTime, Time};
 use jiff::tz::Offset;
 use jiff::{SignedDuration, Timestamp};
 
-use self::analysis_log::{
-    AnalysisLogDetails, AnalysisLogEntry, Evidence, FileFailure, LineFailure, LineProblem,
-    RecordType, RecordingEnd,
-};
-
-pub mod analysis_log;
 mod flight_detection;
-
-/// What the file stage extracted from one IGC file.
-#[derive(Debug)]
-pub struct FileAnalysis {
-    /// The analysed IGC file, or `None` if the file fails to parse or lacks a
-    /// valid fix.
-    pub igc_file: Option<AnalysedIgcFile>,
-    pub log: Vec<AnalysisLogEntry>,
-}
-
-#[derive(Debug)]
-pub struct AnalysedIgcFile {
-    /// The logger that wrote the file, from its `A` record.
-    pub logger: LoggerId,
-    /// The UTC date the recording started on, from its `HFDTE` header.
-    pub recorded_date: Date,
-    /// The records in order of time and line number, without the fixes whose
-    /// time does not advance past the fixes before them.
-    pub records: Vec<Record>,
-    /// Which recorded altitude the analysis uses for every fix.
-    pub altitude_source: AltitudeSource,
-    /// The flights in the recording, in time order.
-    pub flights: Vec<Flight>,
-}
 
 /// One recording of a logger. The times of its records are times of day
 /// until they are resolved to points in time.
@@ -73,6 +44,38 @@ pub enum ParseError {
 pub struct UnreadableLines {
     pub reason: LineFailure,
     pub lines: Vec<usize>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct LineFailure {
+    pub record_type: RecordType,
+    pub problem: LineProblem,
+}
+
+/// The IGC record type that a line starts with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RecordType {
+    A,
+    B,
+    C,
+    D,
+    E,
+    F,
+    G,
+    H,
+    I,
+    J,
+    K,
+    L,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum LineProblem {
+    /// The line does not match the layout of its record type.
+    Malformed,
+    /// A number in the line is outside its valid range.
+    OutOfRange,
 }
 
 /// A problem with the times of an IGC file's records.
@@ -398,73 +401,6 @@ impl IgcFile {
     }
 }
 
-/// The limits that the file stage checks the recording against.
-#[derive(Debug, Clone, Copy)]
-pub struct FileAnalysisOptions {
-    /// The longest interval between two fixes that does not warrant a warning.
-    pub maximum_recording_interval: SignedDuration,
-}
-
-/// Parses an IGC file, skipping what it cannot read, and checks the
-/// recording against the given limits.
-pub fn analyze_file(contents: Bytes, options: FileAnalysisOptions) -> FileAnalysis {
-    let (igc_file, warnings) = match IgcFile::parse(contents) {
-        Ok(parsed) => parsed,
-        Err(error) => {
-            let reason = match error {
-                ParseError::NotIgc => FileFailure::NotIgc,
-                ParseError::MissingLoggerId => FileFailure::MissingLoggerId,
-                ParseError::MissingRecordedDate => FileFailure::MissingRecordedDate,
-            };
-            let log = vec![file_failure(reason)];
-            let igc_file = None;
-            return FileAnalysis { igc_file, log };
-        }
-    };
-    let mut log = Vec::new();
-    let has_valid_fix = igc_file.records.iter().any(Record::is_valid_fix);
-    if !has_valid_fix {
-        log.push(file_failure(FileFailure::NoValidFixes));
-    }
-
-    for UnreadableLines { reason, lines } in warnings {
-        let details = AnalysisLogDetails::UnreadableLines { reason, lines };
-        log.push(file_entry(details));
-    }
-
-    let igc_file = has_valid_fix.then(|| {
-        let recorded_date = igc_file.date;
-        let resolved = igc_file.resolve_times(recorded_date);
-        let (igc_file, warnings) = resolved.expect("recorded dates lie in the 21st century");
-        for warning in warnings {
-            if let TimeWarning::OutOfOrderFixes { lines } = warning {
-                log.push(file_entry(AnalysisLogDetails::TimestampErrors { lines }));
-            }
-        }
-        log.extend(exceeded_recording_intervals(&igc_file.records, options));
-        let altitude_source = igc_file.altitude_source();
-        if altitude_source == AltitudeSource::Gnss {
-            log.push(file_entry(AnalysisLogDetails::NoPressureAltitude));
-        }
-        let flights = igc_file.flights();
-        log.extend(flight_entries(&flights, &igc_file.records));
-        let IgcFile {
-            logger,
-            date: recorded_date,
-            records,
-        } = igc_file;
-        AnalysedIgcFile {
-            logger,
-            recorded_date,
-            records,
-            altitude_source,
-            flights,
-        }
-    });
-
-    FileAnalysis { igc_file, log }
-}
-
 /// Dates the records walking away from the anchor, backwards for
 /// `Ordering::Less` and forwards for `Ordering::Greater`. Each record lies the
 /// shorter way around the clock from the anchor or the last fix kept since,
@@ -504,68 +440,6 @@ fn clock_step(from: Time, to: Time) -> SignedDuration {
     } else {
         step
     }
-}
-
-/// Warns about each stretch of consecutive intervals between fixes that
-/// exceed the limit.
-fn exceeded_recording_intervals(
-    records: &[Record],
-    options: FileAnalysisOptions,
-) -> Vec<AnalysisLogEntry> {
-    let limit = options.maximum_recording_interval;
-    let length = |&(start, end): &(Timestamp, Timestamp)| end.duration_since(start);
-    let fixes = records.iter().filter(|record| record.fix().is_some());
-    let times = fixes.map(|record| record.time).collect::<Vec<_>>();
-    let intervals = times.windows(2).map(|pair| (pair[0], pair[1]));
-    let intervals = intervals.collect::<Vec<_>>();
-    let exceeds = |interval: &(Timestamp, Timestamp)| length(interval) > limit;
-
-    let stretches = intervals.chunk_by(|a, b| exceeds(a) == exceeds(b));
-    let stretches = stretches.filter(|stretch| exceeds(&stretch[0]));
-    let entries = stretches.map(|stretch| {
-        let intervals = stretch.iter().map(length);
-        let longest_interval = intervals.max().unwrap_or_default();
-        let details = AnalysisLogDetails::RecordingIntervalExceeded { longest_interval };
-        let evidence = Evidence::Interval(stretch[0].0, stretch[stretch.len() - 1].1);
-        AnalysisLogEntry { details, evidence }
-    });
-    entries.collect()
-}
-
-/// Reports each take-off and landing, or the end of the recording that a
-/// flight lacks one at.
-fn flight_entries(flights: &[Flight], records: &[Record]) -> Vec<AnalysisLogEntry> {
-    let valid_fixes = records.iter().filter(|record| record.is_valid_fix());
-    let mut valid_fixes = valid_fixes.map(|record| record.time);
-    let first_fix = valid_fixes.next().expect("an IGC file has a valid fix");
-    let last_fix = valid_fixes.next_back().unwrap_or(first_fix);
-    let airborne = |end| AnalysisLogDetails::Airborne { end };
-    let entries = flights.iter().flat_map(|flight| {
-        let take_off = match flight.take_off_time {
-            Some(time) => fix_entry(AnalysisLogDetails::TakeOff, time),
-            None => fix_entry(airborne(RecordingEnd::Start), first_fix),
-        };
-        let landing = match flight.landing_time {
-            Some(time) => fix_entry(AnalysisLogDetails::Landing, time),
-            None => fix_entry(airborne(RecordingEnd::End), last_fix),
-        };
-        [take_off, landing]
-    });
-    entries.collect()
-}
-
-fn file_failure(reason: FileFailure) -> AnalysisLogEntry {
-    file_entry(AnalysisLogDetails::FileFailedToParse { reason })
-}
-
-fn file_entry(details: AnalysisLogDetails) -> AnalysisLogEntry {
-    let evidence = Evidence::File;
-    AnalysisLogEntry { details, evidence }
-}
-
-fn fix_entry(details: AnalysisLogDetails, time: Timestamp) -> AnalysisLogEntry {
-    let evidence = Evidence::Fix(time);
-    AnalysisLogEntry { details, evidence }
 }
 
 fn record_type(line: &str) -> RecordType {

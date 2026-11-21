@@ -3,7 +3,6 @@ use jiff::SignedDuration;
 use jiff::civil::{Time, time};
 use jiff::tz::TimeZone;
 use keyhole_engine::day_scoring::ScoringParameters;
-use keyhole_engine::flight_analysis::analysis_log::AnalysisLogKind;
 use keyhole_engine::rule_sets::{
     Altitude, AnalysisParameters, DAEC_SWO_2026, EarthModel, FAI_ANNEX_A_2025A, RuleOverrides,
     RuleSetEdition,
@@ -36,17 +35,6 @@ fn both_editions_are_found_by_their_ids() {
         assert_eq!(RuleSetEdition::find(id).map(|edition| edition.id), Some(id));
     }
     assert_eq!(RuleSetEdition::find("DAeC SWO 2025"), None);
-}
-
-#[test]
-fn analysis_log_kinds_cite_the_clauses_of_the_edition() {
-    let kind = AnalysisLogKind::FileFailedToParse;
-    assert_eq!(DAEC_SWO_2026.clause(kind), Some("5.9.8"));
-    assert_eq!(FAI_ANNEX_A_2025A.clause(kind), None);
-
-    let kind = AnalysisLogKind::RecordingIntervalExceeded;
-    assert_eq!(DAEC_SWO_2026.clause(kind), Some("5.9.3"));
-    assert_eq!(FAI_ANNEX_A_2025A.clause(kind), Some("5.3c"));
 }
 
 #[test]
