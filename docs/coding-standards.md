@@ -17,3 +17,7 @@ A doc comment says what a value holds, where it comes from or which unit it uses
 ## Domain terms
 
 Names, doc comments and commit messages use the terms from `GLOSSARY.md` and replace the words in each entry's _Avoid_ list.
+
+## Research notes
+
+A research note cites its data by public reference: WeGlide flights by their flight page, and SoaringSpot files by competition, class, day and file name, linked to the competition page. Local tools, lists and folders are described in words.
