@@ -305,7 +305,6 @@ fn reports_unreadable_lines_grouped_by_record_type_and_problem() {
          B1000025122267N00651236EA00102\n\
          B9900035122265N00651234EA0010000110\n\
          \n\
-         just some text\n\
          B1000045122265N00651234EA0010000110\n\
          \t \n\
          E100004PEV\n\
@@ -314,8 +313,7 @@ fn reports_unreadable_lines_grouped_by_record_type_and_problem() {
     assert_snapshot!(render(&analysis), @"
     error   unreadable_lines       file   B Malformed: 4, 5
     error   unreadable_lines       file   B OutOfRange: 6
-    error   unreadable_lines       file   E Malformed: 12
-    error   unreadable_lines       file   Unknown Malformed: 8
+    error   unreadable_lines       file   E Malformed: 11
     warning interval_exceeded      10:00:00 to 10:00:04 longest 4s
     logger LXV ABC
     date   2024-06-16
@@ -323,6 +321,17 @@ fn reports_unreadable_lines_grouped_by_record_type_and_problem() {
     fix    10:00:00 A 51.37108 6.85390 100 110
     fix    10:00:04 A 51.37108 6.85390 100 110
     pev    10:00:04
+    ");
+}
+
+#[test]
+fn skips_lines_of_unknown_record_types() {
+    let analysis = analyze(&format!("ALXVABC\nHFDTE160624\nXLXVOLTAGE:12.4\n{FIX}"));
+    assert_snapshot!(render(&analysis), @"
+    logger LXV ABC
+    date   2024-06-16
+    alt    Pressure
+    fix    10:00:00 A 51.37108 6.85390 100 110
     ");
 }
 

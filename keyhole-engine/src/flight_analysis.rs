@@ -206,8 +206,8 @@ impl ExtensionDefinition {
 }
 
 impl IgcFile<Time> {
-    /// Parses an IGC file, skipping the lines it cannot read and returning
-    /// them grouped by reason.
+    /// Parses an IGC file, skipping the lines of unknown record types. It also
+    /// skips the lines it cannot read and returns them grouped by reason.
     pub fn parse(contents: Bytes) -> Result<(Self, Vec<UnreadableLines>), ParseError> {
         let contents = match contents.strip_prefix(b"\xEF\xBB\xBF") {
             Some(rest) => contents.slice_ref(rest),
@@ -230,7 +230,7 @@ impl IgcFile<Time> {
             let line_number = index + 1;
             let record = records::Record::parse_line(&line);
             let problem = match &record {
-                Ok(records::Record::Unrecognised(_)) => Some(LineProblem::Malformed),
+                Ok(records::Record::Unrecognised(_)) => continue,
                 Ok(_) => None,
                 Err(igc::util::ParseError::NumberOutOfRange) => Some(LineProblem::OutOfRange),
                 Err(_) => Some(LineProblem::Malformed),
