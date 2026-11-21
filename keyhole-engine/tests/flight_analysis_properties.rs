@@ -1,16 +1,21 @@
 use bytes::Bytes;
-use jiff::SignedDuration;
-use keyhole_engine::flight_analysis::{FileAnalysis, FileAnalysisOptions, analyze_file};
+use jiff::Timestamp;
+use keyhole_engine::flight_analysis::IgcFile;
 use proptest::prelude::*;
-
-const OPTIONS: FileAnalysisOptions = FileAnalysisOptions {
-    maximum_recording_interval: SignedDuration::from_secs(1),
-};
 
 const HEADER: &str = "ALXVABC\nHFDTE160624\n";
 
-fn analyze(contents: impl Into<Bytes>) -> FileAnalysis {
-    analyze_file(contents.into(), OPTIONS)
+/// The times of the fixes of a file dated on its recorded date, or `None`
+/// if it fails to parse.
+fn fix_times(contents: impl Into<Bytes>) -> Option<Vec<Timestamp>> {
+    let (igc_file, _) = IgcFile::parse(contents.into()).ok()?;
+    let recorded_date = igc_file.date;
+    let (igc_file, _) = igc_file.resolve_times(recorded_date).unwrap();
+    let fixes = igc_file
+        .records
+        .iter()
+        .filter(|record| record.fix().is_some());
+    Some(fixes.map(|record| record.time).collect())
 }
 
 fn b_record(time_of_day: u32) -> String {
@@ -44,10 +49,7 @@ proptest! {
     #[test]
     fn fix_times_strictly_increase_in_any_file(lines in prop::collection::vec(line(), 0..60)) {
         let contents = [HEADER.as_bytes().to_vec(), lines.concat()].concat();
-        let analysis = analyze(contents);
-        if let Some(igc_file) = analysis.igc_file {
-            let fixes = igc_file.records.iter().filter(|record| record.fix().is_some());
-            let times = fixes.map(|record| record.time).collect::<Vec<_>>();
+        if let Some(times) = fix_times(contents) {
             prop_assert!(times.windows(2).all(|pair| pair[0] < pair[1]), "{times:?}");
         }
     }
@@ -65,11 +67,8 @@ proptest! {
         let mut stale_records = records.clone();
         stale_records.insert(insert_at, b_record(stale_time));
 
-        let fix_times = |records: Vec<String>| {
-            let igc_file = analyze(HEADER.to_owned() + &records.concat()).igc_file.unwrap();
-            let fixes = igc_file.records.iter().filter(|record| record.fix().is_some());
-            fixes.map(|record| record.time).collect::<Vec<_>>()
-        };
-        prop_assert_eq!(fix_times(stale_records), fix_times(records));
+        let file = |records: Vec<String>| HEADER.to_owned() + &records.concat();
+        let stale_times = fix_times(file(stale_records)).unwrap();
+        prop_assert_eq!(stale_times, fix_times(file(records)).unwrap());
     }
 }
