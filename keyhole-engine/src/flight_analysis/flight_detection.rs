@@ -1,14 +1,19 @@
 //! Take-off and landing detection.
 //!
-//! The glider stands on the ground where it barely moves and keeps its
-//! altitude for a while. Such fixes are still, and runs of still fixes form
-//! ground periods. Between the ground periods, the glider moves. A moving
-//! stretch is a flight when it contains a take-off run, a stretch of fast
-//! fixes, and climbs well above the ground periods around it, which a car tow
-//! or a taxi does not. The take-off is the first fix of the take-off roll,
-//! where the glider starts to move faster than the still speed on its way
-//! into the take-off run. The landing is the last fix that the glider reaches
-//! at still speed or faster before the ground period after the flight.
+//! A glider on the ground barely moves and keeps its altitude. Fixes where it
+//! does so for a while are still, and runs of still fixes form still periods.
+//! A glider hovering in wave can look the same for a short time. So a still
+//! period well above the lowest ground seen so far is a ground period only
+//! when the glider rests in it, staying within a few metres of one spot for a
+//! while. Every other still period is a ground period.
+//!
+//! Between the ground periods, the glider moves. A moving stretch is a flight
+//! when it contains a take-off run, a stretch of fast fixes, and climbs well
+//! above the ground periods around it, which a car tow or a taxi does not.
+//! The take-off is the first fix of the take-off roll, where the glider
+//! starts to move faster than the still speed on its way into the take-off
+//! run. The landing is the last fix that the glider reaches at still speed or
+//! faster before the ground period after the flight.
 
 use std::ops::RangeInclusive;
 
@@ -23,22 +28,28 @@ const STILL_WINDOW: SignedDuration = SignedDuration::from_secs(30);
 /// and that the glider stays below from its landing on. A crew pushing the
 /// glider stays below it.
 const STILL_SPEED: f64 = 15.0;
-/// The longest time between two still fixes of the same ground period, so
+/// The longest time between two still fixes of the same still period, so
 /// that a few moving fixes, such as a short push or a position jump, do not
 /// split it.
 const STILL_GAP: SignedDuration = SignedDuration::from_secs(5);
-/// The shortest ground period. A shorter run of still fixes, such as a slow
+/// The shortest still period. A shorter run of still fixes, such as a slow
 /// moment in flight, belongs to the moving stretch around it. The recording
 /// cuts off the runs at its ends, so a run at the start of the file counts at
 /// any length and a run at the end of the file counts from 3 fixes.
-const GROUND_PERIOD: SignedDuration = SignedDuration::from_secs(5);
+const STILL_PERIOD: SignedDuration = SignedDuration::from_secs(5);
 /// In km/h, the fix-to-fix ground speed of a take-off run.
 const TAKE_OFF_SPEED: f64 = 50.0;
 /// The shortest take-off run.
 const TAKE_OFF_RUN: SignedDuration = SignedDuration::from_secs(10);
 /// In m, how far a flight climbs above the higher of the ground periods
-/// around it, which a car tow or a taxi does not.
+/// around it, which a car tow or a taxi does not. A still period this far
+/// above the lowest ground seen so far needs a rest to be a ground period.
 const CLIMB: i32 = 50;
+/// In m, how far the glider moves over the ground while it rests.
+const REST_RADIUS: f64 = 5.0;
+/// The shortest rest. A glider hovering in wave drifts out of the rest radius
+/// sooner, while a glider on the ground rests for longer.
+const REST_TIME: SignedDuration = SignedDuration::from_secs(20);
 
 /// Finds the flights in a recording. A flight whose take-off run is already
 /// under way at the first fix has no take-off, and one that reaches the last
@@ -144,9 +155,46 @@ impl Recording<'_> {
         })
     }
 
-    /// The runs of still fixes, joined across short stretches of moving
-    /// fixes, that are long enough to count as ground.
+    /// The still periods in which the glider stands on the ground. The first
+    /// fix stands in for the ground when no ground period comes before a
+    /// still period. A still period at either end of the file needs no rest,
+    /// because the recording may cut the rest short.
     fn ground_periods(&self) -> Vec<RangeInclusive<usize>> {
+        let last = self.fixes.len() - 1;
+        let mut lowest_ground = self.altitude(0);
+        let mut ground_periods = Vec::new();
+        for period in self.still_periods() {
+            let altitude = self.median_altitude(period.clone());
+            let is_raised = altitude > lowest_ground + CLIMB;
+            let is_at_start_or_end = *period.start() == 0 || *period.end() == last;
+            if is_raised && !is_at_start_or_end && !self.has_rest(period.clone()) {
+                continue;
+            }
+            lowest_ground = lowest_ground.min(altitude);
+            ground_periods.push(period);
+        }
+        ground_periods
+    }
+
+    /// Whether the glider stays within the rest radius of one fix for the rest
+    /// time, from the start of the period to the end of the still window of
+    /// its last fix.
+    fn has_rest(&self, period: RangeInclusive<usize>) -> bool {
+        let (start, end) = (*period.start(), self.still_window_end(*period.end()));
+        (start..=end).any(|from| {
+            // The rest from a fix lasts until the glider first moves farther
+            // than the rest radius away from it.
+            let rest_end = (from..=end)
+                .take_while(|&to| distance(self.fixes[from], self.fixes[to]) <= REST_RADIUS)
+                .last()
+                .unwrap_or(from);
+            self.duration(from..=rest_end) >= REST_TIME
+        })
+    }
+
+    /// The runs of still fixes, joined across short stretches of moving
+    /// fixes, that are long enough to count.
+    fn still_periods(&self) -> Vec<RangeInclusive<usize>> {
         let last = self.fixes.len() - 1;
         let still = (0..=last).filter(|&index| self.is_still(index));
         let still = still.collect::<Vec<_>>();
@@ -155,7 +203,7 @@ impl Recording<'_> {
         let periods = runs.filter(|run| {
             let (start, end) = (*run.start(), *run.end());
             start == 0
-                || self.duration(run.clone()) >= GROUND_PERIOD
+                || self.duration(run.clone()) >= STILL_PERIOD
                 || (end == last && end - start >= 2)
         });
         periods.collect()
@@ -165,8 +213,7 @@ impl Recording<'_> {
     /// slow at every fix and keeps its altitude.
     fn is_still(&self, index: usize) -> bool {
         let last = self.fixes.len() - 1;
-        let window_end = self.fixes[index].time + STILL_WINDOW;
-        let window_end = self.fixes.partition_point(|fix| fix.time <= window_end) - 1;
+        let window_end = self.still_window_end(index);
         // A fix before a recording gap is judged with its neighbours instead.
         let window = if window_end > index {
             index..=window_end
@@ -180,6 +227,12 @@ impl Recording<'_> {
 
         let is_slow = (start + 1..=end).all(|index| self.speed(index) < STILL_SPEED);
         is_slow && self.altitude_range(window) <= self.still_altitude_range()
+    }
+
+    /// The last fix of the still window that starts at a fix.
+    fn still_window_end(&self, index: usize) -> usize {
+        let end = self.fixes[index].time + STILL_WINDOW;
+        self.fixes.partition_point(|fix| fix.time <= end) - 1
     }
 
     /// In m, the widest altitude range of a still window.

@@ -669,6 +669,48 @@ fn detects_no_landing_while_hovering_in_wave() {
 }
 
 #[test]
+fn detects_the_take_off_before_a_hover_in_wave() {
+    let analysis = analyze_excerpt(include_bytes!("fixtures/hover-after-winch-launch.igc"));
+    assert_snapshot!(render_flights(&analysis), @"
+    info    take_off               12:56:40
+    info    landing                13:53:19
+    flight 12:56:40 to 13:53:19
+    ");
+}
+
+#[test]
+fn detects_the_take_off_before_two_hovers_in_wave() {
+    let analysis = analyze_excerpt(include_bytes!("fixtures/two-wave-hovers.igc"));
+    assert_snapshot!(render_flights(&analysis), @"
+    info    take_off               09:44:54
+    info    landing                12:57:20
+    flight 09:44:54 to 12:57:20
+    ");
+}
+
+/// The recording starts too shortly before the take-off run for a ground
+/// period, so the first fix is the only ground that the hovers compare with.
+#[test]
+fn detects_the_landing_after_a_slow_hover_in_wave() {
+    let analysis = analyze_excerpt(include_bytes!("fixtures/slow-wave-hover.igc"));
+    assert_snapshot!(render_flights(&analysis), @"
+    info    take_off               12:05:56
+    info    landing                16:15:51
+    flight 12:05:56 to 16:15:51
+    ");
+}
+
+#[test]
+fn detects_one_flight_across_a_short_hover_in_wave() {
+    let analysis = analyze_excerpt(include_bytes!("fixtures/short-wave-hover.igc"));
+    assert_snapshot!(render_flights(&analysis), @"
+    info    take_off               13:51:02
+    info    landing                15:42:32
+    flight 13:51:02 to 15:42:32
+    ");
+}
+
+#[test]
 fn detects_an_outlanding_far_above_the_take_off() {
     let analysis = analyze_excerpt(include_bytes!("fixtures/outlanding-on-higher-ground.igc"));
     assert_snapshot!(render_flights(&analysis), @"
@@ -768,5 +810,86 @@ fn detects_a_take_off_run_from_the_second_fix() {
     info    take_off               10:00:02
     info    landing                10:01:00
     flight 10:00:02 to 10:01:00
+    ");
+}
+
+#[test]
+fn detects_a_take_off_after_a_stop_on_higher_ground() {
+    let standing = (0..60).map(|_| (0.0, 100));
+    let climbing = (1..=32).map(|second| (72.0, 100 + 5 * second));
+    let landing = (1..=6).map(|second| (72.0, 260 - 10 * second));
+    let stopped = (0..36).map(|_| (0.0, 200));
+    let climbing_again = (1..=30).map(|second| (72.0, 200 + 5 * second));
+    let descending = (1..=25).map(|second| (72.0, 350 - 10 * second));
+    let stopped_again = (0..40).map(|_| (0.0, 100));
+    let fixes = standing
+        .chain(climbing)
+        .chain(landing)
+        .chain(stopped)
+        .chain(climbing_again)
+        .chain(descending)
+        .chain(stopped_again);
+    let analysis = analyze_profile(&profile(&fixes.collect::<Vec<_>>()));
+    assert_snapshot!(render_flights(&analysis), @"
+    info    take_off               10:01:00
+    info    landing                10:01:37
+    info    take_off               10:02:14
+    info    landing                10:03:08
+    flight 10:01:00 to 10:01:37
+    flight 10:02:14 to 10:03:08
+    ");
+}
+
+#[test]
+fn detects_a_take_off_after_a_slow_roll_on_the_airfield() {
+    let standing = (0..60).map(|_| (0.0, 100));
+    let climbing = (1..=30).map(|second| (72.0, 100 + 5 * second));
+    let descending = (1..=30).map(|second| (72.0, 250 - 5 * second));
+    let rolling = (0..40).map(|_| (9.0, 100));
+    let climbing_again = (1..=30).map(|second| (72.0, 100 + 5 * second));
+    let descending_again = (1..=30).map(|second| (72.0, 250 - 5 * second));
+    let stopped = (0..40).map(|_| (0.0, 100));
+    let fixes = standing
+        .chain(climbing)
+        .chain(descending)
+        .chain(rolling)
+        .chain(climbing_again)
+        .chain(descending_again)
+        .chain(stopped);
+    let analysis = analyze_profile(&profile(&fixes.collect::<Vec<_>>()));
+    assert_snapshot!(render_flights(&analysis), @"
+    info    take_off               10:01:00
+    info    landing                10:01:59
+    info    take_off               10:02:40
+    info    landing                10:03:39
+    flight 10:01:00 to 10:01:59
+    flight 10:02:40 to 10:03:39
+    ");
+}
+
+#[test]
+fn ignores_a_hover_in_wave_above_ground_lower_than_the_first_fix() {
+    let descending = (1..=30).map(|second| (72.0, 1000 - 30 * second));
+    let standing = (0..60).map(|_| (0.0, 100));
+    let climbing = (1..=60).map(|second| (72.0, 100 + 5 * second));
+    let hovering = (0..40).map(|_| (7.2, 400));
+    let climbing_again = (1..=20).map(|second| (72.0, 400 + 5 * second));
+    let descending_again = (1..=40).map(|second| (72.0, 500 - 10 * second));
+    let stopped = (0..40).map(|_| (0.0, 100));
+    let fixes = descending
+        .chain(standing)
+        .chain(climbing)
+        .chain(hovering)
+        .chain(climbing_again)
+        .chain(descending_again)
+        .chain(stopped);
+    let analysis = analyze_profile(&profile(&fixes.collect::<Vec<_>>()));
+    assert_snapshot!(render_flights(&analysis), @"
+    warning airborne               10:00:00 Start
+    info    landing                10:00:29
+    info    take_off               10:01:30
+    info    landing                10:04:09
+    flight - to 10:00:29
+    flight 10:01:30 to 10:04:09
     ");
 }
