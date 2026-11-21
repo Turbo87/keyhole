@@ -18,15 +18,20 @@ pub enum AnalysisLogKind {
     TimestampErrors,
     RecordingIntervalExceeded,
     NoPressureAltitude,
+    TakeOff,
+    Landing,
+    Airborne,
 }
 
 impl AnalysisLogKind {
     pub fn level(self) -> Level {
         match self {
             Self::FileFailedToParse | Self::UnreadableLines => Level::Error,
-            Self::TimestampErrors | Self::RecordingIntervalExceeded | Self::NoPressureAltitude => {
-                Level::Warning
-            }
+            Self::TimestampErrors
+            | Self::RecordingIntervalExceeded
+            | Self::NoPressureAltitude
+            | Self::Airborne => Level::Warning,
+            Self::TakeOff | Self::Landing => Level::Info,
         }
     }
 }
@@ -35,6 +40,7 @@ impl AnalysisLogKind {
 pub enum Level {
     Error,
     Warning,
+    Info,
 }
 
 #[derive(Debug)]
@@ -55,6 +61,13 @@ pub enum AnalysisLogDetails {
     /// No fix has a pressure altitude, so the analysis uses GNSS altitude,
     /// which neither rule set provides for.
     NoPressureAltitude,
+    /// A flight starts its take-off run at the fix.
+    TakeOff,
+    /// A flight's roll-out stays slow from the fix on.
+    Landing,
+    /// A flight lacks its take-off or landing because the recording starts or
+    /// ends with it in progress.
+    Airborne { end: RecordingEnd },
 }
 
 impl AnalysisLogDetails {
@@ -65,8 +78,18 @@ impl AnalysisLogDetails {
             Self::TimestampErrors { .. } => AnalysisLogKind::TimestampErrors,
             Self::RecordingIntervalExceeded { .. } => AnalysisLogKind::RecordingIntervalExceeded,
             Self::NoPressureAltitude => AnalysisLogKind::NoPressureAltitude,
+            Self::TakeOff => AnalysisLogKind::TakeOff,
+            Self::Landing => AnalysisLogKind::Landing,
+            Self::Airborne { .. } => AnalysisLogKind::Airborne,
         }
     }
+}
+
+/// One end of the recording.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RecordingEnd {
+    Start,
+    End,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -119,4 +142,6 @@ pub enum Evidence {
     File,
     /// The span from the first time to the second.
     Interval(Timestamp, Timestamp),
+    /// The fix at the time.
+    Fix(Timestamp),
 }

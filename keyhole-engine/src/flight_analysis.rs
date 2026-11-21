@@ -13,10 +13,11 @@ use jiff::{SignedDuration, Timestamp};
 
 use self::analysis_log::{
     AnalysisLogDetails, AnalysisLogEntry, Evidence, FileFailure, LineFailure, LineProblem,
-    RecordType,
+    RecordType, RecordingEnd,
 };
 
 pub mod analysis_log;
+mod flight_detection;
 
 /// What the file stage extracted from one IGC file.
 #[derive(Debug)]
@@ -40,6 +41,8 @@ pub struct IgcFile {
     pub pevs: Vec<Timestamp>,
     /// Which recorded altitude the analysis uses for every fix.
     pub altitude_source: AltitudeSource,
+    /// The flights in the recording, in time order.
+    pub flights: Vec<Flight>,
 }
 
 /// The recorded altitude of a fix, pressure or GNSS.
@@ -47,6 +50,17 @@ pub struct IgcFile {
 pub enum AltitudeSource {
     Pressure,
     Gnss,
+}
+
+/// The part of an IGC file from a take-off to the following landing.
+#[derive(Debug)]
+pub struct Flight {
+    /// The time of the first fix of the take-off roll, or `None` when the
+    /// recording starts in the take-off run.
+    pub take_off_time: Option<Timestamp>,
+    /// The time of the fix from which the roll-out stays slow, or `None` when
+    /// the recording ends in flight.
+    pub landing_time: Option<Timestamp>,
 }
 
 /// A logger's manufacturer and serial, as written in the A record.
@@ -96,6 +110,14 @@ impl Fix {
     pub fn extension(&self, code: &str) -> Option<&str> {
         let extension = self.extensions.iter().find(|e| e.code == code.as_bytes())?;
         std::str::from_utf8(&extension.value).ok()
+    }
+
+    /// The altitude from the given source, in m.
+    pub fn altitude(&self, source: AltitudeSource) -> i32 {
+        match source {
+            AltitudeSource::Pressure => self.pressure_altitude,
+            AltitudeSource::Gnss => self.gnss_altitude,
+        }
     }
 }
 
@@ -243,12 +265,15 @@ pub fn analyze_file(contents: Bytes, options: FileAnalysisOptions) -> FileAnalys
         } else {
             AltitudeSource::Pressure
         };
+        let flights = flight_detection::detect_flights(&fixes, altitude_source);
+        log.extend(flight_entries(&flights, &fixes));
         IgcFile {
             logger,
             recorded_date,
             fixes,
             pevs,
             altitude_source,
+            flights,
         }
     });
 
@@ -346,12 +371,38 @@ fn drop_out_of_order_fixes(
     (kept, dropped)
 }
 
+/// Reports each take-off and landing, or the end of the recording that a
+/// flight lacks one at.
+fn flight_entries(flights: &[Flight], fixes: &[Fix]) -> Vec<AnalysisLogEntry> {
+    let mut valid_fixes = fixes.iter().filter(|fix| fix.valid).map(|fix| fix.time);
+    let first_fix = valid_fixes.next().expect("an IGC file has a valid fix");
+    let last_fix = valid_fixes.next_back().unwrap_or(first_fix);
+    let airborne = |end| AnalysisLogDetails::Airborne { end };
+    let entries = flights.iter().flat_map(|flight| {
+        let take_off = match flight.take_off_time {
+            Some(time) => fix_entry(AnalysisLogDetails::TakeOff, time),
+            None => fix_entry(airborne(RecordingEnd::Start), first_fix),
+        };
+        let landing = match flight.landing_time {
+            Some(time) => fix_entry(AnalysisLogDetails::Landing, time),
+            None => fix_entry(airborne(RecordingEnd::End), last_fix),
+        };
+        [take_off, landing]
+    });
+    entries.collect()
+}
+
 fn file_failure(reason: FileFailure) -> AnalysisLogEntry {
     file_entry(AnalysisLogDetails::FileFailedToParse { reason })
 }
 
 fn file_entry(details: AnalysisLogDetails) -> AnalysisLogEntry {
     let evidence = Evidence::File;
+    AnalysisLogEntry { details, evidence }
+}
+
+fn fix_entry(details: AnalysisLogDetails, time: Timestamp) -> AnalysisLogEntry {
+    let evidence = Evidence::Fix(time);
     AnalysisLogEntry { details, evidence }
 }
 
