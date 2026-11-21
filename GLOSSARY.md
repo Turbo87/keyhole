@@ -332,6 +332,14 @@ _Avoid_: Flight, track
 The part of an IGC file from a take-off to the following landing. A flight that starts airborne has no take-off, and one that ends airborne has no landing.
 _Avoid_: Airborne period, launch
 
+**Scored flight**:
+The one flight of an IGC file that analysis scores: the longest flight unless a scorer sets its take-off or landing.
+_Avoid_: Main flight, chosen flight, active flight
+
+**Flight end**:
+The end of the scored flight, after which nothing the pilot achieves counts: its landing, or the time a scorer sets instead, for example at an engine run.
+_Avoid_: Landing override, flight finish
+
 **Flight analysis**:
 Working out from a flight's IGC file what the pilot achieved on the day's task.
 _Avoid_: Evaluation, check
@@ -341,11 +349,11 @@ A file's flight analysis whose inputs, or the version of Keyhole that analysed i
 _Avoid_: Outdated analysis, invalid analysis
 
 **Recorded date**:
-The UTC date an IGC file states for its flight in its `HFDTE` header. It differs from the file's flight date when take-off and UTC midnight fall on different sides, and it can be plainly wrong, for example after a GPS week number rollover or in a logger that lost its clock.
+The UTC date an IGC file states for its flight in its `HFDTE` header. It differs from a flight's flight date when take-off and UTC midnight fall on different sides, and it can be plainly wrong, for example after a GPS week number rollover or in a logger that lost its clock.
 _Avoid_: File date
 
 **Flight date**:
-The local date in the competition time zone that an IGC file counts for, which picks its logger link and class day. It is the date of take-off, or of the first fix without one, corrected for a GPS week number rollover, unless a scorer overrides it.
+The local date in the competition time zone of a flight's take-off, or of its first fix without one. The scored flight's flight date picks the IGC file's logger link and class day, unless a scorer overrides it, for example after a GPS week number rollover.
 _Avoid_: File date, take-off date
 
 **Analysis log**:

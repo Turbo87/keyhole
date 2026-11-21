@@ -1,0 +1,7 @@
+# Analyse IGC files in steps the platform assembles
+
+The engine offers the flight analysis of an IGC file as small pure steps instead of one function that analyses the whole file, and the platform calls them in order. The platform has to act between the steps. The scored flight's flight date picks the logger link and class day, which decide the task. Overrides replace the output of single steps, and a stale analysis depends on the inputs of each step separately. One function would need every possible input up front, and an engine function that runs all steps would grow back into it, so the engine has none.
+
+Steps that check part of a recording take the records to check rather than choosing them, so whether a check covers the whole recording or only the scored flight is up to the rule set. The scored flight is the longest flight of the file, and the platform replaces its take-off or landing with a scorer's times, so the steps after it cannot tell a detected flight from an overridden one. Letting start candidates from all flights of a file compete was rejected as more complex than the rare relaunch needs.
+
+The engine returns typed outputs and no analysis log. The platform builds the analysis log from them together with entries only it knows about, such as overrides and stale reasons. Measuring and checking a measurement against the rules are separate engine functions, and the rules stay in the engine, so `ENGINE_VERSION` changes whenever a result would.
