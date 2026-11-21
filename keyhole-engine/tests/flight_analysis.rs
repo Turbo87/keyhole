@@ -526,6 +526,35 @@ fn orders_the_records_by_time_and_line_number() {
 }
 
 #[test]
+fn detects_no_flights_without_a_valid_fix() {
+    let contents = "ALXVABC\nHFDTE160624\nB1000005122265N00651234EV0010000110\n";
+    let (igc_file, _) = resolve_times(contents, Date::constant(2024, 6, 16));
+    assert!(igc_file.flights().is_empty());
+}
+
+#[test]
+fn returns_the_records_between_two_times() {
+    let contents = "ALXVABC\n\
+                    HFDTE160624\n\
+                    B1000005122265N00651234EA0010000110\n\
+                    B1000015122265N00651234EA0010000110\n\
+                    E100001PEV\n\
+                    B1000025122265N00651234EA0010000110\n\
+                    B1000035122265N00651234EA0010000110\n";
+    let (igc_file, _) = resolve_times(contents, Date::constant(2024, 6, 16));
+    // Takes UTC times of day on the recorded date.
+    let lines_between = |start: &str, end: &str| {
+        let time = |time: &str| format!("2024-06-16T{time}Z").parse().unwrap();
+        let records = igc_file.records_between(time(start), time(end));
+        records.iter().map(|record| record.line).collect::<Vec<_>>()
+    };
+    assert_eq!(lines_between("10:00:01", "10:00:02"), [4, 5, 6]);
+    assert_eq!(lines_between("10:00:00.5", "10:00:01.5"), [4, 5]);
+    assert!(lines_between("10:00:04", "11:00:00").is_empty());
+    assert!(lines_between("10:00:02", "10:00:01").is_empty());
+}
+
+#[test]
 fn fails_to_date_records_outside_the_supported_range() {
     let contents = "ALXVABC\nHFDTE160624\nB2300005122265N00651234EA0010000110\n";
     let (igc_file, _) = IgcFile::parse(Bytes::from_static(contents.as_bytes())).unwrap();

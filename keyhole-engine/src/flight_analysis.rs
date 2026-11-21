@@ -372,6 +372,32 @@ impl IgcFile<Time> {
     }
 }
 
+impl IgcFile {
+    /// Which recorded altitude the flights are detected with, GNSS when every
+    /// fix records a pressure altitude of zero. Zero on only some fixes is a
+    /// real pressure altitude near sea level.
+    pub fn altitude_source(&self) -> AltitudeSource {
+        let mut fixes = self.records.iter().filter_map(Record::fix);
+        if fixes.all(|fix| fix.pressure_altitude == 0) {
+            AltitudeSource::Gnss
+        } else {
+            AltitudeSource::Pressure
+        }
+    }
+
+    /// The flights in the recording, in time order.
+    pub fn flights(&self) -> Vec<Flight> {
+        flight_detection::detect_flights(&self.records, self.altitude_source())
+    }
+
+    /// The records from `start` to `end`, including both ends.
+    pub fn records_between(&self, start: Timestamp, end: Timestamp) -> &[Record] {
+        let start = self.records.partition_point(|record| record.time < start);
+        let end = self.records.partition_point(|record| record.time <= end);
+        self.records.get(start..end).unwrap_or_default()
+    }
+}
+
 /// The limits that the file stage checks the recording against.
 #[derive(Debug, Clone, Copy)]
 pub struct FileAnalysisOptions {
@@ -415,23 +441,18 @@ pub fn analyze_file(contents: Bytes, options: FileAnalysisOptions) -> FileAnalys
                 log.push(file_entry(AnalysisLogDetails::TimestampErrors { lines }));
             }
         }
+        log.extend(exceeded_recording_intervals(&igc_file.records, options));
+        let altitude_source = igc_file.altitude_source();
+        if altitude_source == AltitudeSource::Gnss {
+            log.push(file_entry(AnalysisLogDetails::NoPressureAltitude));
+        }
+        let flights = igc_file.flights();
+        log.extend(flight_entries(&flights, &igc_file.records));
         let IgcFile {
             logger,
             date: recorded_date,
             records,
         } = igc_file;
-        log.extend(exceeded_recording_intervals(&records, options));
-        // A pressure altitude of zero on some fixes is a real value near sea
-        // level, so only zero on every fix means the logger recorded none.
-        let mut fixes = records.iter().filter_map(Record::fix);
-        let altitude_source = if fixes.all(|fix| fix.pressure_altitude == 0) {
-            log.push(file_entry(AnalysisLogDetails::NoPressureAltitude));
-            AltitudeSource::Gnss
-        } else {
-            AltitudeSource::Pressure
-        };
-        let flights = flight_detection::detect_flights(&records, altitude_source);
-        log.extend(flight_entries(&flights, &records));
         AnalysedIgcFile {
             logger,
             recorded_date,

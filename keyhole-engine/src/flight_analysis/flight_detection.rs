@@ -60,7 +60,10 @@ pub fn detect_flights(records: &[Record], altitude_source: AltitudeSource) -> Ve
         let time = record.time;
         Some(TimedFix { time, fix })
     });
-    let fixes = fixes.collect();
+    let fixes = fixes.collect::<Vec<_>>();
+    if fixes.is_empty() {
+        return Vec::new();
+    }
     let recording = Recording {
         fixes,
         altitude_source,
