@@ -91,6 +91,12 @@ fn listed(competition: &str) -> Option<Inference> {
         | "2023-open-18m-15m-and-standard-nationals-benalla-2023"
         | "2024-australian-national-multiclass-champs-lake-keepit-2024"
         | "leeton-multiclass-nationals-2026" => LeftOut("Australian national rules"),
+        "nationale-junioren-wedstrijd-2025-venlo-2025"
+        | "nationale-junioren-wedstrijd-2026-venlo-2026" => LeftOut("Dutch national rules"),
+        "new-zealand-national-multi-class-gliding-championships-2025"
+        | "nz-multiclass-national-championships-jan-2026-matamata-2026" => {
+            LeftOut("New Zealand national rules")
+        }
         "2019-south-african-nationals-18m-open-and-sports-welkom-2019"
         | "2020-south-african-nationals-welkom-2020"
         | "2021-sa-nats"
