@@ -142,12 +142,31 @@ pub enum AltitudeSource {
 /// The part of an IGC file from a take-off to the following landing.
 #[derive(Debug)]
 pub struct Flight {
-    /// The time of the first fix of the take-off roll, or `None` when the
+    /// The first fix of the take-off roll, or the first valid fix when the
     /// recording starts in the take-off run.
-    pub take_off_time: Option<Timestamp>,
-    /// The time of the fix from which the roll-out stays slow, or `None` when
+    pub start: FlightBound,
+    /// The fix from which the roll-out stays slow, or the last valid fix when
     /// the recording ends in flight.
-    pub landing_time: Option<Timestamp>,
+    pub end: FlightBound,
+}
+
+/// Where a flight starts or stops.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FlightBound {
+    /// The time of a detected take-off or landing.
+    Detected(Timestamp),
+    /// The time of the first or last valid fix, which the glider reaches in
+    /// flight.
+    Airborne(Timestamp),
+}
+
+impl FlightBound {
+    /// The time of the take-off, landing or valid fix.
+    pub fn time(self) -> Timestamp {
+        match self {
+            Self::Detected(time) | Self::Airborne(time) => time,
+        }
+    }
 }
 
 /// A logger's manufacturer and serial, as written in the `A` record.
@@ -437,6 +456,16 @@ pub fn fix_gaps(records: &[Record], minimum: SignedDuration) -> Vec<FixGap> {
     });
     let gaps = gaps.filter(|gap| gap.end.duration_since(gap.start) >= minimum);
     gaps.collect()
+}
+
+/// The flight that is scored unless a scorer sets its take-off or landing:
+/// the longest of the given flights, and the first of equally long ones in
+/// the given order.
+pub fn choose_default_flight(flights: &[Flight]) -> Option<&Flight> {
+    let duration = |flight: &Flight| flight.end.time().duration_since(flight.start.time());
+    flights
+        .iter()
+        .min_by_key(|flight| Reverse(duration(flight)))
 }
 
 /// Dates the records walking away from the anchor, backwards for
