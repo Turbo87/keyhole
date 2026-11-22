@@ -67,7 +67,7 @@ pub static DAEC_SWO_2026: RuleSetEdition = RuleSetEdition {
         start: Some(ObservationZone::Line { length: 20. }),
         turnpoint: Some(ObservationZone::daec_keyhole()),
         assigned_area: Some(ObservationZone::cylinder(20., false)),
-        finish: Some(ObservationZone::cylinder(5., false)),
+        finish: Some(ObservationZone::cylinder(5., true)),
     },
     task_design_limits: TaskDesignLimits {
         minimum_turnpoints: 2,
@@ -87,7 +87,6 @@ pub static DAEC_SWO_2026: RuleSetEdition = RuleSetEdition {
             pev_start: false,
             pev_wait_time: SignedDuration::from_mins(10),
             pev_start_window: SignedDuration::from_mins(7),
-            subtract_finish_ring_radius: true,
             delivery_period: Some(SignedDuration::from_mins(45)),
             tow_altitude: None,
             maximum_altitude: None,
@@ -122,7 +121,7 @@ pub static FAI_ANNEX_A_2025A: RuleSetEdition = RuleSetEdition {
         start: None,
         turnpoint: Some(ObservationZone::cylinder(0.5, false)),
         assigned_area: Some(ObservationZone::cylinder(20., false)),
-        finish: Some(ObservationZone::cylinder(3., false)),
+        finish: Some(ObservationZone::cylinder(3., true)),
     },
     task_design_limits: TaskDesignLimits {
         minimum_turnpoints: 2,
@@ -142,7 +141,6 @@ pub static FAI_ANNEX_A_2025A: RuleSetEdition = RuleSetEdition {
             pev_start: false,
             pev_wait_time: SignedDuration::from_mins(10),
             pev_start_window: SignedDuration::from_mins(10),
-            subtract_finish_ring_radius: true,
             delivery_period: None,
             tow_altitude: None,
             maximum_altitude: None,
@@ -244,7 +242,6 @@ pub struct RuleOverrides {
     pub pev_start: Option<bool>,
     pub pev_wait_time: Option<SignedDuration>,
     pub pev_start_window: Option<SignedDuration>,
-    pub subtract_finish_ring_radius: Option<bool>,
     pub delivery_period: Option<SignedDuration>,
     pub tow_altitude: Option<f64>,
     pub maximum_altitude: Option<Altitude>,
@@ -297,8 +294,6 @@ pub struct AnalysisParameters {
     pub pev_start: bool,
     pub pev_wait_time: SignedDuration,
     pub pev_start_window: SignedDuration,
-    /// Whether the finish ring radius is subtracted from the task distance.
-    pub subtract_finish_ring_radius: bool,
     /// The time after landing within which a flight must be delivered.
     pub delivery_period: Option<SignedDuration>,
     /// In m MSL.
@@ -357,7 +352,6 @@ impl RuleSetEdition {
                 pev_start,
                 pev_wait_time,
                 pev_start_window,
-                subtract_finish_ring_radius,
                 delivery_period,
                 tow_altitude,
                 maximum_altitude,
@@ -375,8 +369,6 @@ impl RuleSetEdition {
             analysis.pev_start = pev_start.unwrap_or(analysis.pev_start);
             analysis.pev_wait_time = pev_wait_time.unwrap_or(analysis.pev_wait_time);
             analysis.pev_start_window = pev_start_window.unwrap_or(analysis.pev_start_window);
-            analysis.subtract_finish_ring_radius =
-                subtract_finish_ring_radius.unwrap_or(analysis.subtract_finish_ring_radius);
             analysis.delivery_period = delivery_period.or(analysis.delivery_period);
             analysis.tow_altitude = tow_altitude.or(analysis.tow_altitude);
             analysis.maximum_altitude = maximum_altitude.or(analysis.maximum_altitude);
@@ -401,7 +393,6 @@ impl RuleSetEdition {
             pev_start,
             pev_wait_time,
             pev_start_window,
-            subtract_finish_ring_radius,
             delivery_period,
             tow_altitude,
             maximum_altitude,
@@ -438,10 +429,6 @@ impl RuleSetEdition {
             ("pev_start", pev_start.to_string()),
             ("pev_wait_time", duration(pev_wait_time)),
             ("pev_start_window", duration(pev_start_window)),
-            (
-                "subtract_finish_ring_radius",
-                subtract_finish_ring_radius.to_string(),
-            ),
             (
                 "delivery_period",
                 or_none(delivery_period.as_ref().map(duration)),
