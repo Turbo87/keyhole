@@ -7,7 +7,7 @@ use std::path::Path;
 
 use anyhow::Context;
 use jiff::SignedDuration;
-use keyhole_engine::rule_sets;
+use keyhole_engine::{geodesy, rule_sets};
 use serde::{Deserialize, Serialize};
 
 use crate::comparison::Field;
@@ -116,7 +116,7 @@ impl From<&RuleOverrides> for rule_sets::RuleOverrides {
     }
 }
 
-impl From<EarthModel> for rule_sets::EarthModel {
+impl From<EarthModel> for geodesy::EarthModel {
     fn from(earth_model: EarthModel) -> Self {
         match earth_model {
             EarthModel::Wgs84 => Self::Wgs84,

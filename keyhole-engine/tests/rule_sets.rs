@@ -3,9 +3,9 @@ use jiff::SignedDuration;
 use jiff::civil::{Time, time};
 use jiff::tz::TimeZone;
 use keyhole_engine::day_scoring::ScoringParameters;
+use keyhole_engine::geodesy::EarthModel;
 use keyhole_engine::rule_sets::{
-    Altitude, AnalysisParameters, DAEC_SWO_2026, EarthModel, FAI_ANNEX_A_2025A, RuleOverrides,
-    RuleSetEdition,
+    Altitude, AnalysisParameters, DAEC_SWO_2026, FAI_ANNEX_A_2025A, RuleOverrides, RuleSetEdition,
 };
 use keyhole_handicaps::HandicapList;
 

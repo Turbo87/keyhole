@@ -1,5 +1,48 @@
 //! Tasks and their observation zones.
 
+use std::iter;
+
+use jiff::SignedDuration;
+
+use crate::geodesy::{EarthModel, LngLat};
+
+/// A task with its start, turnpoints and finish, where `D` is each point's
+/// direction: an `Orientation` as entered, or a bearing in degrees once
+/// resolved.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Task<D> {
+    pub kind: TaskKind,
+    pub start: TaskPoint<D>,
+    pub turnpoints: Vec<TaskPoint<D>>,
+    pub finish: TaskPoint<D>,
+    pub earth_model: EarthModel,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TaskKind {
+    Racing,
+    AssignedArea { minimum_task_time: SignedDuration },
+}
+
+/// The start, a turnpoint or the finish of a task, with the reference point
+/// copied from the turnpoint file.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TaskPoint<D> {
+    pub reference_point: LngLat,
+    pub direction: D,
+    pub zone: ObservationZone,
+}
+
+/// Which way a task point's observation zone points.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Orientation {
+    Symmetric,
+    Previous,
+    Next,
+    /// A bearing in degrees.
+    Fixed(f64),
+}
+
 /// The area or line around a reference point that a flight has to reach or
 /// cross, with every distance in km and every angle in degrees.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -41,5 +84,38 @@ impl ObservationZone {
             a2: 180.,
             reduce: false,
         }
+    }
+
+    /// How much the zone shortens each task leg it touches, in km.
+    fn reduction(&self) -> f64 {
+        match *self {
+            Self::TwoArc { r1, reduce, .. } if reduce => r1,
+            _ => 0.,
+        }
+    }
+}
+
+impl<D> Task<D> {
+    /// The task distance in km: the sum of the geodesic legs between the
+    /// reference points, each shortened by the reductions of its zones and
+    /// counted as zero when they exceed it.
+    pub fn distance(&self) -> f64 {
+        if matches!(self.kind, TaskKind::AssignedArea { .. }) {
+            todo!("the distance of an assigned area task");
+        }
+
+        let earth_model = self.earth_model;
+        let legs = self.task_points().zip(self.task_points().skip(1));
+        legs.map(|(from, to)| {
+            let length = earth_model.distance(from.reference_point, to.reference_point);
+            (length - from.zone.reduction() - to.zone.reduction()).max(0.)
+        })
+        .sum()
+    }
+
+    fn task_points(&self) -> impl Iterator<Item = &TaskPoint<D>> {
+        iter::once(&self.start)
+            .chain(&self.turnpoints)
+            .chain(iter::once(&self.finish))
     }
 }

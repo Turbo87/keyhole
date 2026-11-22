@@ -11,6 +11,7 @@ use jiff::tz::TimeZone;
 use sha2::{Digest, Sha256};
 
 use crate::day_scoring::ScoringParameters;
+use crate::geodesy::EarthModel;
 use crate::task::ObservationZone;
 
 /// One dated version of a rule set, shipped as immutable data.
@@ -217,15 +218,6 @@ pub struct PevRules {
 pub enum PevLimitScope {
     Day,
     Launch,
-}
-
-/// The shape of the Earth that distances and observation zones are calculated
-/// on.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EarthModel {
-    Wgs84,
-    /// A sphere with a radius of 6371 km.
-    FaiSphere,
 }
 
 /// One layer of changes to an edition's parameters, such as a class's or a
