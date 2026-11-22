@@ -25,7 +25,7 @@ pub enum TaskKind {
 }
 
 /// The start, a turnpoint or the finish of a task, with the reference point
-/// copied from the turnpoint file.
+/// copied from the waypoint file.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TaskPoint<D> {
     pub reference_point: LngLat,
