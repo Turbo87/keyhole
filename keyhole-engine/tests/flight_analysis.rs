@@ -151,6 +151,29 @@ fn render_default_flight(analysis: &Analysis) -> String {
     }
 }
 
+/// Renders the take-off reference altitude for a take-off at the given time
+/// with the window it is the median of, or `reference none`.
+fn render_reference_altitude(analysis: &Analysis, take_off: Timestamp) -> String {
+    let date = analysis.igc_file.date;
+    match analysis.igc_file.reference_altitude(take_off) {
+        Some(reference) => format!(
+            "reference {} m from {} to {}",
+            reference.altitude,
+            time(date, reference.start),
+            time(date, reference.end),
+        ),
+        None => "reference none".into(),
+    }
+}
+
+/// The take-off time of the default flight.
+fn default_take_off(analysis: &Analysis) -> Timestamp {
+    choose_default_flight(&analysis.flights)
+        .unwrap()
+        .start
+        .time()
+}
+
 /// A flight at 72 km/h that climbs for `seconds` and descends for as long,
 /// followed by 40 s on the ground.
 fn short_flight(seconds: i32) -> impl Iterator<Item = (f64, i32)> {
@@ -1061,4 +1084,49 @@ fn chooses_no_flight_in_a_file_without_flights() {
     let analysis = analyze_profile(&profile(&standing.collect::<Vec<_>>()));
     assert_snapshot!(render_flights(&analysis), @"");
     assert_snapshot!(render_default_flight(&analysis), @"scored none");
+}
+
+#[test]
+fn takes_the_reference_altitude_of_a_winch_launch_from_the_glider_standing_before_it() {
+    let analysis = analyze(include_bytes!("fixtures/two-winch-launches.igc"));
+    let take_off = default_take_off(&analysis);
+    assert_snapshot!(render_reference_altitude(&analysis, take_off), @"reference 41 m from 11:11:19 to 11:11:49");
+}
+
+/// The recording starts too shortly before the take-off run for a still
+/// period.
+#[test]
+fn takes_the_reference_altitude_before_the_take_off_roll_without_a_still_period() {
+    let analysis = analyze(include_bytes!("fixtures/slow-wave-hover.igc"));
+    let take_off = default_take_off(&analysis);
+    assert_snapshot!(render_reference_altitude(&analysis, take_off), @"reference 565 m from 12:05:39 to 12:05:55");
+}
+
+#[test]
+fn takes_no_reference_altitude_without_a_still_period_or_a_slow_fix() {
+    let rolling = (0..10).map(|_| (20.0, 100));
+    let fixes = rolling.chain(short_flight(30));
+    let analysis = analyze_profile(&profile(&fixes.collect::<Vec<_>>()));
+    assert_snapshot!(render_flights(&analysis), @"flight 10:00:01 to 10:01:09");
+    let take_off = default_take_off(&analysis);
+    assert_snapshot!(render_reference_altitude(&analysis, take_off), @"reference none");
+}
+
+/// The glider stands at 100 m, is towed by car to a launch point at 110 m and
+/// stands there before its take-off. The scorer sets the take-off during the
+/// car tow and while the glider waits at the launch point.
+#[test]
+fn takes_the_reference_altitude_of_a_scorers_take_off_from_the_still_period_before_it() {
+    let standing = (0..60).map(|_| (0.0, 100));
+    let towed = (1..=20).map(|second| (30.0, 100 + second / 2));
+    let waiting = (0..60).map(|_| (0.0, 110));
+    let fixes = standing.chain(towed).chain(waiting).chain(short_flight(30));
+    let analysis = analyze_profile(&profile(&fixes.collect::<Vec<_>>()));
+    assert_snapshot!(render_flights(&analysis), @"flight 10:02:20 to 10:03:19");
+    let take_off = default_take_off(&analysis);
+    assert_snapshot!(render_reference_altitude(&analysis, take_off), @"reference 110 m from 10:01:19 to 10:01:49");
+    let during_tow = "2024-06-16T10:01:10Z".parse().unwrap();
+    assert_snapshot!(render_reference_altitude(&analysis, during_tow), @"reference 100 m from 10:00:00 to 10:00:29");
+    let while_waiting = "2024-06-16T10:01:40.5Z".parse().unwrap();
+    assert_snapshot!(render_reference_altitude(&analysis, while_waiting), @"reference 110 m from 10:01:19 to 10:01:40");
 }

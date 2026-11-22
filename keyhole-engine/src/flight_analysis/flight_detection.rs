@@ -14,12 +14,16 @@
 //! starts to move faster than the still speed on its way into the take-off
 //! run. The landing is the last fix that the glider reaches at still speed or
 //! faster before the ground period after the flight.
+//!
+//! The take-off reference altitude comes from the last seconds of the still
+//! period before the take-off. Without one, it comes from the seconds up to
+//! the last fix below the still speed, where the take-off roll starts.
 
 use std::ops::RangeInclusive;
 
 use jiff::{SignedDuration, Timestamp};
 
-use super::{AltitudeSource, Fix, Flight, FlightBound, Record};
+use super::{AltitudeSource, Fix, Flight, FlightBound, Record, ReferenceAltitude};
 
 /// How long after a fix the glider has to stand still for the fix to count
 /// as still.
@@ -50,25 +54,24 @@ const REST_RADIUS: f64 = 5.0;
 /// The shortest rest. A glider hovering in wave drifts out of the rest radius
 /// sooner, while a glider on the ground rests for longer.
 const REST_TIME: SignedDuration = SignedDuration::from_secs(20);
+/// How far the window of the take-off reference altitude reaches back from
+/// its last fix.
+const REFERENCE_WINDOW: SignedDuration = SignedDuration::from_secs(30);
 
 /// Finds the flights in a recording. A flight whose take-off run is already
 /// under way at the first fix has no take-off, and one that reaches the last
 /// fix has no landing.
 pub fn detect_flights(records: &[Record], altitude_source: AltitudeSource) -> Vec<Flight> {
-    let fixes = records.iter().filter_map(|record| {
-        let fix = record.fix().filter(|fix| fix.valid)?;
-        let time = record.time;
-        Some(TimedFix { time, fix })
-    });
-    let fixes = fixes.collect::<Vec<_>>();
-    if fixes.is_empty() {
-        return Vec::new();
-    }
-    let recording = Recording {
-        fixes,
-        altitude_source,
-    };
-    recording.flights()
+    Recording::new(records, altitude_source).map_or_else(Vec::new, |recording| recording.flights())
+}
+
+/// Finds the take-off reference altitude of a take-off at the given time.
+pub fn reference_altitude(
+    records: &[Record],
+    altitude_source: AltitudeSource,
+    take_off: Timestamp,
+) -> Option<ReferenceAltitude> {
+    Recording::new(records, altitude_source)?.reference_altitude(take_off)
 }
 
 struct Recording<'a> {
@@ -92,7 +95,21 @@ struct Segment {
     take_off: Option<usize>,
 }
 
-impl Recording<'_> {
+impl<'a> Recording<'a> {
+    /// The valid fixes of the records, or `None` without any.
+    fn new(records: &'a [Record], altitude_source: AltitudeSource) -> Option<Self> {
+        let fixes = records.iter().filter_map(|record| {
+            let fix = record.fix().filter(|fix| fix.valid)?;
+            let time = record.time;
+            Some(TimedFix { time, fix })
+        });
+        let fixes = fixes.collect::<Vec<_>>();
+        (!fixes.is_empty()).then_some(Self {
+            fixes,
+            altitude_source,
+        })
+    }
+
     fn flights(&self) -> Vec<Flight> {
         let segments = self.segments().into_iter();
         let flights = segments.filter(|segment| segment.take_off.is_some());
@@ -172,6 +189,43 @@ impl Recording<'_> {
             let run = self.duration(start - 1..=index);
             (run >= TAKE_OFF_RUN).then_some(start)
         })
+    }
+
+    /// A still period that the take-off falls into ends at the take-off. The
+    /// take-off fix itself reads low on the roll and high after a winch
+    /// launch, a recording gap or a pressure spike.
+    fn reference_altitude(&self, take_off: Timestamp) -> Option<ReferenceAltitude> {
+        let last_before = self
+            .fixes
+            .partition_point(|fix| fix.time <= take_off)
+            .checked_sub(1)?;
+        let still_periods = self.still_periods();
+        let still_period = still_periods
+            .into_iter()
+            .rfind(|period| *period.start() <= last_before);
+        let window = match still_period {
+            Some(period) => {
+                self.reference_window(*period.start()..=(*period.end()).min(last_before))
+            }
+            None => {
+                let mut fixes = (1..=last_before).rev();
+                let slow = fixes.find(|&index| self.speed(index) < STILL_SPEED)?;
+                self.reference_window(0..=slow)
+            }
+        };
+        Some(ReferenceAltitude {
+            altitude: self.median_altitude(window.clone()),
+            start: self.fixes[*window.start()].time,
+            end: self.fixes[*window.end()].time,
+        })
+    }
+
+    /// The fixes of the reference window at the end of the given fixes.
+    fn reference_window(&self, fixes: RangeInclusive<usize>) -> RangeInclusive<usize> {
+        let end = *fixes.end();
+        let window_start = self.fixes[end].time - REFERENCE_WINDOW;
+        let start = self.fixes.partition_point(|fix| fix.time < window_start);
+        start.max(*fixes.start())..=end
     }
 
     /// The still periods in which the glider stands on the ground. The first
