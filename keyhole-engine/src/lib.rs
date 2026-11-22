@@ -6,6 +6,7 @@ pub mod flight_analysis;
 pub mod overall_results;
 mod ranking;
 pub mod rule_sets;
+pub mod task;
 
 /// The version of the engine's algorithms, published with every result.
 ///

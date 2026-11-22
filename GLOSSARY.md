@@ -228,8 +228,16 @@ _Avoid_: Gate
 An observation zone shaped as a circle of a given radius around its reference point, used for starts, turnpoints, assigned areas and finishes.
 _Avoid_: Ring, circle, barrel
 
+**Two-arc zone**:
+SeeYou's observation zone of radii R1 and R2 and half angles A1 and A2: the R1 sector of half angle A1, minus the R2 disc, plus the R2 sector of half angle A2. An A1 of 180° makes a cylinder, and an A2 of 180° joins a cylinder of radius R2.
+_Avoid_: SeeYou sector, generic sector
+
 **Keyhole**:
-The SWO observation zone for racing task turnpoints between start and finish: a 10 km 90° slice of a circle facing away from the course, joined with a 0.5 km cylinder.
+A sector joined with a cylinder of a smaller radius around the same reference point, a two-arc zone with an A2 of 180°.
+_Avoid_: Sector with cylinder
+
+**DAeC keyhole**:
+The SWO observation zone for racing task turnpoints between start and finish: a keyhole of a 10 km sector with a half angle of 45° facing away from the course, joined with a 0.5 km cylinder.
 _Avoid_: DAeC sector
 
 **Assigned area**:

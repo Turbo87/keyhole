@@ -11,6 +11,7 @@ use jiff::tz::TimeZone;
 use sha2::{Digest, Sha256};
 
 use crate::day_scoring::ScoringParameters;
+use crate::task::ObservationZone;
 
 /// One dated version of a rule set, shipped as immutable data.
 ///
@@ -64,13 +65,9 @@ pub static DAEC_SWO_2026: RuleSetEdition = RuleSetEdition {
     },
     default_zones: DefaultZones {
         start: Some(ObservationZone::Line { length: 20. }),
-        turnpoint: Some(ObservationZone::Keyhole {
-            sector_radius: 10.,
-            sector_angle: 90.,
-            cylinder_radius: 0.5,
-        }),
-        assigned_area: Some(ObservationZone::Cylinder { radius: 20. }),
-        finish: Some(ObservationZone::Cylinder { radius: 5. }),
+        turnpoint: Some(ObservationZone::daec_keyhole()),
+        assigned_area: Some(ObservationZone::cylinder(20., false)),
+        finish: Some(ObservationZone::cylinder(5., false)),
     },
     task_design_limits: TaskDesignLimits {
         minimum_turnpoints: 2,
@@ -123,9 +120,9 @@ pub static FAI_ANNEX_A_2025A: RuleSetEdition = RuleSetEdition {
     },
     default_zones: DefaultZones {
         start: None,
-        turnpoint: Some(ObservationZone::Cylinder { radius: 0.5 }),
-        assigned_area: Some(ObservationZone::Cylinder { radius: 20. }),
-        finish: Some(ObservationZone::Cylinder { radius: 3. }),
+        turnpoint: Some(ObservationZone::cylinder(0.5, false)),
+        assigned_area: Some(ObservationZone::cylinder(20., false)),
+        finish: Some(ObservationZone::cylinder(3., false)),
     },
     task_design_limits: TaskDesignLimits {
         minimum_turnpoints: 2,
@@ -280,25 +277,6 @@ pub struct TaskDesignLimits {
     pub minimum_turnpoints: u32,
     /// The shortest distance between consecutive assigned areas, in km.
     pub minimum_assigned_area_separation: f64,
-}
-
-/// The area or line around a reference point that a flight has to reach or
-/// cross, with every distance in km.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ObservationZone {
-    Line {
-        length: f64,
-    },
-    Cylinder {
-        radius: f64,
-    },
-    /// A sector facing away from the course, with its full opening angle in
-    /// degrees, joined with a cylinder.
-    Keyhole {
-        sector_radius: f64,
-        sector_angle: f64,
-        cylinder_radius: f64,
-    },
 }
 
 /// The parameters that flight analysis takes, where an empty limit isn't
