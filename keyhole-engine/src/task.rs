@@ -114,7 +114,8 @@ impl<D> Task<D> {
         .sum()
     }
 
-    fn task_points(&self) -> impl Iterator<Item = &TaskPoint<D>> {
+    /// The start, turnpoints and finish in order.
+    pub fn task_points(&self) -> impl Iterator<Item = &TaskPoint<D>> {
         iter::once(&self.start)
             .chain(&self.turnpoints)
             .chain(iter::once(&self.finish))

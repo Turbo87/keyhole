@@ -28,3 +28,7 @@ maximum_points = 633
 # would set Do, Vo and the maximum points.
 [decisions.IV]
 handicap = 1.059
+
+[[deviations]]
+field = "task_distance"
+explanation = "SeeYou's FAI Sphere distances deviate from a 6371 km great circle, here by 10 m."

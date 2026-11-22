@@ -21,3 +21,7 @@ vo = 94.78
 f = 1.000
 fcr = 1.000
 maximum_points = 1000
+
+[[deviations]]
+field = "task_distance"
+explanation = "SeeYou's FAI Sphere distances deviate from a 6371 km great circle, here by 15 m."

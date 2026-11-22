@@ -12,12 +12,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::comparison::Field;
 use crate::decisions::ResultDecision;
-use crate::published::{PublishedRow, PublishedTask, parse_results};
+use crate::published::{PublishedRacingTask, PublishedRow, PublishedTask, parse_results};
 
 /// One published class day with what its download lacks.
 #[derive(Debug)]
 pub struct Fixture {
     pub minimum_task_time: Option<SignedDuration>,
+    /// The task of a `polygon` class day, whose distance and bearings are
+    /// compared.
+    pub racing_task: Option<PublishedRacingTask>,
     pub rows: Vec<PublishedRow>,
     pub file: FixtureFile,
 }
@@ -49,12 +52,16 @@ impl Fixture {
         results_csv: &str,
         file: FixtureFile,
     ) -> anyhow::Result<Self> {
-        let minimum_task_time = serde_json::from_str::<PublishedTask>(task_json)
-            .context("parsing task.json")?
-            .minimum_task_time();
+        let task: PublishedTask = serde_json::from_str(task_json).context("parsing task.json")?;
+        let minimum_task_time = task.minimum_task_time();
+        let racing_task = match task {
+            PublishedTask::Racing(racing_task) => Some(racing_task),
+            _ => None,
+        };
         let rows = parse_results(results_csv).context("parsing results.csv")?;
         Ok(Self {
             minimum_task_time,
+            racing_task,
             rows,
             file,
         })
