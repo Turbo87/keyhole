@@ -1,3 +1,4 @@
+use approx::assert_abs_diff_eq;
 use keyhole_engine::geodesy::{EarthModel, FAI_SPHERE_RADIUS, LngLat};
 use keyhole_engine::task::{ObservationZone, Orientation, Task, TaskError, TaskKind, TaskPoint};
 
@@ -6,10 +7,7 @@ use keyhole_engine::task::{ObservationZone, Orientation, Task, TaskError, TaskKi
 const EQUATOR_DEGREE: f64 = FAI_SPHERE_RADIUS * std::f64::consts::PI / 180.;
 
 fn assert_km(actual: f64, expected: f64) {
-    assert!(
-        (actual - expected).abs() < 1e-5,
-        "expected {expected} km, got {actual} km"
-    );
+    assert_abs_diff_eq!(actual, expected, epsilon = 1e-5);
 }
 
 fn assert_bearings(task: &Task<Orientation>, expected: &[f64]) {
@@ -17,11 +15,7 @@ fn assert_bearings(task: &Task<Orientation>, expected: &[f64]) {
     let mut bearings = vec![resolved.start.direction];
     bearings.extend(resolved.turnpoints.iter().map(|point| point.direction));
     bearings.push(resolved.finish.direction);
-    let matches = |(actual, expected): (&f64, &f64)| (actual - expected).abs() < 1e-6;
-    assert!(
-        bearings.len() == expected.len() && bearings.iter().zip(expected).all(matches),
-        "expected bearings {expected:?}, got {bearings:?}"
-    );
+    assert_abs_diff_eq!(bearings.as_slice(), expected, epsilon = 1e-6);
 }
 
 fn point(longitude: f64, latitude: f64, zone: ObservationZone) -> TaskPoint<Orientation> {

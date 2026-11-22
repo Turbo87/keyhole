@@ -12,6 +12,7 @@ jiff = { version = "1.0.1", default-features = false, features = ["std", "tzdb-b
 sha2 = "0.11.1"
 
 [dev-dependencies]
+approx = "0.5.1"
 insta = "1.49.0"
-proptest = { version = "1.12.0", default-features = false, features = ["std"] }
 keyhole-handicaps = { path = "../keyhole-handicaps" }
+proptest = { version = "1.12.0", default-features = false, features = ["std"] }
