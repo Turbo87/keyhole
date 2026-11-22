@@ -19,7 +19,7 @@ use std::ops::RangeInclusive;
 
 use jiff::{SignedDuration, Timestamp};
 
-use super::{AltitudeSource, Fix, Flight, Record};
+use super::{AltitudeSource, Fix, Flight, FlightBound, Record};
 
 /// How long after a fix the glider has to stand still for the fix to count
 /// as still.
@@ -117,9 +117,13 @@ impl Recording<'_> {
             }
             landing
         });
+        let bound = |detected: Option<usize>, airborne: usize| match detected {
+            Some(index) => FlightBound::Detected(self.fixes[index].time),
+            None => FlightBound::Airborne(self.fixes[airborne].time),
+        };
         Flight {
-            take_off_time: take_off.map(|index| self.fixes[index].time),
-            landing_time: landing.map(|index| self.fixes[index].time),
+            start: bound(take_off, 0),
+            end: bound(landing, end),
         }
     }
 

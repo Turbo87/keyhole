@@ -6,8 +6,8 @@ use jiff::civil::{Date, Time};
 use jiff::tz::Offset;
 use jiff::{SignedDuration, Timestamp};
 use keyhole_engine::flight_analysis::{
-    AltitudeSource, Flight, IgcFile, ParseError, RecordKind, TimeWarning, UnreadableLines,
-    fix_gaps, recording_interval,
+    AltitudeSource, Flight, FlightBound, IgcFile, ParseError, RecordKind, TimeWarning,
+    UnreadableLines, fix_gaps, recording_interval,
 };
 
 /// The outputs of the steps for one IGC file, dated on its recorded date.
@@ -129,10 +129,13 @@ fn render_flights(analysis: &Analysis) -> String {
 
 fn write_flights(out: &mut String, analysis: &Analysis) {
     let date = analysis.igc_file.date;
-    let time = |time: Option<Timestamp>| time.map_or("-".into(), |t| self::time(date, t));
+    let bound = |bound| match bound {
+        FlightBound::Detected(time) => self::time(date, time),
+        FlightBound::Airborne(time) => format!("{} (airborne)", self::time(date, time)),
+    };
     for flight in &analysis.flights {
-        let (take_off, landing) = (time(flight.take_off_time), time(flight.landing_time));
-        writeln!(out, "flight {take_off} to {landing}").unwrap();
+        let (start, end) = (bound(flight.start), bound(flight.end));
+        writeln!(out, "flight {start} to {end}").unwrap();
     }
 }
 
@@ -795,7 +798,7 @@ fn detects_every_take_off_and_landing_of_several_flights() {
 fn detects_a_take_off_shortly_after_a_landing() {
     let analysis = analyze(include_bytes!("fixtures/take-off-after-short-stop.igc"));
     assert_snapshot!(render_flights(&analysis), @"
-    flight - to 13:44:51
+    flight 13:41:16 (airborne) to 13:44:51
     flight 13:46:09 to 14:55:36
     ");
 }
@@ -803,13 +806,13 @@ fn detects_a_take_off_shortly_after_a_landing() {
 #[test]
 fn detects_no_take_off_in_a_file_that_starts_in_the_take_off_run() {
     let analysis = analyze(include_bytes!("fixtures/starts-airborne.igc"));
-    assert_snapshot!(render_flights(&analysis), @"flight - to 15:22:57");
+    assert_snapshot!(render_flights(&analysis), @"flight 11:58:59 (airborne) to 15:22:57");
 }
 
 #[test]
 fn detects_no_landing_in_a_file_that_ends_in_flight() {
     let analysis = analyze(include_bytes!("fixtures/ends-airborne.igc"));
-    assert_snapshot!(render_flights(&analysis), @"flight 12:07:03 to -");
+    assert_snapshot!(render_flights(&analysis), @"flight 12:07:03 to 13:46:09 (airborne)");
 }
 
 #[test]
@@ -901,7 +904,7 @@ fn detects_no_take_off_for_a_take_off_run_from_the_first_fix() {
     let stopped = (0..40).map(|_| (0.0, 100));
     let fixes = climbing.chain(descending).chain(stopped);
     let analysis = analyze_profile(&profile(&fixes.collect::<Vec<_>>()));
-    assert_snapshot!(render_flights(&analysis), @"flight - to 10:00:59");
+    assert_snapshot!(render_flights(&analysis), @"flight 10:00:00 (airborne) to 10:00:59");
 }
 
 #[test]
@@ -983,7 +986,7 @@ fn ignores_a_hover_in_wave_above_ground_lower_than_the_first_fix() {
         .chain(stopped);
     let analysis = analyze_profile(&profile(&fixes.collect::<Vec<_>>()));
     assert_snapshot!(render_flights(&analysis), @"
-    flight - to 10:00:29
+    flight 10:00:00 (airborne) to 10:00:29
     flight 10:01:30 to 10:04:09
     ");
 }
