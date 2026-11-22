@@ -32,6 +32,15 @@ impl EarthModel {
         metres / 1000.
     }
 
+    /// The azimuth at `from` of the geodesic to `to`, in degrees clockwise
+    /// from north in [0°, 360°).
+    pub fn azimuth(self, from: LngLat, to: LngLat) -> f64 {
+        let geodesic = self.geodesic();
+        let (azimuth, _, _): (f64, f64, f64) =
+            geodesic.inverse(from.latitude, from.longitude, to.latitude, to.longitude);
+        normalize_bearing(azimuth)
+    }
+
     fn geodesic(self) -> &'static Geodesic {
         static WGS84: LazyLock<Geodesic> = LazyLock::new(Geodesic::wgs84);
         static FAI_SPHERE: LazyLock<Geodesic> =
@@ -41,4 +50,11 @@ impl EarthModel {
             Self::FaiSphere => &FAI_SPHERE,
         }
     }
+}
+
+/// Wraps an angle in degrees into [0°, 360°).
+pub fn normalize_bearing(degrees: f64) -> f64 {
+    let bearing = degrees.rem_euclid(360.);
+    // `rem_euclid()` rounds a tiny negative angle up to 360°.
+    if bearing == 360. { 0. } else { bearing }
 }

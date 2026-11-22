@@ -4,7 +4,7 @@ use std::iter;
 
 use jiff::SignedDuration;
 
-use crate::geodesy::{EarthModel, LngLat};
+use crate::geodesy::{EarthModel, LngLat, normalize_bearing};
 
 /// A task with its start, turnpoints and finish, where `D` is each point's
 /// direction: an `Orientation` as entered, or a bearing in degrees once
@@ -33,7 +33,8 @@ pub struct TaskPoint<D> {
     pub zone: ObservationZone,
 }
 
-/// Which way a task point's observation zone points.
+/// Which way a task point's observation zone points, which resolving a task
+/// turns into a bearing at the reference point that points into the task.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Orientation {
     Symmetric,
@@ -118,4 +119,78 @@ impl<D> Task<D> {
             .chain(&self.turnpoints)
             .chain(iter::once(&self.finish))
     }
+}
+
+/// Why a task cannot be resolved.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TaskError {
+    /// The orientation of the task point at this index, counted from the
+    /// start at 0, is symmetric or previous at the start, symmetric or next at
+    /// the finish or a fixed bearing outside [0°, 360°).
+    Orientation { point_index: usize },
+}
+
+impl Task<Orientation> {
+    /// Replaces every orientation with a bearing in degrees, so that the line
+    /// and zone geometry never needs the neighbouring task points.
+    ///
+    /// Every course is the geodesic azimuth at the reference point. A start
+    /// points toward the next point and a finish toward the previous point. A
+    /// symmetric turnpoint points along the inner bisector of its courses to
+    /// the previous and next point, or the incoming course plus 90° when they
+    /// are exactly opposite.
+    pub fn resolve(&self) -> Result<Task<f64>, TaskError> {
+        let earth_model = self.earth_model;
+        let previous = iter::once(None).chain(self.task_points().map(Some));
+        let next = self.task_points().skip(1).map(Some).chain(iter::once(None));
+        let neighbours = self.task_points().zip(previous.zip(next)).enumerate();
+        let resolved = neighbours.map(|(point_index, (point, (previous, next)))| {
+            let from = point.reference_point;
+            let course = |to: &TaskPoint<_>| earth_model.azimuth(from, to.reference_point);
+            let bearing = bearing(point.direction, previous.map(course), next.map(course));
+            Ok(TaskPoint {
+                reference_point: point.reference_point,
+                direction: bearing.ok_or(TaskError::Orientation { point_index })?,
+                zone: point.zone,
+            })
+        });
+
+        let mut resolved = resolved.collect::<Result<Vec<_>, _>>()?.into_iter();
+        let start = resolved.next().expect("a task has a start");
+        let finish = resolved.next_back().expect("a task has a finish");
+        Ok(Task {
+            kind: self.kind.clone(),
+            start,
+            turnpoints: resolved.collect(),
+            finish,
+            earth_model,
+        })
+    }
+}
+
+/// The bearing of an orientation given the courses to the previous and next
+/// point, which the start and finish lack on one side.
+fn bearing(
+    orientation: Orientation,
+    to_previous: Option<f64>,
+    to_next: Option<f64>,
+) -> Option<f64> {
+    use Orientation::*;
+    match (orientation, to_previous, to_next) {
+        (Fixed(bearing), _, _) => (0.0..360.).contains(&bearing).then_some(bearing),
+        (Previous, Some(course), _) | (Next, _, Some(course)) => Some(course),
+        (Symmetric, Some(to_previous), Some(to_next)) => Some(bisector(to_previous, to_next)),
+        _ => None,
+    }
+}
+
+/// The bearing of a symmetric turnpoint, as `Task::resolve()` describes it.
+fn bisector(to_previous: f64, to_next: f64) -> f64 {
+    let turn = normalize_bearing(to_next - to_previous);
+    let offset = match turn {
+        180. => 270.,
+        ..180. => turn / 2.,
+        _ => (turn - 360.) / 2.,
+    };
+    normalize_bearing(to_previous + offset)
 }
