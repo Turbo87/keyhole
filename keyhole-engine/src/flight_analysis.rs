@@ -29,13 +29,13 @@ pub struct IgcFile<T = Timestamp> {
 }
 
 /// Why a file is not an IGC file that the analysis can read.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum ParseError {
-    /// No line of the file is an IGC record.
+    #[error("no line of the file is an IGC record")]
     NotIgc,
-    /// The `A` record is missing or unreadable.
+    #[error("the A record is missing or unreadable")]
     MissingLoggerId,
-    /// The `HFDTE` header is missing or does not hold a valid date.
+    #[error("the HFDTE header is missing or does not hold a valid date")]
     MissingRecordedDate,
 }
 

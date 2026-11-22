@@ -4,7 +4,7 @@
 use std::collections::HashSet;
 use std::fmt;
 
-use anyhow::{anyhow, bail};
+use anyhow::{Context, bail};
 use jiff::tz::TimeZone;
 use keyhole_engine::day_scoring::{ClassDay, DayResult, DayValidity, Rank, Row, score_class_day};
 use keyhole_engine::geodesy::{EarthModel, normalize_bearing};
@@ -304,8 +304,7 @@ fn task_mismatches(
     earth_model: EarthModel,
 ) -> anyhow::Result<Vec<Mismatch>> {
     let task = published.to_task(earth_model)?;
-    let resolved = task.resolve();
-    let resolved = resolved.map_err(|error| anyhow!("resolving the task: {error:?}"))?;
+    let resolved = task.resolve().context("resolving the task")?;
     let mismatch = |field, published, keyhole| Mismatch {
         competition_id: None,
         field,

@@ -10,6 +10,7 @@ geographiclib-rs = { version = "0.2.7", default-features = false }
 igc = "0.3.0"
 jiff = { version = "1.0.1", default-features = false, features = ["std", "tzdb-bundle-always"] }
 sha2 = "0.11.1"
+thiserror = "2.0.21"
 
 [dev-dependencies]
 approx = "0.5.1"
