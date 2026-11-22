@@ -169,6 +169,19 @@ impl FlightBound {
     }
 }
 
+/// The altitude before a take-off that the flight's altitudes are measured
+/// from, with the window of fixes that gives it.
+#[derive(Debug)]
+pub struct ReferenceAltitude {
+    /// In m, the median altitude of the window's valid fixes, in the file's
+    /// altitude source.
+    pub altitude: i32,
+    /// The time of the first fix of the window.
+    pub start: Timestamp,
+    /// The time of the last fix of the window.
+    pub end: Timestamp,
+}
+
 /// A logger's manufacturer and serial, as written in the `A` record.
 #[derive(Debug)]
 pub struct LoggerId {
@@ -410,6 +423,13 @@ impl IgcFile {
     /// The flights in the recording, in time order.
     pub fn flights(&self) -> Vec<Flight> {
         flight_detection::detect_flights(&self.records, self.altitude_source())
+    }
+
+    /// The take-off reference altitude of a detected take-off or one that a
+    /// scorer sets, or `None` without a still period or a fix below the still
+    /// speed before it.
+    pub fn reference_altitude(&self, take_off: Timestamp) -> Option<ReferenceAltitude> {
+        flight_detection::reference_altitude(&self.records, self.altitude_source(), take_off)
     }
 
     /// The records from `start` to `end`, including both ends.
