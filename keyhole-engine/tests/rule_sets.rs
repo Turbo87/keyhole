@@ -3,9 +3,9 @@ use jiff::SignedDuration;
 use jiff::civil::{Time, time};
 use jiff::tz::TimeZone;
 use keyhole_engine::day_scoring::ScoringParameters;
+use keyhole_engine::geodesy::EarthModel;
 use keyhole_engine::rule_sets::{
-    Altitude, AnalysisParameters, DAEC_SWO_2026, EarthModel, FAI_ANNEX_A_2025A, RuleOverrides,
-    RuleSetEdition,
+    Altitude, AnalysisParameters, DAEC_SWO_2026, FAI_ANNEX_A_2025A, RuleOverrides, RuleSetEdition,
 };
 use keyhole_handicaps::HandicapList;
 
@@ -105,7 +105,6 @@ fn start_procedure_overrides_apply() {
 #[test]
 fn finish_altitude_and_scoring_end_overrides_apply() {
     let overrides = RuleOverrides {
-        subtract_finish_ring_radius: Some(false),
         delivery_period: Some(minutes(30)),
         tow_altitude: Some(600.),
         maximum_altitude: Some(Altitude::FlightLevel(95)),
@@ -116,7 +115,6 @@ fn finish_altitude_and_scoring_end_overrides_apply() {
     let analysis = DAEC_SWO_2026.resolve(berlin(), &[overrides]).analysis;
 
     let expected = AnalysisParameters {
-        subtract_finish_ring_radius: false,
         delivery_period: Some(minutes(30)),
         tow_altitude: Some(600.),
         maximum_altitude: Some(Altitude::FlightLevel(95)),
@@ -193,7 +191,6 @@ fn canonical_rules_list_the_edition_and_every_parameter() {
         pev_start: Some(true),
         pev_wait_time: Some(minutes(5)),
         pev_start_window: Some(minutes(8)),
-        subtract_finish_ring_radius: Some(false),
         delivery_period: Some(minutes(30)),
         tow_altitude: Some(600.),
         maximum_altitude: Some(Altitude::Msl(2999.9)),
@@ -212,7 +209,6 @@ fn canonical_rules_list_the_edition_and_every_parameter() {
     pev_start=true
     pev_wait_time=PT5M
     pev_start_window=PT8M
-    subtract_finish_ring_radius=false
     delivery_period=PT30M
     tow_altitude=600
     maximum_altitude=2999.9 m
@@ -229,8 +225,8 @@ fn the_rules_hash_of_both_editions_defaults_does_not_change() {
         edition.rules_hash(&rules).to_string()
     };
 
-    assert_snapshot!(hash(&DAEC_SWO_2026), @"31f4fd18c528ae8e5cd4ac7ce8d945f6322016e27f3c7ff5f17025f2afa5ab22");
-    assert_snapshot!(hash(&FAI_ANNEX_A_2025A), @"d70cf11bca531791eb664e31328a3d063b084b2924e09c7c6f4a3d7216b809d9");
+    assert_snapshot!(hash(&DAEC_SWO_2026), @"2696a16cdb7b9c2695d309958cb93d08c46cbd1dad69eb7065aee2980c4e55a3");
+    assert_snapshot!(hash(&FAI_ANNEX_A_2025A), @"caa0bfa72d86aa15808de296b3519a906b8efe5fffc0e89beddd4f61e49b6e78");
 }
 
 #[test]

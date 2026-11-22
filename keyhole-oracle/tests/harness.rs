@@ -5,6 +5,19 @@ const HEADER: &str = "rank,cn,contestant,countries,club,team,glider,handicap,sta
 
 const TASK: &str = r#"{"task_type": "assigned_area", "task_duration": 10800}"#;
 
+/// A racing task along the equator from a start line at 0° to a finish
+/// cylinder at 1° of longitude, 111319.49 m on WGS84.
+const RACING_TASK: &str = r#"{
+  "task_type": "polygon",
+  "task_distance": 111319.49,
+  "task_points": [
+    {"type": "takeoff", "latitude": 0, "longitude": 0, "elevation": 100, "distance": 0, "oz_type": "unknown", "oz_radius1": 0, "oz_radius2": 0, "oz_angle1": 0, "oz_angle2": 0, "oz_angle12": 0, "oz_line": false, "oz_reduce": false},
+    {"type": "start", "latitude": 0, "longitude": 0, "elevation": 100, "distance": 111319.49, "oz_type": "next", "oz_radius1": 10000, "oz_radius2": 0, "oz_angle1": 0.785398163397448, "oz_angle2": 0, "oz_angle12": 1.5707963267949, "oz_line": true, "oz_reduce": false},
+    {"type": "finish", "latitude": 0, "longitude": 0.0174532925199433, "elevation": 100, "distance": 111319.49, "oz_type": "previous", "oz_radius1": 3000, "oz_radius2": 0, "oz_angle1": 3.14159265358979, "oz_angle2": 0, "oz_angle12": 4.71238898038469, "oz_line": false, "oz_reduce": false},
+    {"type": "landing", "latitude": 0, "longitude": 0, "elevation": 100, "distance": 0, "oz_type": "unknown", "oz_radius1": 0, "oz_radius2": 0, "oz_angle1": 0, "oz_angle2": 0, "oz_angle12": 0, "oz_line": false, "oz_reduce": false}
+  ]
+}"#;
+
 const FIXTURE_FILE: &str = r#"
 rule_set = "FAI Annex A 2025a"
 
@@ -35,8 +48,18 @@ fn results(rows: &[&str]) -> String {
 }
 
 fn check_day(rows: &[&str], fixture_file: &str) -> Report {
-    let fixture = Fixture::parse(TASK, &results(rows), fixture_file).unwrap();
+    check_task(TASK, rows, fixture_file)
+}
+
+fn check_task(task: &str, rows: &[&str], fixture_file: &str) -> Report {
+    let fixture = Fixture::parse(task, &results(rows), fixture_file).unwrap();
     check(&fixture).unwrap()
+}
+
+/// A racing task day whose finisher flew the 111.32 km of `RACING_TASK`.
+fn check_racing_task(task: &str) -> Report {
+    let finisher = "1,A,Crew A,de,,,Arcus,,12:00:00,13:00:00,1:00:00,111.32,111.32,200,0,,";
+    check_task(task, &[finisher], "rule_set = \"FAI Annex A 2025a\"")
 }
 
 #[test]
@@ -419,7 +442,7 @@ fn unreadable_start_time_is_an_error() {
 
 #[test]
 fn racing_task_finisher_is_not_raised_to_a_minimum_task_time() {
-    let task = r#"{"task_type": "polygon", "task_duration": 0}"#;
+    let task = RACING_TASK;
     let finisher = FINISHER.replace(
         "15:00:00,3:00:00,100,300,1000,",
         "14:30:00,2:30:00,120,300,800,",
@@ -728,4 +751,108 @@ fn missing_handicaps_in_a_handicapped_class_are_an_error() {
     let error = check(&fixture).unwrap_err();
 
     assert_eq!(error.to_string(), "no handicap for A, G");
+}
+
+#[test]
+fn racing_task_matching_its_published_distance_and_bearings_passes() {
+    let report = check_racing_task(RACING_TASK);
+    assert!(report.passes(), "{report}");
+}
+
+#[test]
+fn racing_task_distance_more_than_1_m_off_fails() {
+    let task = RACING_TASK.replace(
+        r#""task_distance": 111319.49"#,
+        r#""task_distance": 111321"#,
+    );
+    let report = check_racing_task(&task);
+    assert_snapshot!(report, @"
+    task distance: published 111.3210 km, Keyhole 111.3195 km
+    Decisions:
+      A: finished 111.32 km in 01:00:00 (from the download)
+    ");
+}
+
+#[test]
+fn racing_task_distance_within_1_m_passes() {
+    let task = RACING_TASK.replace(
+        r#""task_distance": 111319.49"#,
+        r#""task_distance": 111320.4"#,
+    );
+    let report = check_racing_task(&task);
+    assert!(report.passes(), "{report}");
+}
+
+#[test]
+fn start_bearing_more_than_a_thousandth_of_a_degree_off_fails() {
+    // 90.002°
+    let task = RACING_TASK.replace("1.5707963267949", "1.5708312333799");
+    let report = check_racing_task(&task);
+    assert_snapshot!(report, @"
+    bearing: published start 90.002°, Keyhole start 90.000°
+    Decisions:
+      A: finished 111.32 km in 01:00:00 (from the download)
+    ");
+}
+
+#[test]
+fn finish_bearing_beyond_the_bearing_tolerance_fails() {
+    // A 45° sector instead of a cylinder, pointing at 272°.
+    let sector =
+        r#""oz_angle1": 0.785398163397448, "oz_angle2": 0, "oz_angle12": 4.74729556542455"#;
+    let cylinder =
+        r#""oz_angle1": 3.14159265358979, "oz_angle2": 0, "oz_angle12": 4.71238898038469"#;
+    let task = RACING_TASK.replace(cylinder, sector);
+    let report = check_racing_task(&task);
+    assert_snapshot!(report, @"
+    bearing: published finish 272.000°, Keyhole finish 270.000°
+    Decisions:
+      A: finished 111.32 km in 01:00:00 (from the download)
+    ");
+}
+
+#[test]
+fn bearing_of_a_cylinder_is_not_compared() {
+    // 90°, the opposite of where the finish cylinder points.
+    let task = RACING_TASK.replace("4.71238898038469", "1.5707963267949");
+    let report = check_racing_task(&task);
+    assert!(report.passes(), "{report}");
+}
+
+#[test]
+fn bearing_of_a_cylinder_with_a_sector_cut_out_is_compared() {
+    // An R2 of 1 km whose sector of 45° stays in the zone, pointing at 272°.
+    let notched = r#""oz_radius2": 1000, "oz_angle1": 3.14159265358979, "oz_angle2": 0.785398163397448, "oz_angle12": 4.74729556542455"#;
+    let cylinder = r#""oz_radius2": 0, "oz_angle1": 3.14159265358979, "oz_angle2": 0, "oz_angle12": 4.71238898038469"#;
+    let task = RACING_TASK.replace(cylinder, notched);
+    let report = check_racing_task(&task);
+    assert_snapshot!(report, @"
+    bearing: published finish 272.000°, Keyhole finish 270.000°
+    Decisions:
+      A: finished 111.32 km in 01:00:00 (from the download)
+    ");
+}
+
+#[test]
+fn fixed_bearing_just_below_360_degrees_resolves_to_0_degrees() {
+    let next = r#""oz_type": "next", "oz_radius1": 10000, "oz_radius2": 0, "oz_angle1": 0.785398163397448, "oz_angle2": 0, "oz_angle12": 1.5707963267949"#;
+    let fixed = r#""oz_type": "fixed", "oz_radius1": 10000, "oz_radius2": 0, "oz_angle1": 0.785398163397448, "oz_angle2": 0, "oz_angle12": 6.28318530717958"#;
+    let task = RACING_TASK.replace(next, fixed);
+    let report = check_racing_task(&task);
+    assert!(report.passes(), "{report}");
+}
+
+#[test]
+fn symmetric_finish_resolves_like_previous() {
+    let task = RACING_TASK.replace(r#""oz_type": "previous""#, r#""oz_type": "symmetric""#);
+    let report = check_racing_task(&task);
+    assert!(report.passes(), "{report}");
+}
+
+#[test]
+fn racing_task_without_a_finish_is_an_error() {
+    let task = RACING_TASK.replace(r#""type": "finish""#, r#""type": "point""#);
+    let fixture = Fixture::parse(&task, &results(&[FINISHER]), FIXTURE_FILE).unwrap();
+    let error = check(&fixture).unwrap_err();
+    assert_snapshot!(format!("{error:#}"), @"the racing task doesn't run from a start over turnpoints to a finish");
 }

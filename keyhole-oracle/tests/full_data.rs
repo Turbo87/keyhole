@@ -346,3 +346,36 @@ fn accept_mode_refuses_class_day_errors_and_keeps_the_baseline() {
     assert_snapshot!(error, @"accept mode writes no baseline while class days have errors: 1");
     assert_eq!(baseline(&dataset), accepted);
 }
+
+/// A racing task along the equator from a start line at 0° to a finish
+/// cylinder at 1° of longitude, 111194.93 m on the FAI Sphere and 111319.49 m
+/// on WGS84.
+const FAI_SPHERE_RACING_TASK: &str = r#"{
+  "task_type": "polygon",
+  "result_status": "official",
+  "task_distance": 111194.93,
+  "task_points": [
+    {"type": "start", "latitude": 0, "longitude": 0, "elevation": 100, "oz_type": "next", "oz_radius1": 10000, "oz_radius2": 0, "oz_angle1": 0.785398163397448, "oz_angle2": 0, "oz_angle12": 1.5707963267949, "oz_line": true, "oz_reduce": false},
+    {"type": "finish", "latitude": 0, "longitude": 0.0174532925199433, "elevation": 100, "oz_type": "previous", "oz_radius1": 3000, "oz_radius2": 0, "oz_angle1": 3.14159265358979, "oz_angle2": 0, "oz_angle12": 4.71238898038469, "oz_line": false, "oz_reduce": false}
+  ]
+}"#;
+
+#[test]
+fn listed_fai_sphere_classes_measure_their_tasks_on_the_fai_sphere() {
+    let dataset = TempDir::new().unwrap();
+    for day in [
+        "egc2023/20m-multi-seat/2023-08-04",
+        "egc2023/open/2023-08-04",
+    ] {
+        write_day(&dataset, day, "official", LINE, FINISHER);
+        let task = dataset.path().join(day).join("task.json");
+        fs::write(task, FAI_SPHERE_RACING_TASK).unwrap();
+    }
+    let report = check_dataset(dataset.path()).unwrap();
+    assert_snapshot!(report, @"
+    task distance (1):
+      egc2023/open/2023-08-04: published 111.1949 km, Keyhole 111.3195 km
+    Checked class days: 2, failing: 1
+    Rows with remarks of unknown effect: 0, matching anyway: 0
+    ");
+}

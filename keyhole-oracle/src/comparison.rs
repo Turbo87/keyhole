@@ -4,21 +4,25 @@
 use std::collections::HashSet;
 use std::fmt;
 
-use anyhow::bail;
+use anyhow::{anyhow, bail};
 use jiff::tz::TimeZone;
 use keyhole_engine::day_scoring::{ClassDay, DayResult, DayValidity, Rank, Row, score_class_day};
+use keyhole_engine::geodesy::{EarthModel, normalize_bearing};
 use keyhole_engine::rule_sets::RuleSetEdition;
+use keyhole_engine::task::ObservationZone;
 use serde::{Deserialize, Serialize};
 
 use crate::decisions::{Cause, RemarkDecision, RowDecisions, Source};
 use crate::fixture::{Deviation, Fixture, PublishedDayParameters};
-use crate::published::PublishedRow;
+use crate::published::{PublishedRacingTask, PublishedRow, degrees};
 
 /// A compared value: a day parameter or a field of a row. The order of the
 /// variants lists day parameters before rows in the full-data report.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Field {
+    TaskDistance,
+    Bearing,
     Validity,
     D1,
     N,
@@ -39,6 +43,8 @@ pub enum Field {
 impl fmt::Display for Field {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
+            Self::TaskDistance => "task distance",
+            Self::Bearing => "bearing",
             Self::Validity => "day validity",
             Self::D1 => "D1",
             Self::N => "N",
@@ -72,9 +78,24 @@ pub struct Mismatch {
     pub explanation: Option<String>,
 }
 
+/// How far Keyhole's task distance may lie from the published one, in km. The
+/// published task distance is stored as a 32-bit float, which holds about
+/// 0.03 m at 500 km, and on older class days in whole m.
+const TASK_DISTANCE_TOLERANCE: f64 = 0.001;
+
+/// How far Keyhole's start bearing may lie from SeeYou's, in degrees.
+const START_BEARING_TOLERANCE: f64 = 0.001;
+
+/// How far Keyhole's turnpoint and finish bearings may lie from SeeYou's, in
+/// degrees. SeeYou measures each course where its leg begins and Keyhole at
+/// the reference point (ADR 0003), which differs most on long legs at high
+/// latitudes. The full-data suite measured at most 1.41°.
+const BEARING_TOLERANCE: f64 = 1.5;
+
 /// The outcome of checking one fixture.
 #[derive(Debug)]
 pub struct Report {
+    /// The mismatches of the task and of the day parameters.
     pub day_parameter_mismatches: Vec<Mismatch>,
     pub row_mismatches: Vec<Mismatch>,
     /// Recorded deviations that no longer occur.
@@ -229,10 +250,16 @@ pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
         mismatch
     };
 
-    let day_parameter_mismatches = file
-        .published_day_parameters
-        .iter()
-        .flat_map(|day_parameters| day_parameter_mismatches(day_parameters, &result))
+    let task_mismatches = match &fixture.racing_task {
+        Some(task) => task_mismatches(task, rules.analysis.earth_model)?,
+        None => Vec::new(),
+    };
+    let day_parameters = file.published_day_parameters.iter();
+    let day_parameters =
+        day_parameters.flat_map(|published| day_parameter_mismatches(published, &result));
+    let day_parameter_mismatches = task_mismatches
+        .into_iter()
+        .chain(day_parameters)
         .map(&mut explain)
         .collect();
     let row_mismatches = fixture
@@ -270,6 +297,69 @@ pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
             .map(|(row, _)| row.competition_id.clone())
             .collect(),
     })
+}
+
+fn task_mismatches(
+    published: &PublishedRacingTask,
+    earth_model: EarthModel,
+) -> anyhow::Result<Vec<Mismatch>> {
+    let task = published.to_task(earth_model)?;
+    let resolved = task.resolve();
+    let resolved = resolved.map_err(|error| anyhow!("resolving the task: {error:?}"))?;
+    let mismatch = |field, published, keyhole| Mismatch {
+        competition_id: None,
+        field,
+        published,
+        keyhole,
+        cause: None,
+        explanation: None,
+    };
+
+    let mut mismatches = Vec::new();
+    let published_distance = published.task_distance / 1000.;
+    let distance = task.distance();
+    if (distance - published_distance).abs() > TASK_DISTANCE_TOLERANCE {
+        let km = |distance: f64| format!("{distance:.4} km");
+        let (published, keyhole) = (km(published_distance), km(distance));
+        mismatches.push(mismatch(Field::TaskDistance, published, keyhole));
+    }
+
+    let published_points = published.task_points();
+    let points = published_points
+        .iter()
+        .zip(resolved.task_points())
+        .enumerate();
+    for (index, (published, resolved)) in points {
+        if !shaped_by_bearing(resolved.zone) {
+            continue;
+        }
+        let (published_bearing, bearing) = (degrees(published.oz_angle12), resolved.direction);
+        let difference = normalize_bearing(bearing - published_bearing + 180.) - 180.;
+        let (point, tolerance) = match index {
+            0 => ("start".to_string(), START_BEARING_TOLERANCE),
+            index if index == published_points.len() - 1 => {
+                ("finish".to_string(), BEARING_TOLERANCE)
+            }
+            index => (format!("turnpoint {index}"), BEARING_TOLERANCE),
+        };
+        if difference.abs() > tolerance {
+            let describe = |bearing: f64| format!("{point} {bearing:.3}°");
+            let (published, keyhole) = (describe(published_bearing), describe(bearing));
+            mismatches.push(mismatch(Field::Bearing, published, keyhole));
+        }
+    }
+    Ok(mismatches)
+}
+
+/// Whether a zone's bearing changes its shape, which it doesn't for a
+/// cylinder or a cylinder with a disc cut out. SeeYou keeps R2 below R1.
+fn shaped_by_bearing(zone: ObservationZone) -> bool {
+    match zone {
+        ObservationZone::Line { .. } => true,
+        ObservationZone::TwoArc { a1, r2, a2, .. } => {
+            a1 < 180. || (r2 > 0. && 0. < a2 && a2 < 180.)
+        }
+    }
 }
 
 fn day_parameter_mismatches(

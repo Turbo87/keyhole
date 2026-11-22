@@ -14,7 +14,7 @@ use serde::Deserialize;
 
 use crate::comparison::{Field, Mismatch, Report, check};
 use crate::decisions::Cause;
-use crate::fixture::{Deviation, Fixture, FixtureFile, RuleOverrides};
+use crate::fixture::{Deviation, EarthModel, Fixture, FixtureFile, RuleOverrides};
 use crate::rule_set_family::{Inference, infer_rule_set_family};
 use crate::task_info::TaskInfo;
 
@@ -23,6 +23,23 @@ use crate::task_info::TaskInfo;
 const PREVIOUS_HANDICAP_REFERENCE: [&str; 2] = [
     "10th-fai-womens-world-gliding-championship-lake-keepit-2020",
     "wgc2021-club-std-15m-montlucon-gueret-2021",
+];
+
+/// Competitions and classes scored on the FAI Sphere, which neither the task
+/// info line nor `task.json` states. Only the 20 m multi-seat class of
+/// egc2023 used it.
+const FAI_SPHERE: [&str; 11] = [
+    "11th-fai-womens-world-gliding-championship-2022",
+    "13th-fai-womens-world-gliding-championship-zbraslavice-2025",
+    "22nd-fai-european-gliding-championships-tabor-2024",
+    "37th-fai-world-gliding-championships-2022-szeged-2022",
+    "37th-fai-world-gliding-championships-narromine-2023",
+    "38th-fai-world-gliding-championship-uvalde-garner-field-2024",
+    "39th-fai-world-gliding-championships-tabor-2025",
+    "6th-fai-junior-european-gliding-championship-2023",
+    "7th-fai-junior-european-gliding-championships-prievidza-2025",
+    "egc2023/20m-multi-seat",
+    "junior-world-gliding-championships-2022-tabor-2022",
 ];
 
 /// The baseline inside a dataset directory, which accept mode writes.
@@ -338,7 +355,7 @@ fn check_class_day(
         original_rule_set: None,
         handicapped: info.handicapped,
         rule_overrides: RuleOverrides {
-            earth_model: None,
+            earth_model: earth_model(name),
             dm: info.dm,
             d1: info.d1,
         },
@@ -358,6 +375,15 @@ fn check_class_day(
     }
     fixture.file.deviations = baseline.remove(name).unwrap_or_default();
     Ok(ClassDay::Scored(check(&fixture)?))
+}
+
+/// The earth model of a `<competition>/<class>/<date>` class day, or `None`
+/// for the edition's default.
+fn earth_model(day: &str) -> Option<EarthModel> {
+    let (class, _) = day.rsplit_once('/')?;
+    let (competition, _) = class.split_once('/')?;
+    let listed = FAI_SPHERE.contains(&competition) || FAI_SPHERE.contains(&class);
+    listed.then_some(EarthModel::FaiSphere)
 }
 
 /// The task info line of `results.html`, or an empty line without one.

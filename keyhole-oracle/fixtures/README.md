@@ -59,11 +59,13 @@ handicap = 1.08    # on the class's handicap scale
 # day parameter. A recorded deviation that no longer occurs fails the test.
 [[deviations]]
 competition_id = "AB"
-field = "points"    # validity d1 n n1 n2 do vo f fcr maximum_points rank points penalty distance speed
+field = "points"    # task_distance bearing validity d1 n n1 n2 do vo f fcr maximum_points rank points penalty distance speed
 explanation = "Why Keyhole and SeeYou differ."
 ```
 
 The harness derives each row's decisions from `results.csv`: `DNF` did not fly, `HC` hors concours, `DNS` landed at 0 km, `penalty_points` the penalty rounded to whole points, `handicap` the handicap in a handicapped class, where every row needs one and the largest handicap puts every handicap on the 1000 scale from 500, on the 100 scale from 10 and on the 1.000 scale below, and every other row flew its published distance, in the time from its start to its finish if it has one. A remark minus its trailing penalty points becomes the penalty's public remark when the row has a penalty, otherwise an official warning when it is in the official warning group, and is only reported when neither applies. Remarks are never compared. Rows are paired by competition ID, so the order of tied rows is never compared. Values are compared at the precision SoaringSpot displays: the day validity verdict and ranks as written, points, `D1` and maximum points as whole numbers, a penalty from the download as published against the whole points Keyhole deducts, distances and speeds, `Do` and `Vo` to 0.01 with a row without a counting result at 0 km as SoaringSpot shows it, and `F` and `FCR` to 0.001.
+
+A `polygon` class day also compares its task. The harness converts `task.json` into a racing task on the effective earth model, without a take-off or landing point, and treats SeeYou's symmetric start and finish as next and previous. The task distance has to match `task_distance` within 1 m, since SeeYou stores it as a 32-bit float. The start bearing has to match `oz_angle12` within 0.001° and every other bearing within 1.5°, since SeeYou measures each course where its leg begins and Keyhole at the reference point (ADR 0003). A bearing that doesn't shape its zone, as for a cylinder, isn't compared. SeeYou's `oz_move` isn't modelled.
 
 ## Full-data suite
 
@@ -73,6 +75,6 @@ The opt-in full-data suite scores every class day of a local soaringspot-downloa
 KEYHOLE_ORACLE_DATASET=<directory> cargo test -p keyhole-oracle --test full_data -- --nocapture
 ```
 
-The report groups mismatches by field and cause, with day parameters first, and lists the mismatches of rows with remarks of unknown effect apart as allowed failures. It counts those rows and how many of them match anyway, and the class days it leaves out: cancelled days, competitions under national rules, handicapped days without a `Handicap` column and handicapped days scored with SeeYou's handicap reference before version 9.01. The repository names competitions only in the slug table of `src/rule_set_family.rs` and in that last exclusion.
+The report groups mismatches by field and cause, with day parameters first, and lists the mismatches of rows with remarks of unknown effect apart as allowed failures. It counts those rows and how many of them match anyway, and the class days it leaves out: cancelled days, competitions under national rules, handicapped days without a `Handicap` column and handicapped days scored with SeeYou's handicap reference before version 9.01. Neither `task.json` nor the task info line states the earth model, so a list in `src/full_data.rs` names the competitions and classes scored on the FAI Sphere. The repository names competitions only in the slug table of `src/rule_set_family.rs`, in that list and in the last exclusion.
 
 Setting `KEYHOLE_ORACLE_ACCEPT` as well writes every mismatch except the allowed failures to `keyhole-oracle-baseline.toml` inside the dataset directory, as an array of tables per class day, such as `[["<competition>/<class>/<date>"]]`, whose rows have the fields of a fixture file's `[[deviations]]` and record the published and Keyhole values. Later runs fail on a mismatch the baseline lacks or records with other values, and on a baseline row that no longer occurs. Accept mode writes nothing while any class day has an error, so a class day error always fails the suite.
