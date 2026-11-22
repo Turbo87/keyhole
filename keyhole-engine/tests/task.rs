@@ -1,4 +1,7 @@
+use std::error::Error;
+
 use approx::assert_abs_diff_eq;
+use insta::assert_snapshot;
 use keyhole_engine::geodesy::{EarthModel, FAI_SPHERE_RADIUS, LngLat};
 use keyhole_engine::task::{ObservationZone, Orientation, Task, TaskError, TaskKind, TaskPoint};
 
@@ -245,4 +248,10 @@ fn orientations_that_cannot_be_resolved_name_their_point() {
         let points = [(0., 1., Next), (0., 0., Fixed(bearing)), (1., 0., Previous)];
         assert_eq!(resolve(&points), error(1));
     }
+}
+
+#[test]
+fn an_orientation_error_describes_its_point() {
+    let error = Box::<dyn Error>::from(TaskError::Orientation { point_index: 2 });
+    assert_snapshot!(error, @"the orientation of the task point at index 2 cannot be resolved");
 }

@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::fmt::Write;
 
 use bytes::Bytes;
@@ -297,6 +298,14 @@ fn reports_an_unreadable_recorded_date() {
         parse_error(format!("ALXVABC\nHFDTEDATE:16O624,01\n{FIX}")),
         ParseError::MissingRecordedDate
     );
+}
+
+#[test]
+fn parse_errors_describe_what_the_file_lacks() {
+    let message = |error: ParseError| Box::<dyn Error>::from(error).to_string();
+    assert_snapshot!(message(ParseError::NotIgc), @"no line of the file is an IGC record");
+    assert_snapshot!(message(ParseError::MissingLoggerId), @"the A record is missing or unreadable");
+    assert_snapshot!(message(ParseError::MissingRecordedDate), @"the HFDTE header is missing or does not hold a valid date");
 }
 
 #[test]

@@ -299,6 +299,7 @@ dependencies = [
  "keyhole-handicaps",
  "proptest",
  "sha2",
+ "thiserror",
 ]
 
 [[package]]

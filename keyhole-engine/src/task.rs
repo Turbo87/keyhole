@@ -123,11 +123,12 @@ impl<D> Task<D> {
 }
 
 /// Why a task cannot be resolved.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum TaskError {
     /// The orientation of the task point at this index, counted from the
     /// start at 0, is symmetric or previous at the start, symmetric or next at
     /// the finish or a fixed bearing outside [0°, 360°).
+    #[error("the orientation of the task point at index {point_index} cannot be resolved")]
     Orientation { point_index: usize },
 }
 
