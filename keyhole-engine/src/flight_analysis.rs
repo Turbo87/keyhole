@@ -160,6 +160,15 @@ pub enum FlightBound {
     Airborne(Timestamp),
 }
 
+impl FlightBound {
+    /// The time of the take-off, landing or valid fix.
+    pub fn time(self) -> Timestamp {
+        match self {
+            Self::Detected(time) | Self::Airborne(time) => time,
+        }
+    }
+}
+
 /// A logger's manufacturer and serial, as written in the `A` record.
 #[derive(Debug)]
 pub struct LoggerId {
@@ -447,6 +456,16 @@ pub fn fix_gaps(records: &[Record], minimum: SignedDuration) -> Vec<FixGap> {
     });
     let gaps = gaps.filter(|gap| gap.end.duration_since(gap.start) >= minimum);
     gaps.collect()
+}
+
+/// The flight that is scored unless a scorer sets its take-off or landing:
+/// the longest of the given flights, and the first of equally long ones in
+/// the given order.
+pub fn choose_default_flight(flights: &[Flight]) -> Option<&Flight> {
+    let duration = |flight: &Flight| flight.end.time().duration_since(flight.start.time());
+    flights
+        .iter()
+        .min_by_key(|flight| Reverse(duration(flight)))
 }
 
 /// Dates the records walking away from the anchor, backwards for

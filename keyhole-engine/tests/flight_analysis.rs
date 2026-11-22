@@ -7,7 +7,7 @@ use jiff::tz::Offset;
 use jiff::{SignedDuration, Timestamp};
 use keyhole_engine::flight_analysis::{
     AltitudeSource, Flight, FlightBound, IgcFile, ParseError, RecordKind, TimeWarning,
-    UnreadableLines, fix_gaps, recording_interval,
+    UnreadableLines, choose_default_flight, fix_gaps, recording_interval,
 };
 
 /// The outputs of the steps for one IGC file, dated on its recorded date.
@@ -128,15 +128,37 @@ fn render_flights(analysis: &Analysis) -> String {
 }
 
 fn write_flights(out: &mut String, analysis: &Analysis) {
+    for flight in &analysis.flights {
+        writeln!(out, "flight {}", flight_times(analysis, flight)).unwrap();
+    }
+}
+
+/// Formats a flight's start and end, marking those reached airborne.
+fn flight_times(analysis: &Analysis, flight: &Flight) -> String {
     let date = analysis.igc_file.date;
     let bound = |bound| match bound {
         FlightBound::Detected(time) => self::time(date, time),
         FlightBound::Airborne(time) => format!("{} (airborne)", self::time(date, time)),
     };
-    for flight in &analysis.flights {
-        let (start, end) = (bound(flight.start), bound(flight.end));
-        writeln!(out, "flight {start} to {end}").unwrap();
+    format!("{} to {}", bound(flight.start), bound(flight.end))
+}
+
+/// Renders the default flight of the analysis, or `scored none`.
+fn render_default_flight(analysis: &Analysis) -> String {
+    match choose_default_flight(&analysis.flights) {
+        Some(flight) => format!("scored {}", flight_times(analysis, flight)),
+        None => "scored none".into(),
     }
+}
+
+/// A flight at 72 km/h that climbs for `seconds` and descends for as long,
+/// followed by 40 s on the ground.
+fn short_flight(seconds: i32) -> impl Iterator<Item = (f64, i32)> {
+    let climbing = (1..=seconds).map(|second| (72.0, 100 + 5 * second));
+    let top = 100 + 5 * seconds;
+    let descending = (1..=seconds).map(move |second| (72.0, top - 5 * second));
+    let stopped = (0..40).map(|_| (0.0, 100));
+    climbing.chain(descending).chain(stopped)
 }
 
 /// Formats a time as time of day, with the days after the given date unless
@@ -989,4 +1011,54 @@ fn ignores_a_hover_in_wave_above_ground_lower_than_the_first_fix() {
     flight 10:00:00 (airborne) to 10:00:29
     flight 10:01:30 to 10:04:09
     ");
+}
+
+#[test]
+fn chooses_the_longest_flight() {
+    let analysis = analyze(include_bytes!("fixtures/two-winch-launches.igc"));
+    assert_snapshot!(render_default_flight(&analysis), @"scored 11:12:20 to 15:18:43");
+}
+
+#[test]
+fn chooses_the_earlier_of_two_equally_long_flights() {
+    let standing = (0..60).map(|_| (0.0, 100));
+    let fixes = standing.chain(short_flight(30)).chain(short_flight(30));
+    let analysis = analyze_profile(&profile(&fixes.collect::<Vec<_>>()));
+    assert_snapshot!(render_flights(&analysis), @"
+    flight 10:01:00 to 10:01:59
+    flight 10:02:40 to 10:03:39
+    ");
+    assert_snapshot!(render_default_flight(&analysis), @"scored 10:01:00 to 10:01:59");
+}
+
+#[test]
+fn chooses_a_flight_by_its_time_from_the_first_fix() {
+    let fixes = short_flight(40).chain(short_flight(30));
+    let analysis = analyze_profile(&profile(&fixes.collect::<Vec<_>>()));
+    assert_snapshot!(render_flights(&analysis), @"
+    flight 10:00:00 (airborne) to 10:01:19
+    flight 10:02:00 to 10:02:59
+    ");
+    assert_snapshot!(render_default_flight(&analysis), @"scored 10:00:00 (airborne) to 10:01:19");
+}
+
+#[test]
+fn chooses_a_flight_by_its_time_to_the_last_fix() {
+    let standing = (0..60).map(|_| (0.0, 100));
+    let climbing = (1..=80).map(|second| (72.0, 100 + 5 * second));
+    let fixes = standing.chain(short_flight(30)).chain(climbing);
+    let analysis = analyze_profile(&profile(&fixes.collect::<Vec<_>>()));
+    assert_snapshot!(render_flights(&analysis), @"
+    flight 10:01:00 to 10:01:59
+    flight 10:02:40 to 10:03:59 (airborne)
+    ");
+    assert_snapshot!(render_default_flight(&analysis), @"scored 10:02:40 to 10:03:59 (airborne)");
+}
+
+#[test]
+fn chooses_no_flight_in_a_file_without_flights() {
+    let standing = (0..60).map(|_| (0.0, 100));
+    let analysis = analyze_profile(&profile(&standing.collect::<Vec<_>>()));
+    assert_snapshot!(render_flights(&analysis), @"");
+    assert_snapshot!(render_default_flight(&analysis), @"scored none");
 }
