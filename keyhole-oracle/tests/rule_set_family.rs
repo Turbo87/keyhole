@@ -48,6 +48,22 @@ fn slug_table_leaves_out_competitions_under_national_rules() {
 }
 
 #[test]
+fn slug_table_leaves_out_dutch_national_competitions() {
+    let family =
+        infer_rule_set_family("nationale-junioren-wedstrijd-2026-venlo-2026", WARNING_LINE);
+    assert_compact_debug_snapshot!(family.unwrap(), @r#"LeftOut("Dutch national rules")"#);
+}
+
+#[test]
+fn slug_table_leaves_out_new_zealand_national_competitions() {
+    let family = infer_rule_set_family(
+        "nz-multiclass-national-championships-jan-2026-matamata-2026",
+        ANNEX_A_LINE,
+    );
+    assert_compact_debug_snapshot!(family.unwrap(), @r#"LeftOut("New Zealand national rules")"#);
+}
+
+#[test]
 fn line_without_any_signal_is_an_error() {
     let error = infer_rule_set_family("some-competition", WARNING_LINE).unwrap_err();
     assert_snapshot!(error, @"cannot infer the rule set family of some-competition from a slug table entry, an SWO script or an Annex A parameter line");
