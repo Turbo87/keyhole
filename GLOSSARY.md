@@ -169,7 +169,7 @@ _Avoid_: Datum, geoid, earth radius
 ### Tasks
 
 **Task**:
-The course a class flies on a class day: an ordered list of turnpoints from start to finish, each with an observation zone. A class day has at most one published task, which keeps the letter of the candidate it was published from.
+The course a class flies on a class day: an ordered list of task points from start to finish, each with an observation zone. A class day has at most one published task, which keeps the letter of the candidate it was published from.
 _Avoid_: Route, course
 
 **Task candidate**:
@@ -193,7 +193,7 @@ A task candidate's free text printed on its task sheet, such as grid time, expec
 _Avoid_: Task notes, briefing notes
 
 **Racing task**:
-A task whose turnpoints must be reached in order, scored by speed over the task distance.
+A task whose task points must be reached in order, scored by speed over the task distance.
 _Avoid_: Speed task, polygon
 
 **Assigned area task (AAT)**:
@@ -204,13 +204,21 @@ _Avoid_: Area task, turn area task
 The shortest time an assigned area task is scored over. A pilot who finishes sooner is scored as if they had flown for this long.
 _Avoid_: Designated time, task time
 
-**Turnpoint file**:
-The competition's published list of turnpoints that its tasks may use.
-_Avoid_: Waypoint file, control point file
+**Waypoint file**:
+The competition's published file of waypoints that its tasks may use.
+_Avoid_: Turnpoint file, control point file
+
+**Waypoint**:
+A named location from the waypoint file. Its type comes from the file, such as the CUP style Waypoint or Outlanding.
+_Avoid_: Turnpoint (the task point a waypoint becomes), control point
+
+**Task point**:
+The start, a turnpoint or the finish of a task, with the reference point of the waypoint it uses, an observation zone and an orientation.
+_Avoid_: Control point
 
 **Turnpoint**:
-A named location from the turnpoint file that a task uses as its start, its finish or a point in between. Its type is the style name from the CUP file, such as Waypoint or Outlanding, which is not a synonym for turnpoint.
-_Avoid_: Waypoint, control point, task point
+A task point between the start and the finish.
+_Avoid_: Waypoint (the named location a turnpoint uses), control point
 
 **Observation zone**:
 The area or line around a reference point that a flight has to reach or cross, such as a line, cylinder, sector or keyhole.
@@ -218,7 +226,7 @@ _Avoid_: OZ, turn area (when the shape matters)
 
 **Reference point**:
 The point an observation zone is built around and that task distance is measured from: a line's midpoint, a cylinder's centre or a sector's apex.
-_Avoid_: Task point, centre, turnpoint (the named location a reference point is taken from)
+_Avoid_: Centre, waypoint (the named location a reference point is taken from)
 
 **Line**:
 An observation zone shaped as a straight line through its reference point, used for starts and finishes.
