@@ -9,12 +9,15 @@ use jiff::tz::TimeZone;
 use keyhole_engine::day_scoring::{ClassDay, DayResult, DayValidity, Rank, Row, score_class_day};
 use keyhole_engine::geodesy::{EarthModel, normalize_bearing};
 use keyhole_engine::rule_sets::RuleSetEdition;
-use keyhole_engine::task::ObservationZone;
+use keyhole_engine::task::{ObservationZone, Task};
 use serde::{Deserialize, Serialize};
 
 use crate::decisions::{Cause, RemarkDecision, RowDecisions, Source};
 use crate::fixture::{Deviation, Fixture, PublishedDayParameters};
-use crate::published::{PublishedRacingTask, PublishedRow, PublishedTask, degrees};
+use crate::published::{
+    PublishedAssignedAreaTask, PublishedRacingTask, PublishedRow, PublishedTask,
+    PublishedTaskPoint, degrees,
+};
 
 /// A compared value: a day parameter or a field of a row. The order of the
 /// variants lists day parameters before rows in the full-data report.
@@ -250,9 +253,11 @@ pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
         mismatch
     };
 
+    let earth_model = rules.analysis.earth_model;
     let task_mismatches = match &fixture.task {
-        PublishedTask::Racing(task) => task_mismatches(task, rules.analysis.earth_model)?,
-        _ => Vec::new(),
+        PublishedTask::Racing(task) => racing_task_mismatches(task, earth_model)?,
+        PublishedTask::AssignedArea(task) => assigned_area_task_mismatches(task, earth_model)?,
+        PublishedTask::CourseShape { .. } => Vec::new(),
     };
     let day_parameters = file.published_day_parameters.iter();
     let day_parameters =
@@ -299,20 +304,12 @@ pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
     })
 }
 
-fn task_mismatches(
+fn racing_task_mismatches(
     published: &PublishedRacingTask,
     earth_model: EarthModel,
 ) -> anyhow::Result<Vec<Mismatch>> {
     let task = published.to_task(earth_model)?;
     let resolved = task.resolve().context("resolving the task")?;
-    let mismatch = |field, published, keyhole| Mismatch {
-        competition_id: None,
-        field,
-        published,
-        keyhole,
-        cause: None,
-        explanation: None,
-    };
 
     let mut mismatches = Vec::new();
     let published_distance = published.task_distance / 1000.;
@@ -320,10 +317,28 @@ fn task_mismatches(
     if (distance - published_distance).abs() > TASK_DISTANCE_TOLERANCE {
         let km = |distance: f64| format!("{distance:.4} km");
         let (published, keyhole) = (km(published_distance), km(distance));
-        mismatches.push(mismatch(Field::TaskDistance, published, keyhole));
+        mismatches.push(task_mismatch(Field::TaskDistance, published, keyhole));
     }
+    mismatches.extend(bearing_mismatches(&published.task_points(), &resolved));
+    Ok(mismatches)
+}
 
-    let published_points = published.task_points();
+fn assigned_area_task_mismatches(
+    published: &PublishedAssignedAreaTask,
+    earth_model: EarthModel,
+) -> anyhow::Result<Vec<Mismatch>> {
+    let task = published.to_task(earth_model)?;
+    let resolved = task.resolve().context("resolving the task")?;
+    Ok(bearing_mismatches(&published.task_points(), &resolved))
+}
+
+/// Compares the bearing of every observation zone whose shape depends on its
+/// bearing with the published `oz_angle12`.
+fn bearing_mismatches(
+    published_points: &[&PublishedTaskPoint],
+    resolved: &Task<f64>,
+) -> Vec<Mismatch> {
+    let mut mismatches = Vec::new();
     let points = published_points
         .iter()
         .zip(resolved.task_points())
@@ -344,10 +359,21 @@ fn task_mismatches(
         if difference.abs() > tolerance {
             let describe = |bearing: f64| format!("{point} {bearing:.3}°");
             let (published, keyhole) = (describe(published_bearing), describe(bearing));
-            mismatches.push(mismatch(Field::Bearing, published, keyhole));
+            mismatches.push(task_mismatch(Field::Bearing, published, keyhole));
         }
     }
-    Ok(mismatches)
+    mismatches
+}
+
+fn task_mismatch(field: Field, published: String, keyhole: String) -> Mismatch {
+    Mismatch {
+        competition_id: None,
+        field,
+        published,
+        keyhole,
+        cause: None,
+        explanation: None,
+    }
 }
 
 /// Whether a zone's bearing changes its shape, which it doesn't for a

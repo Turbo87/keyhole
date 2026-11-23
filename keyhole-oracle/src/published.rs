@@ -1,6 +1,8 @@
 //! The values SoaringSpot publishes for a class day, as soaringspot-downloader
 //! writes them to `task.json` and `results.csv`.
 
+use std::iter;
+
 use anyhow::bail;
 use jiff::SignedDuration;
 use jiff::civil::Time;
@@ -13,10 +15,7 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize)]
 #[serde(tag = "task_type", rename_all = "snake_case")]
 pub enum PublishedTask {
-    AssignedArea {
-        /// The minimum task time in seconds.
-        task_duration: u32,
-    },
+    AssignedArea(PublishedAssignedAreaTask),
     #[serde(rename = "polygon")]
     Racing(PublishedRacingTask),
     /// A task SoaringSpot names by the shape of its course, which is a racing
@@ -35,7 +34,7 @@ pub enum PublishedTask {
 impl PublishedTask {
     pub fn minimum_task_time(&self) -> Option<SignedDuration> {
         let task_duration = match *self {
-            Self::AssignedArea { task_duration } => task_duration,
+            Self::AssignedArea(ref task) => task.task_duration,
             Self::Racing(_) | Self::CourseShape { task_duration: 0 } => return None,
             Self::CourseShape { task_duration } => task_duration,
         };
@@ -52,6 +51,16 @@ pub struct PublishedRacingTask {
     pub task_distance: f64,
     /// The start, turnpoints and finish, between a take-off and a landing on
     /// some class days.
+    pub task_points: Vec<PublishedTaskPoint>,
+}
+
+/// The task of an `assigned_area` class day.
+#[derive(Debug, Deserialize)]
+pub struct PublishedAssignedAreaTask {
+    /// The minimum task time in seconds.
+    pub task_duration: u32,
+    /// The start, assigned areas and finish, between a take-off and a landing
+    /// on some class days.
     pub task_points: Vec<PublishedTaskPoint>,
 }
 
@@ -102,9 +111,7 @@ pub enum PublishedOrientation {
 impl PublishedRacingTask {
     /// The start, turnpoints and finish, without a take-off or landing.
     pub fn task_points(&self) -> Vec<&PublishedTaskPoint> {
-        let points = self.task_points.iter();
-        let ends = [PointRole::Takeoff, PointRole::Landing];
-        points.filter(|point| !ends.contains(&point.role)).collect()
+        without_takeoff_and_landing(&self.task_points)
     }
 
     pub fn to_task(&self, earth_model: EarthModel) -> anyhow::Result<Task<Orientation>> {
@@ -120,15 +127,71 @@ impl PublishedRacingTask {
         if !roles_in_order {
             bail!("the racing task doesn't run from a start over turnpoints to a finish");
         }
-        let turnpoints = turnpoints.iter().map(|point| point.to_task_point());
-        Ok(Task {
-            kind: TaskKind::Racing,
-            start: start.to_task_point()?,
-            turnpoints: turnpoints.collect::<Result<_, _>>()?,
-            finish: finish.to_task_point()?,
-            earth_model,
-        })
+        convert_task(TaskKind::Racing, start, turnpoints, finish, earth_model)
     }
+}
+
+impl PublishedAssignedAreaTask {
+    /// The start, assigned areas and finish, without a take-off or landing.
+    pub fn task_points(&self) -> Vec<&PublishedTaskPoint> {
+        without_takeoff_and_landing(&self.task_points)
+    }
+
+    pub fn to_task(&self, earth_model: EarthModel) -> anyhow::Result<Task<Orientation>> {
+        let task_points = self.task_points();
+        let [start, areas @ .., finish] = task_points.as_slice() else {
+            bail!("the assigned area task has fewer than two task points");
+        };
+        let expected_roles = iter::once((start, PointRole::Start))
+            .chain(areas.iter().map(|area| (area, PointRole::Point)))
+            .chain(iter::once((finish, PointRole::Finish)));
+        for (index, (point, expected)) in expected_roles.enumerate() {
+            if point.role != expected {
+                let (role, expected) = (area_role(point.role), area_role(expected));
+                bail!(
+                    "task point {index} of the assigned area task is {role} instead of {expected}"
+                );
+            }
+        }
+        let minimum_task_time = SignedDuration::from_secs(self.task_duration.into());
+        let kind = TaskKind::AssignedArea { minimum_task_time };
+        convert_task(kind, start, areas, finish, earth_model)
+    }
+}
+
+/// A task point's role in an assigned area task, where SeeYou's `point` is an
+/// assigned area.
+fn area_role(role: PointRole) -> &'static str {
+    match role {
+        PointRole::Takeoff => "a take-off",
+        PointRole::Start => "a start",
+        PointRole::Point => "an assigned area",
+        PointRole::Finish => "a finish",
+        PointRole::Landing => "a landing",
+    }
+}
+
+fn without_takeoff_and_landing(task_points: &[PublishedTaskPoint]) -> Vec<&PublishedTaskPoint> {
+    let ends = [PointRole::Takeoff, PointRole::Landing];
+    let points = task_points.iter();
+    points.filter(|point| !ends.contains(&point.role)).collect()
+}
+
+fn convert_task(
+    kind: TaskKind,
+    start: &PublishedTaskPoint,
+    turnpoints: &[&PublishedTaskPoint],
+    finish: &PublishedTaskPoint,
+    earth_model: EarthModel,
+) -> anyhow::Result<Task<Orientation>> {
+    let turnpoints = turnpoints.iter().map(|point| point.to_task_point());
+    Ok(Task {
+        kind,
+        start: start.to_task_point()?,
+        turnpoints: turnpoints.collect::<Result<_, _>>()?,
+        finish: finish.to_task_point()?,
+        earth_model,
+    })
 }
 
 impl PublishedTaskPoint {

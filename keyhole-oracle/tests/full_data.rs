@@ -42,13 +42,21 @@ const LINE: &str = "Assigned Area Task, Maximum Points: 1000, F = 1,000, Fcr = 1
 ; Dm = 120km, D1 = 300km, no handicaps
 ; N: 1, n1: 1, n2: 1, Do: 300,00km, Vo: 100,00km/h";
 
+/// A start line at 0°, a 20 km area at 1° of longitude and a finish cylinder
+/// back at 0°, all on the equator.
+const TASK_POINTS: &str = r#"[
+  {"type": "start", "latitude": 0, "longitude": 0, "oz_type": "next", "oz_radius1": 10000, "oz_radius2": 0, "oz_angle1": 0.785398163397448, "oz_angle2": 0, "oz_angle12": 1.5707963267949, "oz_line": true, "oz_reduce": false},
+  {"type": "point", "latitude": 0, "longitude": 0.0174532925199433, "oz_type": "symmetric", "oz_radius1": 20000, "oz_radius2": 0, "oz_angle1": 3.14159265358979, "oz_angle2": 0, "oz_angle12": 4.71238898038469, "oz_line": false, "oz_reduce": false},
+  {"type": "finish", "latitude": 0, "longitude": 0, "oz_type": "previous", "oz_radius1": 3000, "oz_radius2": 0, "oz_angle1": 3.14159265358979, "oz_angle2": 0, "oz_angle12": 1.5707963267949, "oz_line": false, "oz_reduce": false}
+]"#;
+
 /// Writes a class day under `<competition>/<class>/<date>` as
 /// soaringspot-downloader does.
 fn write_day(dataset: &TempDir, day: &str, status: &str, line: &str, row: &str) {
     let directory = dataset.path().join(day);
     fs::create_dir_all(&directory).unwrap();
     let task = format!(
-        r#"{{"task_type": "assigned_area", "task_duration": 10800, "result_status": "{status}"}}"#
+        r#"{{"task_type": "assigned_area", "task_duration": 10800, "result_status": "{status}", "task_points": {TASK_POINTS}}}"#
     );
     fs::write(directory.join("task.json"), task).unwrap();
     fs::write(directory.join("results.csv"), format!("{HEADER}\n{row}\n")).unwrap();
@@ -123,7 +131,9 @@ fn left_out_class_days_are_counted_by_reason() {
     let with_handicap = FINISHER.replace(",Arcus,,", ",Arcus,1.000,");
     let leeton = "leeton-multiclass-nationals-2026/club/2026-01-08";
     let wgc_2021 = "wgc2021-club-std-15m-montlucon-gueret-2021/club/2021-06-01";
+    let dmj_edpa = "dmj-edpa-2023/standard/2023-05-27";
     write_day(&dataset, DAY, "cancelled", LINE, FINISHER);
+    write_day(&dataset, dmj_edpa, "practice", LINE, FINISHER);
     write_day(&dataset, leeton, "official", LINE, FINISHER);
     write_day(&dataset, NEXT_DAY, "official", &handicapped, FINISHER);
     let older_line = "Maximum Points: 1000\n; Day factor = 1.000, Completion factor = 1.000";
@@ -137,6 +147,7 @@ fn left_out_class_days_are_counted_by_reason() {
     Left out class days (SeeYou's pre-9.01 handicap reference): 1
     Left out class days (cancelled): 1
     Left out class days (handicapped without a Handicap column): 1
+    Left out class days (task points past the finish): 1
     ");
 }
 

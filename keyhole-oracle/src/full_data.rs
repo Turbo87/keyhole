@@ -25,6 +25,10 @@ const PREVIOUS_HANDICAP_REFERENCE: [&str; 2] = [
     "wgc2021-club-std-15m-montlucon-gueret-2021",
 ];
 
+/// Class days whose `task.json` lists task points after the finish, such as
+/// the PEV start points of dmj-edpa-2023.
+const TASK_POINTS_PAST_THE_FINISH: [&str; 1] = ["dmj-edpa-2023/standard/2023-05-27"];
+
 /// Competitions and classes scored on the FAI Sphere, which neither the task
 /// info line nor `task.json` states. Only the 20 m multi-seat class of
 /// egc2023 used it.
@@ -342,6 +346,9 @@ fn check_class_day(
     let status: DayStatus = serde_json::from_str(&task_json).context("parsing task.json")?;
     if status.result_status == "cancelled" {
         return Ok(ClassDay::LeftOut("cancelled"));
+    }
+    if TASK_POINTS_PAST_THE_FINISH.contains(&name) {
+        return Ok(ClassDay::LeftOut("task points past the finish"));
     }
     let page = read("results.html")?;
     let line = task_info_line(&page);
