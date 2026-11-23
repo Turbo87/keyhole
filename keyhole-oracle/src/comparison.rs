@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::decisions::{Cause, RemarkDecision, RowDecisions, Source};
 use crate::fixture::{Deviation, Fixture, PublishedDayParameters};
-use crate::published::{PublishedRacingTask, PublishedRow, degrees};
+use crate::published::{PublishedRacingTask, PublishedRow, PublishedTask, degrees};
 
 /// A compared value: a day parameter or a field of a row. The order of the
 /// variants lists day parameters before rows in the full-data report.
@@ -229,7 +229,7 @@ pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
     let rules = edition.resolve(TimeZone::UTC, &[(&file.rule_overrides).into()]);
     let day = ClassDay {
         parameters: rules.scoring,
-        minimum_task_time: fixture.minimum_task_time,
+        minimum_task_time: fixture.task.minimum_task_time(),
         competitors: fixture
             .rows
             .iter()
@@ -250,9 +250,9 @@ pub fn check(fixture: &Fixture) -> anyhow::Result<Report> {
         mismatch
     };
 
-    let task_mismatches = match &fixture.racing_task {
-        Some(task) => task_mismatches(task, rules.analysis.earth_model)?,
-        None => Vec::new(),
+    let task_mismatches = match &fixture.task {
+        PublishedTask::Racing(task) => task_mismatches(task, rules.analysis.earth_model)?,
+        _ => Vec::new(),
     };
     let day_parameters = file.published_day_parameters.iter();
     let day_parameters =
