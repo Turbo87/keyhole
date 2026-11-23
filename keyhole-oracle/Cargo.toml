@@ -6,7 +6,9 @@ publish = false
 
 [dependencies]
 anyhow = "1.0.104"
+bytes = "1.11.1"
 csv = "1.4.0"
+flate2 = "1.1.11"
 jiff = { version = "1.0.1", default-features = false, features = ["std", "serde", "tzdb-bundle-always"] }
 keyhole-engine = { path = "../keyhole-engine" }
 regex = "1.12.3"

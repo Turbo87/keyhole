@@ -28,7 +28,7 @@ const PREVIOUS_HANDICAP_REFERENCE: [&str; 2] = [
 
 /// Class days whose `task.json` lists task points after the finish, such as
 /// the PEV start points of dmj-edpa-2023.
-const TASK_POINTS_PAST_THE_FINISH: [&str; 1] = ["dmj-edpa-2023/standard/2023-05-27"];
+pub const TASK_POINTS_PAST_THE_FINISH: [&str; 1] = ["dmj-edpa-2023/standard/2023-05-27"];
 
 /// Competitions and classes scored on the FAI Sphere, which neither the task
 /// info line nor `task.json` states. Only the 20 m multi-seat class of
@@ -449,7 +449,7 @@ pub fn check_dataset(directory: &Path) -> anyhow::Result<DatasetReport> {
     Ok(report)
 }
 
-fn class_days(directory: &Path) -> anyhow::Result<Vec<PathBuf>> {
+pub fn class_days(directory: &Path) -> anyhow::Result<Vec<PathBuf>> {
     let mut directories = vec![directory.to_path_buf()];
     for _ in 0..3 {
         let mut subdirectories = Vec::new();
@@ -534,7 +534,7 @@ fn check_class_day(
 
 /// The earth model of a `<competition>/<class>/<date>` class day, or `None`
 /// for the edition's default.
-fn earth_model(day: &str) -> Option<EarthModel> {
+pub fn earth_model(day: &str) -> Option<EarthModel> {
     let (class, _) = day.rsplit_once('/')?;
     let (competition, _) = class.split_once('/')?;
     let listed = FAI_SPHERE.contains(&competition) || FAI_SPHERE.contains(&class);
