@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
 use anyhow::{Context, bail};
+use jiff::tz::TimeZone;
 use regex::Regex;
 use serde::Deserialize;
 
@@ -27,7 +28,7 @@ const PREVIOUS_HANDICAP_REFERENCE: [&str; 2] = [
 
 /// Class days whose `task.json` lists task points after the finish, such as
 /// the PEV start points of dmj-edpa-2023.
-const TASK_POINTS_PAST_THE_FINISH: [&str; 1] = ["dmj-edpa-2023/standard/2023-05-27"];
+pub const TASK_POINTS_PAST_THE_FINISH: [&str; 1] = ["dmj-edpa-2023/standard/2023-05-27"];
 
 /// Competitions and classes scored on the FAI Sphere, which neither the task
 /// info line nor `task.json` states. Only the 20 m multi-seat class of
@@ -44,6 +45,153 @@ const FAI_SPHERE: [&str; 11] = [
     "7th-fai-junior-european-gliding-championships-prievidza-2025",
     "egc2023/20m-multi-seat",
     "junior-world-gliding-championships-2022-tabor-2022",
+];
+
+/// The competitions that publish their times in each time zone.
+const TIME_ZONES: [(&str, &[&str]); 17] = [
+    (
+        "Africa/Johannesburg",
+        &[
+            "2019-south-african-nationals-18m-open-and-sports-welkom-2019",
+            "2020-south-african-nationals-welkom-2020",
+            "2021-sa-nats",
+            "2021-south-adfrican-nationals-18m-and-sports-welkom-2021",
+            "2022-south-african-nationals-15m-club-and-2-seater",
+            "2022-south-african-nationals-18m-and-sports-kroonstad-2022",
+            "sa-gliding-nationals-2015-welkom-airfield-2015",
+            "sanats-2023-welkom",
+            "sanats-2025",
+            "sanats2023potch",
+            "sanats2024potch",
+            "sanats2026",
+            "south-african-national-championships-2013",
+            "south-african-nationals-2012",
+            "south-african-nationals-2014",
+            "south-african-nationals-2015-welkom-airfield-2015",
+        ],
+    ),
+    (
+        "America/Chicago",
+        &["38th-fai-world-gliding-championship-uvalde-garner-field-2024"],
+    ),
+    (
+        "Australia/Brisbane",
+        &[
+            // Waikerie lies in South Australia, but the published times are 10
+            // hours ahead of UTC rather than the 10.5 hours of its daylight saving
+            // time.
+            "2023-australian-national-championships-open-18m-sport",
+            "2023-club-and-sports-nationals-kingaroy-2023",
+        ],
+    ),
+    (
+        "Australia/Melbourne",
+        &["2023-open-18m-15m-and-standard-nationals-benalla-2023"],
+    ),
+    (
+        "Australia/Sydney",
+        &[
+            "10th-fai-womens-world-gliding-championship-lake-keepit-2020",
+            "2020-multiclass-nationals-tocumwal-2019",
+            "2022-national-gliding-championships-narromine-2022",
+            "2024-australian-national-multiclass-champs-lake-keepit-2024",
+            "37th-fai-world-gliding-championships-narromine-2023",
+            "leeton-multiclass-nationals-2026",
+        ],
+    ),
+    (
+        "Europe/Amsterdam",
+        &[
+            "amstelglide-2024-soesterberg-ab-2024",
+            "amstelglide-2025-soesterberg-ab-2025",
+            "nationale-junioren-wedstrijd-2025-venlo-2025",
+            "nationale-junioren-wedstrijd-2026-venlo-2026",
+            "nationale-kampioenschappen-zweefvliegen-2024-terlet-2024",
+            "nationale-kampioenschappen-zweefvliegen-2026-terlet-2026",
+        ],
+    ),
+    (
+        "Europe/Berlin",
+        &[
+            "21-cup-oerlinghausen-2026-oerlinghausen-2026",
+            "dm-18m-burg-feuerstein-burg-feuerstein-2025",
+            "dm-2022-zwickau",
+            "dm-clubklasse-burg-feuerstein-burg-feuerstein-2024",
+            "dm-dosi-brb2025",
+            "dm-frauen-landau-ebenberg-2022",
+            "dm-offene-klasse-2025-lachen-speyerdorf-2025",
+            "dm-zwickau-2024",
+            "dm-zwickau-2026",
+            "dm2023bayreuth",
+            "dmc2026-burg-feuerstein",
+            "dmj-edpa-2023",
+            "dsmf24",
+            "dsmj2025",
+            "euregiocup-2022",
+            "euregiocup-2023",
+            "euregiocup-2024",
+            "euregiocup-2025",
+            "euregiocup-2026",
+            "jenacup-2026-jena-schongleina-2026",
+            "jwgc2026",
+            "teutorace-22-oerlinghausen-2022",
+        ],
+    ),
+    (
+        "Europe/Bratislava",
+        &["7th-fai-junior-european-gliding-championships-prievidza-2025"],
+    ),
+    (
+        "Europe/Budapest",
+        &[
+            "23rd-fai-european-gliding-championships-bekescsaba-2025",
+            "37th-fai-world-gliding-championships-2022-szeged-2022",
+        ],
+    ),
+    (
+        "Europe/Copenhagen",
+        &["6th-fai-junior-european-gliding-championship-2023"],
+    ),
+    (
+        "Europe/London",
+        &["11th-fai-womens-world-gliding-championship-2022"],
+    ),
+    (
+        "Europe/Madrid",
+        &["12th-fai-womens-world-gliding-championship-garray-2023"],
+    ),
+    (
+        "Europe/Paris",
+        &["wgc2021-club-std-15m-montlucon-gueret-2021"],
+    ),
+    (
+        "Europe/Prague",
+        &[
+            "13th-fai-womens-world-gliding-championship-zbraslavice-2025",
+            "22nd-fai-european-gliding-championships-tabor-2024",
+            "39th-fai-world-gliding-championships-tabor-2025",
+            "junior-world-gliding-championships-2022-tabor-2022",
+        ],
+    ),
+    (
+        "Europe/Vilnius",
+        &[
+            "21st-fai-european-gliding-championships-pociunai-2022",
+            "4th-fai-world-gliding-championship-pociunai-2022",
+            "jegc2021",
+        ],
+    ),
+    (
+        "Europe/Warsaw",
+        &["24th-fai-egc", "egc2023", "jwgc2024", "wgc2026"],
+    ),
+    (
+        "Pacific/Auckland",
+        &[
+            "new-zealand-national-multi-class-gliding-championships-2025",
+            "nz-multiclass-national-championships-jan-2026-matamata-2026",
+        ],
+    ),
 ];
 
 /// The baseline inside a dataset directory, which accept mode writes.
@@ -301,7 +449,7 @@ pub fn check_dataset(directory: &Path) -> anyhow::Result<DatasetReport> {
     Ok(report)
 }
 
-fn class_days(directory: &Path) -> anyhow::Result<Vec<PathBuf>> {
+pub fn class_days(directory: &Path) -> anyhow::Result<Vec<PathBuf>> {
     let mut directories = vec![directory.to_path_buf()];
     for _ in 0..3 {
         let mut subdirectories = Vec::new();
@@ -386,11 +534,22 @@ fn check_class_day(
 
 /// The earth model of a `<competition>/<class>/<date>` class day, or `None`
 /// for the edition's default.
-fn earth_model(day: &str) -> Option<EarthModel> {
+pub fn earth_model(day: &str) -> Option<EarthModel> {
     let (class, _) = day.rsplit_once('/')?;
     let (competition, _) = class.split_once('/')?;
     let listed = FAI_SPHERE.contains(&competition) || FAI_SPHERE.contains(&class);
     listed.then_some(EarthModel::FaiSphere)
+}
+
+/// The time zone that a competition publishes its times in.
+pub fn time_zone(competition: &str) -> anyhow::Result<TimeZone> {
+    let listed = TIME_ZONES
+        .iter()
+        .find(|(_, listed)| listed.contains(&competition));
+    let Some((time_zone, _)) = listed else {
+        bail!("the competition {competition} has no time zone");
+    };
+    Ok(TimeZone::get(time_zone)?)
 }
 
 /// The task info line of `results.html`, or an empty line without one.

@@ -13,6 +13,9 @@ use jiff::tz::Offset;
 use jiff::{SignedDuration, Timestamp};
 
 mod flight_detection;
+mod line_crossings;
+
+pub use line_crossings::{LineCrossing, line_crossings};
 
 /// One recording of a logger. The times of its records are times of day
 /// until they are resolved to points in time.
