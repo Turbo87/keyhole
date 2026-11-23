@@ -6,7 +6,7 @@ use std::fs;
 use std::path::Path;
 
 use insta::assert_snapshot;
-use keyhole_oracle::check_dataset;
+use keyhole_oracle::{check_dataset, time_zone};
 use tempfile::TempDir;
 
 /// Scores every class day of the dataset that `KEYHOLE_ORACLE_DATASET` names
@@ -389,4 +389,12 @@ fn listed_fai_sphere_classes_measure_their_tasks_on_the_fai_sphere() {
     Checked class days: 2, failing: 1
     Rows with remarks of unknown effect: 0, matching anyway: 0
     ");
+}
+
+#[test]
+fn competitions_publish_their_times_in_their_time_zone() {
+    let wgc2026 = time_zone("wgc2026").unwrap();
+    assert_eq!(wgc2026.iana_name(), Some("Europe/Warsaw"));
+    let error = time_zone("some-competition").unwrap_err();
+    assert_snapshot!(error, @"the competition some-competition has no time zone");
 }
