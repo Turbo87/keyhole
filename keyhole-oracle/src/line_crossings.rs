@@ -17,6 +17,7 @@ use jiff::{RoundMode, Timestamp, TimestampRound, Unit};
 use keyhole_engine::flight_analysis::{IgcFile, choose_default_flight, line_crossings};
 use keyhole_engine::geodesy::EarthModel;
 use keyhole_engine::task::{ObservationZone, Task, TaskPoint};
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::full_data::{TASK_POINTS_PAST_THE_FINISH, class_days, earth_model, time_zone};
@@ -287,9 +288,21 @@ pub fn check_line_crossings(directory: &Path) -> anyhow::Result<LineCrossingRepo
         Err(error) => Err(error).with_context(|| format!("reading {}", path.display()))?,
     };
     let mut report = LineCrossingReport::default();
-    for day in class_days(directory)? {
+    let days = class_days(directory)?.into_iter().map(|day| {
         let name = day.strip_prefix(directory)?.display().to_string();
-        match check_day(&day, &name, &mut report.left_out) {
+        Ok((day, name))
+    });
+    let days: Vec<_> = days.collect::<anyhow::Result<_>>()?;
+    let days = days.into_par_iter().map(|(day, name)| {
+        let mut left_out = BTreeMap::new();
+        let crossings = check_day(&day, &name, &mut left_out);
+        (name, crossings, left_out)
+    });
+    for (name, crossings, left_out) in days.collect::<Vec<_>>() {
+        for (reason, count) in left_out {
+            *report.left_out.entry(reason).or_default() += count;
+        }
+        match crossings {
             Ok(Some(mut crossings)) => {
                 crossings.baseline = baseline.remove(&name).unwrap_or_default();
                 report.checked.push((name, Ok(crossings)));
