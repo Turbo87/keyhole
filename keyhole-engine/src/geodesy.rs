@@ -28,6 +28,15 @@ pub struct LineOffset {
     pub along: f64,
 }
 
+/// The radii of curvature of an earth model at a latitude, in km.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RadiiOfCurvature {
+    /// Along the meridian.
+    pub meridional: f64,
+    /// Along the east-west direction, perpendicular to the meridian.
+    pub normal: f64,
+}
+
 /// A position in degrees, positive to the east and north.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LngLat {
@@ -74,6 +83,16 @@ impl EarthModel {
             across: km * cos,
             along: km * sin,
         }
+    }
+
+    /// The radii of curvature at `latitude`.
+    pub fn radii_of_curvature(self, latitude: f64) -> RadiiOfCurvature {
+        let Geodesic { a, f, .. } = *self.geodesic();
+        let e2 = f * (2. - f);
+        let w = (1. - e2 * latitude.to_radians().sin().powi(2)).sqrt();
+        let normal = a / w / 1000.;
+        let meridional = normal * (1. - e2) / (w * w);
+        RadiiOfCurvature { meridional, normal }
     }
 
     fn geodesic(self) -> &'static Geodesic {

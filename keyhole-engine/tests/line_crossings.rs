@@ -69,6 +69,31 @@ fn reports_the_backward_crossings_along_the_reversed_bearing() {
     ");
 }
 
+/// A track that crosses the line through 70°N 0°E northwards, about 100 km
+/// east of the reference point. The line curves about 2 km south of the
+/// 70°N parallel there, so a flat estimate puts both fixes behind it.
+const FAR_NORTH_TRACK: &str = "\
+ALXVABC
+HFDTE160624
+B1000006958675N00237669EA0050000500
+B1000016958999N00237669EA0050000500
+";
+
+#[test]
+fn reports_a_crossing_far_along_the_line_at_a_high_latitude() {
+    let igc_file = parse(FAR_NORTH_TRACK.as_bytes());
+    let records = &igc_file.records;
+    let reference_point = LngLat {
+        longitude: 0.,
+        latitude: 70.,
+    };
+    let crossings = line_crossings(records, EarthModel::FaiSphere, reference_point, 0.);
+    assert_snapshot!(render(&crossings), @"
+    crossing      before    after     along
+    10:00:00.500  10:00:00  10:00:01  100.000 km
+    ");
+}
+
 /// A longitude and latitude in radians, as SeeYou's `task.json` gives them,
 /// with the point's observation zone.
 type SeeYouPoint = (f64, f64, ObservationZone);
