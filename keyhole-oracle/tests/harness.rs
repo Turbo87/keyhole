@@ -3,7 +3,17 @@ use keyhole_oracle::{Fixture, Report, check};
 
 const HEADER: &str = "rank,cn,contestant,countries,club,team,glider,handicap,start_time_local,finish_time_local,duration,speed_kmh,distance_km,points,points_sort_key,penalty_points,remarks";
 
-const TASK: &str = r#"{"task_type": "assigned_area", "task_duration": 10800}"#;
+/// An assigned area task along the equator from a start line at 0° to a
+/// 20 km area at 1° of longitude and back to a finish cylinder at 0°.
+const TASK: &str = r#"{
+  "task_type": "assigned_area",
+  "task_duration": 10800,
+  "task_points": [
+    {"type": "start", "latitude": 0, "longitude": 0, "oz_type": "next", "oz_radius1": 10000, "oz_radius2": 0, "oz_angle1": 0.785398163397448, "oz_angle2": 0, "oz_angle12": 1.5707963267949, "oz_line": true, "oz_reduce": false},
+    {"type": "point", "latitude": 0, "longitude": 0.0174532925199433, "oz_type": "symmetric", "oz_radius1": 20000, "oz_radius2": 0, "oz_angle1": 3.14159265358979, "oz_angle2": 0, "oz_angle12": 4.71238898038469, "oz_line": false, "oz_reduce": false},
+    {"type": "finish", "latitude": 0, "longitude": 0, "oz_type": "previous", "oz_radius1": 3000, "oz_radius2": 0, "oz_angle1": 3.14159265358979, "oz_angle2": 0, "oz_angle12": 1.5707963267949, "oz_line": false, "oz_reduce": false}
+  ]
+}"#;
 
 /// A racing task along the equator from a start line at 0° to a finish
 /// cylinder at 1° of longitude, 111319.49 m on WGS84.
@@ -500,6 +510,30 @@ fn assigned_area_task_without_a_minimum_task_time_is_an_error() {
         format!("{error:#}"),
         "parsing task.json: missing field `task_duration`"
     );
+}
+
+#[test]
+fn assigned_area_start_bearing_more_than_a_thousandth_of_a_degree_off_fails() {
+    // 90.002°
+    let task = TASK.replacen("1.5707963267949", "1.5708312333799", 1);
+
+    let report = check_task(&task, &[FINISHER], FIXTURE_FILE);
+
+    assert_snapshot!(report, @"
+    bearing: published start 90.002°, Keyhole start 90.000°
+    Decisions:
+      A: finished 300 km in 03:00:00 (from the download)
+    ");
+}
+
+#[test]
+fn assigned_area_task_with_a_misplaced_finish_is_an_error() {
+    let task = TASK.replacen(r#""type": "point""#, r#""type": "finish""#, 1);
+    let fixture = Fixture::parse(&task, &results(&[FINISHER]), FIXTURE_FILE).unwrap();
+
+    let error = check(&fixture).unwrap_err();
+
+    assert_snapshot!(format!("{error:#}"), @"task point 1 of the assigned area task is a finish instead of an assigned area");
 }
 
 #[test]
