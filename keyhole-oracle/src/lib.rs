@@ -14,7 +14,8 @@ pub use comparison::{Field, Mismatch, Report, check};
 pub use fixture::{Deviation, Fixture, PublishedDayParameters};
 pub use full_data::{Baseline, DatasetReport, check_dataset, time_zone};
 pub use line_crossings::{
-    DayCrossings, Line, LineCrossingReport, Outcome, RowMismatch, check_line_crossings,
+    DayCrossings, Line, LineCrossingBaseline, LineCrossingReport, LineDeviation, Outcome,
+    RowMismatch, check_line_crossings,
 };
 pub use rule_set_family::{Inference, RuleSetFamily, infer_rule_set_family};
 pub use task_info::TaskInfo;

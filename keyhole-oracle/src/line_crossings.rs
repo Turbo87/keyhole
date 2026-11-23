@@ -5,7 +5,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::fs;
-use std::io::Read;
+use std::io::{ErrorKind, Read};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, bail};
@@ -17,7 +17,7 @@ use jiff::{RoundMode, Timestamp, TimestampRound, Unit};
 use keyhole_engine::flight_analysis::{IgcFile, choose_default_flight, line_crossings};
 use keyhole_engine::geodesy::EarthModel;
 use keyhole_engine::task::{ObservationZone, Task, TaskPoint};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::full_data::{TASK_POINTS_PAST_THE_FINISH, class_days, earth_model, time_zone};
 use crate::published::{PublishedTask, parse_results};
@@ -25,8 +25,25 @@ use crate::published::{PublishedTask, parse_results};
 /// How far beyond each end of a line a crossing still counts, in km.
 const LINE_TOLERANCE: f64 = 0.5;
 
+/// The baseline inside a dataset directory, which accept mode writes.
+const BASELINE: &str = "keyhole-oracle-line-crossings-baseline.toml";
+
+/// Failing rows that a dataset's line crossing check accepts, by class day.
+pub type LineCrossingBaseline = BTreeMap<String, Vec<LineDeviation>>;
+
+/// A failing row that the baseline accepts.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct LineDeviation {
+    pub competition_id: String,
+    pub line: Line,
+    /// The published and Keyhole's time, as the report shows them.
+    pub explanation: String,
+}
+
 /// A start or finish line.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Line {
     Start,
     Finish,
@@ -82,6 +99,48 @@ pub struct DayCrossings {
     pub time_zone: TimeZone,
     pub counts: BTreeMap<(Line, Outcome), usize>,
     pub mismatches: Vec<RowMismatch>,
+    /// The class day's rows in the baseline.
+    pub baseline: Vec<LineDeviation>,
+}
+
+impl DayCrossings {
+    fn deviation(&self, mismatch: &RowMismatch) -> LineDeviation {
+        let local = |time: Timestamp| self.time_zone.to_datetime(time).time();
+        let published = local(mismatch.published);
+        let keyhole = mismatch.keyhole.map(local);
+        let outcome = outcome_name(mismatch.outcome);
+        let keyhole = keyhole.map_or(outcome.into(), |time| time.to_string());
+        LineDeviation {
+            competition_id: mismatch.competition_id.clone(),
+            line: mismatch.line,
+            explanation: format!("published {published}, Keyhole {keyhole}"),
+        }
+    }
+
+    fn deviations(&self) -> impl Iterator<Item = LineDeviation> {
+        self.mismatches
+            .iter()
+            .map(|mismatch| self.deviation(mismatch))
+    }
+
+    /// Whether the baseline accepts every failing row and every baseline row
+    /// still fails.
+    fn passes(&self) -> bool {
+        self.unexplained().next().is_none() && self.stale().next().is_none()
+    }
+
+    /// The failing rows that the baseline doesn't accept with these values.
+    fn unexplained(&self) -> impl Iterator<Item = LineDeviation> {
+        self.deviations()
+            .filter(|deviation| !self.baseline.contains(deviation))
+    }
+
+    /// The baseline rows that no longer fail with these values.
+    fn stale(&self) -> impl Iterator<Item = &LineDeviation> {
+        let deviations: Vec<_> = self.deviations().collect();
+        let baseline = self.baseline.iter();
+        baseline.filter(move |deviation| !deviations.contains(deviation))
+    }
 }
 
 /// The outcome of checking the line crossings of every class day of a
@@ -94,16 +153,51 @@ pub struct LineCrossingReport {
     /// The number of class days left out, by reason. A class day with a start
     /// cylinder and a finish line counts here and is still checked.
     pub left_out: BTreeMap<&'static str, usize>,
+    /// Baseline rows of class days that weren't checked, by class day.
+    pub unchecked_baseline: LineCrossingBaseline,
 }
 
 impl LineCrossingReport {
     pub fn passes(&self) -> bool {
-        self.checked.iter().all(|(_, day)| day_passes(day))
+        let checked = self.checked.iter().all(|(_, day)| day_passes(day));
+        checked && self.unchecked_baseline.is_empty()
+    }
+
+    /// Writes every failing row of the checked class days as the baseline of
+    /// the dataset in `directory`.
+    pub fn write_baseline(&self, directory: &Path) -> anyhow::Result<()> {
+        let errors = self.checked.iter().filter(|(_, day)| day.is_err()).count();
+        if errors > 0 {
+            bail!("accept mode writes no baseline while class days have errors: {errors}");
+        }
+        let days = self.checked.iter();
+        let days = days.filter_map(|(name, day)| Some((name, day.as_ref().ok()?)));
+        let days = days.map(|(name, day)| (name.clone(), day.deviations().collect::<Vec<_>>()));
+        let baseline: LineCrossingBaseline = days.filter(|(_, rows)| !rows.is_empty()).collect();
+        let path = directory.join(BASELINE);
+        let baseline = toml::to_string(&baseline).context("serializing the baseline")?;
+        fs::write(&path, baseline).with_context(|| format!("writing {}", path.display()))
     }
 }
 
 fn day_passes(day: &anyhow::Result<DayCrossings>) -> bool {
-    day.as_ref().is_ok_and(|day| day.mismatches.is_empty())
+    day.as_ref().is_ok_and(DayCrossings::passes)
+}
+
+fn write_baseline_rows<'a>(
+    f: &mut fmt::Formatter<'_>,
+    heading: &str,
+    rows: impl Iterator<Item = (&'a str, &'a LineDeviation)>,
+) -> fmt::Result {
+    let rows: Vec<_> = rows.collect();
+    if !rows.is_empty() {
+        writeln!(f, "{heading} ({}):", rows.len())?;
+    }
+    for (day, deviation) in rows {
+        let (id, line) = (&deviation.competition_id, line_name(deviation.line));
+        writeln!(f, "  {day} {id} {line}: {}", deviation.explanation)?;
+    }
+    Ok(())
 }
 
 impl fmt::Display for LineCrossingReport {
@@ -132,16 +226,20 @@ impl fmt::Display for LineCrossingReport {
                 });
                 writeln!(f, "  {}: {}", line_name(line), counts.join(", "))?;
             }
-            for mismatch in &day.mismatches {
-                let local = |time: Timestamp| day.time_zone.to_datetime(time).time();
-                let published = local(mismatch.published);
-                let keyhole = mismatch.keyhole.map(local);
-                let outcome = outcome_name(mismatch.outcome);
-                let keyhole = keyhole.map_or(outcome.into(), |time| time.to_string());
-                let (id, line) = (&mismatch.competition_id, line_name(mismatch.line));
-                writeln!(f, "  {id} {line}: published {published}, Keyhole {keyhole}")?;
+            for deviation in day.unexplained() {
+                let (id, line) = (&deviation.competition_id, line_name(deviation.line));
+                writeln!(f, "  {id} {line}: {}", deviation.explanation)?;
             }
         }
+        let days = self.checked.iter();
+        let days = days.filter_map(|(name, day)| Some((name.as_str(), day.as_ref().ok()?)));
+        let stale = days.flat_map(|(name, day)| day.stale().map(move |row| (name, row)));
+        write_baseline_rows(f, "Baseline rows that no longer occur", stale)?;
+        let unchecked = self.unchecked_baseline.iter();
+        let unchecked =
+            unchecked.flat_map(|(name, rows)| rows.iter().map(move |row| (name.as_str(), row)));
+        let heading = "Baseline rows of class days that weren't checked";
+        write_baseline_rows(f, heading, unchecked)?;
         let checked = self.checked.len();
         let failing = self.checked.iter().filter(|(_, day)| !day_passes(day));
         let failing = failing.count();
@@ -180,15 +278,27 @@ pub fn check_line_crossings(directory: &Path) -> anyhow::Result<LineCrossingRepo
     if !directory.is_dir() {
         bail!("the dataset directory {path} doesn't exist");
     }
+    let path = directory.join(BASELINE);
+    let mut baseline: LineCrossingBaseline = match fs::read_to_string(&path) {
+        Ok(baseline) => {
+            toml::from_str(&baseline).with_context(|| format!("parsing {}", path.display()))?
+        }
+        Err(error) if error.kind() == ErrorKind::NotFound => LineCrossingBaseline::new(),
+        Err(error) => Err(error).with_context(|| format!("reading {}", path.display()))?,
+    };
     let mut report = LineCrossingReport::default();
     for day in class_days(directory)? {
         let name = day.strip_prefix(directory)?.display().to_string();
         match check_day(&day, &name, &mut report.left_out) {
-            Ok(Some(crossings)) => report.checked.push((name, Ok(crossings))),
+            Ok(Some(mut crossings)) => {
+                crossings.baseline = baseline.remove(&name).unwrap_or_default();
+                report.checked.push((name, Ok(crossings)));
+            }
             Ok(None) => {}
             Err(error) => report.checked.push((name, Err(error))),
         }
     }
+    report.unchecked_baseline = baseline;
     Ok(report)
 }
 
@@ -276,6 +386,7 @@ fn check_day(
         time_zone,
         counts: BTreeMap::new(),
         mismatches: Vec::new(),
+        baseline: Vec::new(),
     };
     for row in parse_results(&read("results.csv")?).context("parsing results.csv")? {
         let mut parsed = None;
