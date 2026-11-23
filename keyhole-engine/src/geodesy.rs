@@ -16,6 +16,18 @@ pub enum EarthModel {
     FaiSphere,
 }
 
+/// Where a position lies relative to a line through a reference point,
+/// perpendicular to a bearing, in km. `s` is the geodesic distance from the
+/// reference point and `Δaz` the azimuth at the reference point minus the
+/// bearing.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LineOffset {
+    /// `s·cos(Δaz)`, negative behind the line and otherwise in front of it.
+    pub across: f64,
+    /// `s·sin(Δaz)`, positive to the right of the bearing.
+    pub along: f64,
+}
+
 /// A position in degrees, positive to the east and north.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LngLat {
@@ -39,6 +51,29 @@ impl EarthModel {
         let (azimuth, _, _): (f64, f64, f64) =
             geodesic.inverse(from.latitude, from.longitude, to.latitude, to.longitude);
         normalize_bearing(azimuth)
+    }
+
+    /// Where `position` lies relative to the line through `reference_point`
+    /// perpendicular to `bearing`, in degrees.
+    pub fn line_offset(
+        self,
+        reference_point: LngLat,
+        bearing: f64,
+        position: LngLat,
+    ) -> LineOffset {
+        let (from, to) = (reference_point, position);
+        let geodesic = self.geodesic();
+        let (metres, azimuth, _, _): (f64, f64, f64, f64) =
+            geodesic.inverse(from.latitude, from.longitude, to.latitude, to.longitude);
+        // Reduced to [-180°, 180°), ±90° has a cosine just above zero, so a
+        // position on the line lies in front of it.
+        let delta = normalize_bearing(azimuth - bearing + 180.) - 180.;
+        let (sin, cos) = delta.to_radians().sin_cos();
+        let km = metres / 1000.;
+        LineOffset {
+            across: km * cos,
+            along: km * sin,
+        }
     }
 
     fn geodesic(self) -> &'static Geodesic {
