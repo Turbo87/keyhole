@@ -8,7 +8,7 @@ use jiff::SignedDuration;
 use jiff::civil::Time;
 use jiff::fmt::friendly::SpanPrinter;
 use keyhole_engine::geodesy::{EarthModel, LngLat, normalize_bearing};
-use keyhole_engine::task::{ObservationZone, Orientation, Task, TaskKind, TaskPoint};
+use keyhole_engine::task::{ObservationZone, Orientation, Task, TaskKind, TaskPoint, TwoArcZone};
 use serde::Deserialize;
 
 /// The part of `task.json` that day scoring uses.
@@ -216,10 +216,12 @@ impl PublishedTaskPoint {
             ObservationZone::Line { length }
         } else {
             ObservationZone::TwoArc {
-                r1: self.oz_radius1 / 1000.,
-                a1: degrees(self.oz_angle1),
-                r2: self.oz_radius2 / 1000.,
-                a2: degrees(self.oz_angle2),
+                shape: TwoArcZone {
+                    r1: self.oz_radius1 / 1000.,
+                    a1: degrees(self.oz_angle1),
+                    r2: self.oz_radius2 / 1000.,
+                    a2: degrees(self.oz_angle2),
+                },
                 reduce: self.oz_reduce,
             }
         };

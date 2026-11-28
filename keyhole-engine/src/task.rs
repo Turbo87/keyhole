@@ -51,38 +51,60 @@ pub enum ObservationZone {
     Line {
         length: f64,
     },
-    /// SeeYou's zone of the R1 sector of half angle A1, minus the R2 disc,
-    /// plus the R2 sector of half angle A2.
     TwoArc {
-        r1: f64,
-        a1: f64,
-        r2: f64,
-        a2: f64,
+        shape: TwoArcZone,
         /// Whether the zone shortens each task leg it touches by its R1.
         reduce: bool,
     },
 }
 
-impl ObservationZone {
-    /// A two-arc zone shaped as a cylinder of the given radius.
-    pub const fn cylinder(radius: f64, reduce: bool) -> Self {
-        Self::TwoArc {
+/// SeeYou's zone of the R1 sector of half angle A1, minus the R2 disc, plus
+/// the R2 sector of half angle A2, with every distance in km and every angle
+/// in degrees.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TwoArcZone {
+    pub r1: f64,
+    pub a1: f64,
+    pub r2: f64,
+    pub a2: f64,
+}
+
+impl TwoArcZone {
+    /// A cylinder of the given radius.
+    pub const fn cylinder(radius: f64) -> Self {
+        Self {
             r1: radius,
             a1: 180.,
             r2: 0.,
             a2: 0.,
-            reduce,
         }
     }
 
     /// The DAeC keyhole: a 10 km sector with a half angle of 45°, joined with a
     /// 0.5 km cylinder.
     pub const fn daec_keyhole() -> Self {
-        Self::TwoArc {
+        Self {
             r1: 10.,
             a1: 45.,
             r2: 0.5,
             a2: 180.,
+        }
+    }
+}
+
+impl ObservationZone {
+    /// A two-arc zone shaped as a cylinder of the given radius.
+    pub const fn cylinder(radius: f64, reduce: bool) -> Self {
+        let shape = TwoArcZone::cylinder(radius);
+        Self::TwoArc { shape, reduce }
+    }
+
+    /// The DAeC keyhole: a 10 km sector with a half angle of 45°, joined with a
+    /// 0.5 km cylinder.
+    pub const fn daec_keyhole() -> Self {
+        let shape = TwoArcZone::daec_keyhole();
+        Self::TwoArc {
+            shape,
             reduce: false,
         }
     }
@@ -90,7 +112,7 @@ impl ObservationZone {
     /// How much the zone shortens each task leg it touches, in km.
     fn reduction(&self) -> f64 {
         match *self {
-            Self::TwoArc { r1, reduce, .. } if reduce => r1,
+            Self::TwoArc { shape, reduce } if reduce => shape.r1,
             _ => 0.,
         }
     }

@@ -12,10 +12,15 @@ use jiff::civil::{Date, DateTime, Time};
 use jiff::tz::Offset;
 use jiff::{SignedDuration, Timestamp};
 
+use crate::geodesy::LngLat;
+
+mod flat_estimate;
 mod flight_detection;
 mod line_crossings;
+mod zone_visits;
 
 pub use line_crossings::{LineCrossing, line_crossings};
+pub use zone_visits::{NearMiss, PlacedZone, ZoneCrossing, ZoneEvent, ZoneVisit, zone_visits};
 
 /// One recording of a logger. The times of its records are times of day
 /// until they are resolved to points in time.
@@ -211,6 +216,13 @@ pub struct Fix {
 }
 
 impl Fix {
+    pub fn position(&self) -> LngLat {
+        LngLat {
+            longitude: self.longitude,
+            latitude: self.latitude,
+        }
+    }
+
     /// The value of the extension with the given three-letter code, such as
     /// `ENL`.
     pub fn extension(&self, code: &str) -> Option<&str> {
