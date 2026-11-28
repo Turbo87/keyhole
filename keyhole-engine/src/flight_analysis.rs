@@ -17,8 +17,10 @@ use crate::geodesy::LngLat;
 mod flat_estimate;
 mod flight_detection;
 mod line_crossings;
+mod zone_visits;
 
 pub use line_crossings::{LineCrossing, line_crossings};
+pub use zone_visits::{NearMiss, PlacedZone, ZoneCrossing, ZoneEvent, ZoneVisit, zone_visits};
 
 /// One recording of a logger. The times of its records are times of day
 /// until they are resolved to points in time.

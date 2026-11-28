@@ -62,6 +62,16 @@ impl EarthModel {
         normalize_bearing(azimuth)
     }
 
+    /// The geodesic distance between two positions in km, and the azimuth
+    /// at `from` of the geodesic to `to` in degrees clockwise from north in
+    /// [0°, 360°), from a single geodesic calculation.
+    pub fn distance_and_azimuth(self, from: LngLat, to: LngLat) -> (f64, f64) {
+        let geodesic = self.geodesic();
+        let (metres, azimuth, _, _): (f64, f64, f64, f64) =
+            geodesic.inverse(from.latitude, from.longitude, to.latitude, to.longitude);
+        (metres / 1000., normalize_bearing(azimuth))
+    }
+
     /// Where `position` lies relative to the line through `reference_point`
     /// perpendicular to `bearing`, in degrees.
     pub fn line_offset(
