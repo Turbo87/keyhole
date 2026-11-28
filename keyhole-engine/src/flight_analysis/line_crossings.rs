@@ -37,10 +37,7 @@ pub fn line_crossings<'a>(
     let line = FlatLine::new(earth_model, reference_point, bearing);
     let valid_fixes = records.iter().filter_map(|record| {
         let fix = record.fix().filter(|fix| fix.valid)?;
-        let position = LngLat {
-            longitude: fix.longitude,
-            latitude: fix.latitude,
-        };
+        let position = fix.position();
         Some((record, position, line.across(position)))
     });
     let valid_fixes: Vec<_> = valid_fixes.collect();

@@ -12,6 +12,8 @@ use jiff::civil::{Date, DateTime, Time};
 use jiff::tz::Offset;
 use jiff::{SignedDuration, Timestamp};
 
+use crate::geodesy::LngLat;
+
 mod flat_estimate;
 mod flight_detection;
 mod line_crossings;
@@ -212,6 +214,13 @@ pub struct Fix {
 }
 
 impl Fix {
+    pub fn position(&self) -> LngLat {
+        LngLat {
+            longitude: self.longitude,
+            latitude: self.latitude,
+        }
+    }
+
     /// The value of the extension with the given three-letter code, such as
     /// `ENL`.
     pub fn extension(&self, code: &str) -> Option<&str> {
