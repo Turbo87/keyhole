@@ -12,6 +12,7 @@ use jiff::civil::{Date, DateTime, Time};
 use jiff::tz::Offset;
 use jiff::{SignedDuration, Timestamp};
 
+mod flat_estimate;
 mod flight_detection;
 mod line_crossings;
 

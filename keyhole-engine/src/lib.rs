@@ -2,6 +2,7 @@
 //! with no I/O, clock, network or randomness.
 
 pub mod day_scoring;
+mod flat;
 pub mod flight_analysis;
 pub mod geodesy;
 pub mod overall_results;

@@ -5,7 +5,9 @@ use std::ops::RangeInclusive;
 use jiff::Timestamp;
 
 use super::Record;
-use crate::geodesy::{EarthModel, FAI_SPHERE_RADIUS, LngLat, normalize_bearing};
+use super::flat_estimate::FlatEstimate;
+use crate::flat::Point;
+use crate::geodesy::{EarthModel, LngLat};
 
 /// A crossing of a start or finish line from behind to in front by the line
 /// between two consecutive valid fixes.
@@ -65,49 +67,29 @@ pub fn line_crossings<'a>(
     crossings.collect()
 }
 
-/// The line on the plane tangent to the Earth at the reference point, which
-/// bounds the across coordinate of a position without solving a geodesic.
+/// The start or finish line drawn on a flat map around its reference point.
+/// It quickly tells which side of the line a position is on, or that it is
+/// too close to the line to tell without the exact geodesic calculation.
 struct FlatLine {
-    reference_point: LngLat,
-    /// The km per degree of longitude at the reference point.
-    km_per_degree_longitude: f64,
-    /// The km per degree of latitude at the reference point.
-    km_per_degree_latitude: f64,
-    sin_bearing: f64,
-    cos_bearing: f64,
-    /// The factor of the squared distance that bounds the flat estimate's
-    /// error.
-    curvature: f64,
+    estimate: FlatEstimate,
+    /// The unit direction of the bearing, across the line.
+    bearing: Point,
 }
 
 impl FlatLine {
     fn new(earth_model: EarthModel, reference_point: LngLat, bearing: f64) -> Self {
-        let latitude = reference_point.latitude.to_radians();
-        let radii = earth_model.radii_of_curvature(reference_point.latitude);
-        let (sin_bearing, cos_bearing) = bearing.to_radians().sin_cos();
-        // On both earth models, the error measured up to 84° latitude stays
-        // below `(1 + tan|φ|)/R·d²`, and the factor 2 adds headroom.
-        let curvature = 2. * (1. + latitude.tan().abs()) / FAI_SPHERE_RADIUS;
+        let (sin, cos) = bearing.to_radians().sin_cos();
         Self {
-            reference_point,
-            km_per_degree_longitude: (radii.normal * latitude.cos()).to_radians(),
-            km_per_degree_latitude: radii.meridional.to_radians(),
-            sin_bearing,
-            cos_bearing,
-            curvature,
+            estimate: FlatEstimate::new(earth_model, reference_point),
+            bearing: Point::new(sin, cos),
         }
     }
 
-    /// The range that the across coordinate of `position` lies in, in km.
+    /// The range that the exact `LineOffset::across` of `position` lies in,
+    /// in km: negative behind the line, otherwise in front of it.
     fn across(&self, position: LngLat) -> RangeInclusive<f64> {
-        let longitude =
-            normalize_bearing(position.longitude - self.reference_point.longitude + 180.) - 180.;
-        let latitude = position.latitude - self.reference_point.latitude;
-        let x = longitude * self.km_per_degree_longitude;
-        let y = latitude * self.km_per_degree_latitude;
-        let across = x * self.sin_bearing + y * self.cos_bearing;
-        // The 1 m covers rounding close to the reference point.
-        let margin = self.curvature * (x * x + y * y) + 0.001;
-        across - margin..=across + margin
+        let position = self.estimate.project(position);
+        let across = position.point.dot(self.bearing);
+        across - position.margin..=across + position.margin
     }
 }
