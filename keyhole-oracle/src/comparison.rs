@@ -9,7 +9,7 @@ use jiff::tz::TimeZone;
 use keyhole_engine::day_scoring::{ClassDay, DayResult, DayValidity, Rank, Row, score_class_day};
 use keyhole_engine::geodesy::{EarthModel, normalize_bearing};
 use keyhole_engine::rule_sets::RuleSetEdition;
-use keyhole_engine::task::{ObservationZone, Task};
+use keyhole_engine::task::{ObservationZone, Task, TwoArcZone};
 use serde::{Deserialize, Serialize};
 
 use crate::decisions::{Cause, RemarkDecision, RowDecisions, Source};
@@ -381,9 +381,10 @@ fn task_mismatch(field: Field, published: String, keyhole: String) -> Mismatch {
 fn shaped_by_bearing(zone: ObservationZone) -> bool {
     match zone {
         ObservationZone::Line { .. } => true,
-        ObservationZone::TwoArc { a1, r2, a2, .. } => {
-            a1 < 180. || (r2 > 0. && 0. < a2 && a2 < 180.)
-        }
+        ObservationZone::TwoArc {
+            shape: TwoArcZone { a1, r2, a2, .. },
+            ..
+        } => a1 < 180. || (r2 > 0. && 0. < a2 && a2 < 180.),
     }
 }
 
