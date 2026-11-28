@@ -10,7 +10,7 @@ use std::path::Path;
 use flate2::Compression;
 use flate2::write::GzEncoder;
 use insta::assert_snapshot;
-use keyhole_oracle::check_line_crossings;
+use keyhole_oracle::check_task_points;
 use tempfile::TempDir;
 
 /// Checks the line crossings of every class day of the dataset that
@@ -23,7 +23,7 @@ fn downloaded_class_days_cross_their_lines_at_the_published_times() {
         return;
     };
     let dataset = Path::new(&dataset);
-    let check = || check_line_crossings(dataset).unwrap_or_else(|error| panic!("{error:#}"));
+    let check = || check_task_points(dataset).unwrap_or_else(|error| panic!("{error:#}"));
     let mut report = check();
     if env::var_os("KEYHOLE_ORACLE_ACCEPT").is_some() {
         let written = report.write_baseline(dataset);
@@ -117,7 +117,7 @@ fn dataset(rows: &[String], flights: &[(&str, String)]) -> TempDir {
 fn matching_rows_pass_with_the_earth_model_and_time_zone_of_their_class_day() {
     let rows = [row("A", "14:00:00", "14:01:04")];
     let dataset = dataset(&rows, &[("A", equator_flight())]);
-    let report = check_line_crossings(dataset.path()).unwrap();
+    let report = check_task_points(dataset.path()).unwrap();
     assert!(report.passes(), "{report}");
     assert_snapshot!(report, @"
     egc2023/club/2026-06-01 (WGS84, Europe/Warsaw):
@@ -131,7 +131,7 @@ fn matching_rows_pass_with_the_earth_model_and_time_zone_of_their_class_day() {
 fn rows_1_s_off_are_counted_and_pass() {
     let rows = [row("A", "13:59:59", "14:01:05")];
     let dataset = dataset(&rows, &[("A", equator_flight())]);
-    let report = check_line_crossings(dataset.path()).unwrap();
+    let report = check_task_points(dataset.path()).unwrap();
     assert!(report.passes(), "{report}");
     assert_snapshot!(report, @"
     egc2023/club/2026-06-01 (WGS84, Europe/Warsaw):
@@ -145,7 +145,7 @@ fn rows_1_s_off_are_counted_and_pass() {
 fn rows_more_than_1_s_off_fail() {
     let rows = [row("A", "14:00:05", "14:01:04")];
     let dataset = dataset(&rows, &[("A", equator_flight())]);
-    let report = check_line_crossings(dataset.path()).unwrap();
+    let report = check_task_points(dataset.path()).unwrap();
     assert!(!report.passes());
     assert_snapshot!(report, @"
     egc2023/club/2026-06-01 (WGS84, Europe/Warsaw):
@@ -161,7 +161,7 @@ fn rows_without_a_crossing_within_half_the_line_plus_500_m_fail() {
     let rows = [row("A", "14:00:00", "14:01:04")];
     // 0.15' is about 11 km north of the equator.
     let dataset = dataset(&rows, &[("A", igc_file("0006000N"))]);
-    let report = check_line_crossings(dataset.path()).unwrap();
+    let report = check_task_points(dataset.path()).unwrap();
     assert!(!report.passes());
     assert_snapshot!(report, @"
     egc2023/club/2026-06-01 (WGS84, Europe/Warsaw):
@@ -177,7 +177,7 @@ fn rows_without_a_crossing_within_half_the_line_plus_500_m_fail() {
 fn rows_without_an_igc_file_are_counted_and_pass() {
     let rows = [row("A", "14:00:00", "14:01:04"), row("B", "14:00:00", "")];
     let dataset = dataset(&rows, &[("A", equator_flight())]);
-    let report = check_line_crossings(dataset.path()).unwrap();
+    let report = check_task_points(dataset.path()).unwrap();
     assert!(report.passes(), "{report}");
     assert_snapshot!(report, @"
     egc2023/club/2026-06-01 (WGS84, Europe/Warsaw):
@@ -194,7 +194,7 @@ fn class_day_of_a_competition_without_a_time_zone_fails() {
     let rows = [row("A", "14:00:00", "14:01:04")];
     let day = "some-competition/club/2026-06-01";
     write_day(&dataset, day, &task, &rows, &[("A", equator_flight())]);
-    let report = check_line_crossings(dataset.path()).unwrap();
+    let report = check_task_points(dataset.path()).unwrap();
     assert!(!report.passes());
     assert_snapshot!(report, @"
     some-competition/club/2026-06-01: the competition some-competition has no time zone
@@ -223,7 +223,7 @@ fn left_out_class_days_are_counted_by_reason() {
     let cylinders = TASK_POINTS.replace(r#""oz_line": true"#, r#""oz_line": false"#);
     write("04", &task_json("official", &cylinders), &flights);
     write("05", &task_json("official", TASK_POINTS), &[]);
-    let report = check_line_crossings(dataset.path()).unwrap();
+    let report = check_task_points(dataset.path()).unwrap();
     assert!(report.passes(), "{report}");
     assert_snapshot!(report, @"
     Checked class days: 0, failing: 0
@@ -239,7 +239,7 @@ fn left_out_class_days_are_counted_by_reason() {
 fn rows_with_an_unreadable_igc_file_fail() {
     let rows = [row("A", "14:00:00", "14:01:04")];
     let dataset = dataset(&rows, &[("A", "not an IGC file".into())]);
-    let report = check_line_crossings(dataset.path()).unwrap();
+    let report = check_task_points(dataset.path()).unwrap();
     assert!(!report.passes());
     assert_snapshot!(report, @"
     egc2023/club/2026-06-01 (WGS84, Europe/Warsaw):
@@ -254,7 +254,7 @@ fn rows_with_an_unreadable_igc_file_fail() {
 fn baseline(dataset: &TempDir) -> String {
     let path = dataset
         .path()
-        .join("keyhole-oracle-line-crossings-baseline.toml");
+        .join("keyhole-oracle-task-points-baseline.toml");
     fs::read_to_string(path).unwrap()
 }
 
@@ -264,7 +264,7 @@ fn accepted_dataset() -> TempDir {
     let rows = [row("A", "14:00:05", "14:01:04"), row("B", "14:00:00", "")];
     let flights = [("A", equator_flight()), ("B", igc_file("0006000N"))];
     let dataset = dataset(&rows, &flights);
-    let report = check_line_crossings(dataset.path()).unwrap();
+    let report = check_task_points(dataset.path()).unwrap();
     report.write_baseline(dataset.path()).unwrap();
     dataset
 }
@@ -283,7 +283,7 @@ fn accept_mode_writes_the_failing_rows_as_the_baseline() {
     line = "start"
     explanation = "published 14:00:00, Keyhole no crossing"
     "#);
-    let report = check_line_crossings(dataset.path()).unwrap();
+    let report = check_task_points(dataset.path()).unwrap();
     assert!(report.passes(), "{report}");
     assert_snapshot!(report, @"
     egc2023/club/2026-06-01 (WGS84, Europe/Warsaw):
@@ -303,7 +303,7 @@ fn new_failing_row_fails_against_the_baseline() {
     let flights = [("A", equator_flight()), ("B", igc_file("0006000N"))];
     let task = task_json("official", TASK_POINTS);
     write_day(&dataset, DAY, &task, &rows, &flights);
-    let report = check_line_crossings(dataset.path()).unwrap();
+    let report = check_task_points(dataset.path()).unwrap();
     assert!(!report.passes());
     assert_snapshot!(report, @"
     egc2023/club/2026-06-01 (WGS84, Europe/Warsaw):
@@ -321,7 +321,7 @@ fn baseline_row_with_changed_values_fails() {
     let flights = [("A", equator_flight()), ("B", igc_file("0006000N"))];
     let task = task_json("official", TASK_POINTS);
     write_day(&dataset, DAY, &task, &rows, &flights);
-    let report = check_line_crossings(dataset.path()).unwrap();
+    let report = check_task_points(dataset.path()).unwrap();
     assert!(!report.passes());
     assert_snapshot!(report, @"
     egc2023/club/2026-06-01 (WGS84, Europe/Warsaw):
@@ -341,7 +341,7 @@ fn baseline_row_that_starts_matching_fails() {
     let flights = [("A", equator_flight()), ("B", igc_file("0006000N"))];
     let task = task_json("official", TASK_POINTS);
     write_day(&dataset, DAY, &task, &rows, &flights);
-    let report = check_line_crossings(dataset.path()).unwrap();
+    let report = check_task_points(dataset.path()).unwrap();
     assert!(!report.passes());
     assert_snapshot!(report, @"
     egc2023/club/2026-06-01 (WGS84, Europe/Warsaw):
@@ -359,7 +359,7 @@ fn baseline_rows_of_a_class_day_no_longer_checked_fail() {
     let task = task_json("cancelled", TASK_POINTS);
     let rows = [row("A", "14:00:05", "14:01:04")];
     write_day(&dataset, DAY, &task, &rows, &[("A", equator_flight())]);
-    let report = check_line_crossings(dataset.path()).unwrap();
+    let report = check_task_points(dataset.path()).unwrap();
     assert!(!report.passes());
     assert_snapshot!(report, @"
     Baseline rows of class days that weren't checked (2):
@@ -378,7 +378,7 @@ fn accept_mode_refuses_class_day_errors_and_keeps_the_baseline() {
     let day = "some-competition/club/2026-06-01";
     let task = task_json("official", TASK_POINTS);
     write_day(&dataset, day, &task, &rows, &[("A", equator_flight())]);
-    let report = check_line_crossings(dataset.path()).unwrap();
+    let report = check_task_points(dataset.path()).unwrap();
     let error = report.write_baseline(dataset.path()).unwrap_err();
     assert_snapshot!(error, @"accept mode writes no baseline while class days have errors: 1");
     assert_eq!(baseline(&dataset), accepted);

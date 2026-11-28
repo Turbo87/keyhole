@@ -27,15 +27,15 @@ use crate::published::{PublishedTask, parse_results};
 const LINE_TOLERANCE: f64 = 0.5;
 
 /// The baseline inside a dataset directory, which accept mode writes.
-const BASELINE: &str = "keyhole-oracle-line-crossings-baseline.toml";
+const BASELINE: &str = "keyhole-oracle-task-points-baseline.toml";
 
-/// Failing rows that a dataset's line crossing check accepts, by class day.
-pub type LineCrossingBaseline = BTreeMap<String, Vec<LineDeviation>>;
+/// Failing rows that a dataset's task point check accepts, by class day.
+pub type TaskPointBaseline = BTreeMap<String, Vec<TaskPointDeviation>>;
 
 /// A failing row that the baseline accepts.
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct LineDeviation {
+pub struct TaskPointDeviation {
     pub competition_id: String,
     pub line: Line,
     /// The published and Keyhole's time, as the report shows them.
@@ -95,30 +95,30 @@ pub struct RowMismatch {
 
 /// The rows of one class day, counted by line and outcome.
 #[derive(Debug)]
-pub struct DayCrossings {
+pub struct DayTaskPoints {
     pub earth_model: EarthModel,
     pub time_zone: TimeZone,
     pub counts: BTreeMap<(Line, Outcome), usize>,
     pub mismatches: Vec<RowMismatch>,
     /// The class day's rows in the baseline.
-    pub baseline: Vec<LineDeviation>,
+    pub baseline: Vec<TaskPointDeviation>,
 }
 
-impl DayCrossings {
-    fn deviation(&self, mismatch: &RowMismatch) -> LineDeviation {
+impl DayTaskPoints {
+    fn deviation(&self, mismatch: &RowMismatch) -> TaskPointDeviation {
         let local = |time: Timestamp| self.time_zone.to_datetime(time).time();
         let published = local(mismatch.published);
         let keyhole = mismatch.keyhole.map(local);
         let outcome = outcome_name(mismatch.outcome);
         let keyhole = keyhole.map_or(outcome.into(), |time| time.to_string());
-        LineDeviation {
+        TaskPointDeviation {
             competition_id: mismatch.competition_id.clone(),
             line: mismatch.line,
             explanation: format!("published {published}, Keyhole {keyhole}"),
         }
     }
 
-    fn deviations(&self) -> impl Iterator<Item = LineDeviation> {
+    fn deviations(&self) -> impl Iterator<Item = TaskPointDeviation> {
         self.mismatches
             .iter()
             .map(|mismatch| self.deviation(mismatch))
@@ -131,13 +131,13 @@ impl DayCrossings {
     }
 
     /// The failing rows that the baseline doesn't accept with these values.
-    fn unexplained(&self) -> impl Iterator<Item = LineDeviation> {
+    fn unexplained(&self) -> impl Iterator<Item = TaskPointDeviation> {
         self.deviations()
             .filter(|deviation| !self.baseline.contains(deviation))
     }
 
     /// The baseline rows that no longer fail with these values.
-    fn stale(&self) -> impl Iterator<Item = &LineDeviation> {
+    fn stale(&self) -> impl Iterator<Item = &TaskPointDeviation> {
         let deviations: Vec<_> = self.deviations().collect();
         let baseline = self.baseline.iter();
         baseline.filter(move |deviation| !deviations.contains(deviation))
@@ -147,18 +147,18 @@ impl DayCrossings {
 /// The outcome of checking the line crossings of every class day of a
 /// dataset.
 #[derive(Debug, Default)]
-pub struct LineCrossingReport {
+pub struct TaskPointReport {
     /// The rows of each checked class day, or the error that stopped its
     /// check, by its `<competition>/<class>/<date>` path.
-    pub checked: Vec<(String, anyhow::Result<DayCrossings>)>,
+    pub checked: Vec<(String, anyhow::Result<DayTaskPoints>)>,
     /// The number of class days left out, by reason. A class day with a start
     /// cylinder and a finish line counts here and is still checked.
     pub left_out: BTreeMap<&'static str, usize>,
     /// Baseline rows of class days that weren't checked, by class day.
-    pub unchecked_baseline: LineCrossingBaseline,
+    pub unchecked_baseline: TaskPointBaseline,
 }
 
-impl LineCrossingReport {
+impl TaskPointReport {
     pub fn passes(&self) -> bool {
         let checked = self.checked.iter().all(|(_, day)| day_passes(day));
         checked && self.unchecked_baseline.is_empty()
@@ -174,21 +174,21 @@ impl LineCrossingReport {
         let days = self.checked.iter();
         let days = days.filter_map(|(name, day)| Some((name, day.as_ref().ok()?)));
         let days = days.map(|(name, day)| (name.clone(), day.deviations().collect::<Vec<_>>()));
-        let baseline: LineCrossingBaseline = days.filter(|(_, rows)| !rows.is_empty()).collect();
+        let baseline: TaskPointBaseline = days.filter(|(_, rows)| !rows.is_empty()).collect();
         let path = directory.join(BASELINE);
         let baseline = toml::to_string(&baseline).context("serializing the baseline")?;
         fs::write(&path, baseline).with_context(|| format!("writing {}", path.display()))
     }
 }
 
-fn day_passes(day: &anyhow::Result<DayCrossings>) -> bool {
-    day.as_ref().is_ok_and(DayCrossings::passes)
+fn day_passes(day: &anyhow::Result<DayTaskPoints>) -> bool {
+    day.as_ref().is_ok_and(DayTaskPoints::passes)
 }
 
 fn write_baseline_rows<'a>(
     f: &mut fmt::Formatter<'_>,
     heading: &str,
-    rows: impl Iterator<Item = (&'a str, &'a LineDeviation)>,
+    rows: impl Iterator<Item = (&'a str, &'a TaskPointDeviation)>,
 ) -> fmt::Result {
     let rows: Vec<_> = rows.collect();
     if !rows.is_empty() {
@@ -201,7 +201,7 @@ fn write_baseline_rows<'a>(
     Ok(())
 }
 
-impl fmt::Display for LineCrossingReport {
+impl fmt::Display for TaskPointReport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for (name, day) in &self.checked {
             let day = match day {
@@ -274,20 +274,20 @@ fn outcome_name(outcome: Outcome) -> &'static str {
 /// Checks the line crossings of every class day under
 /// `<competition>/<class>/<date>` in a dataset directory. A class day that
 /// can't be checked fails the report instead of stopping the run.
-pub fn check_line_crossings(directory: &Path) -> anyhow::Result<LineCrossingReport> {
+pub fn check_task_points(directory: &Path) -> anyhow::Result<TaskPointReport> {
     let path = directory.display();
     if !directory.is_dir() {
         bail!("the dataset directory {path} doesn't exist");
     }
     let path = directory.join(BASELINE);
-    let mut baseline: LineCrossingBaseline = match fs::read_to_string(&path) {
+    let mut baseline: TaskPointBaseline = match fs::read_to_string(&path) {
         Ok(baseline) => {
             toml::from_str(&baseline).with_context(|| format!("parsing {}", path.display()))?
         }
-        Err(error) if error.kind() == ErrorKind::NotFound => LineCrossingBaseline::new(),
+        Err(error) if error.kind() == ErrorKind::NotFound => TaskPointBaseline::new(),
         Err(error) => Err(error).with_context(|| format!("reading {}", path.display()))?,
     };
-    let mut report = LineCrossingReport::default();
+    let mut report = TaskPointReport::default();
     let days = class_days(directory)?.into_iter().map(|day| {
         let name = day.strip_prefix(directory)?.display().to_string();
         Ok((day, name))
@@ -338,7 +338,7 @@ fn check_day(
     directory: &Path,
     name: &str,
     left_out: &mut BTreeMap<&'static str, usize>,
-) -> anyhow::Result<Option<DayCrossings>> {
+) -> anyhow::Result<Option<DayTaskPoints>> {
     let mut leave_out = |reason| *left_out.entry(reason).or_default() += 1;
     let read = |name| {
         let path = directory.join(name);
@@ -394,7 +394,7 @@ fn check_day(
 
     let competition = name.split('/').next().unwrap_or_default();
     let time_zone = time_zone(competition)?;
-    let mut day = DayCrossings {
+    let mut day = DayTaskPoints {
         earth_model,
         time_zone,
         counts: BTreeMap::new(),
