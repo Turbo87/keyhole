@@ -1,12 +1,14 @@
+mod support;
+
 use approx::assert_abs_diff_eq;
-use bytes::Bytes;
 use insta::assert_snapshot;
-use jiff::Unit;
+use jiff::{RoundMode, Timestamp, TimestampRound, Unit};
 use keyhole_engine::flight_analysis::{
     IgcFile, NearMiss, PlacedZone, Record, ZoneCrossing, ZoneEvent, ZoneVisit, zone_visits,
 };
 use keyhole_engine::geodesy::{EarthModel, LngLat};
-use keyhole_engine::task::TwoArcZone;
+use keyhole_engine::task::{ObservationZone, Task, TaskKind, TaskPoint, TwoArcZone};
+use support::{cylinder, edpa_task, line, parse, reducing_cylinder, seeyou_task, tocumwal_task};
 
 /// A zone shape with the resolved bearing and the reference point it is
 /// placed at.
@@ -387,13 +389,6 @@ fn a_sector_straddling_north_contains_both_sides_of_north() {
 /// 0°N 0°E, where 0.001' is about 1.85 m both ways on the FAI sphere.
 const EQUATOR: LngLat = lng_lat(0., 0.);
 
-fn parse(contents: &'static str) -> IgcFile {
-    let (igc_file, _) = IgcFile::parse(Bytes::from_static(contents.as_bytes())).unwrap();
-    let date = igc_file.date;
-    let (igc_file, _) = igc_file.resolve_times(date).unwrap();
-    igc_file
-}
-
 fn events<'a>(
     igc_file: &'a IgcFile,
     bearing: f64,
@@ -450,7 +445,7 @@ B1000200000200N00001500EA0050000500
 
 #[test]
 fn a_line_between_two_fixes_outside_reaches_a_cylinder() {
-    let igc_file = parse(CYLINDER_PASS);
+    let igc_file = parse(CYLINDER_PASS.as_bytes());
     let events = events(&igc_file, 0., TwoArcZone::cylinder(0.5), None);
     assert_snapshot!(render(&events), @"visit      entry 10:00:03.189 (10:00:00-10:00:10)  exit 10:00:06.811 (10:00:00-10:00:10)");
 }
@@ -466,7 +461,7 @@ B1000100000200N00000600EA0050000500
 
 #[test]
 fn a_line_that_misses_a_cylinder_is_a_near_miss_within_the_tolerance() {
-    let igc_file = parse(CYLINDER_MISS);
+    let igc_file = parse(CYLINDER_MISS.as_bytes());
     let shape = TwoArcZone::cylinder(0.3);
     assert_snapshot!(render(&events(&igc_file, 0., shape, None)), @"");
     assert_snapshot!(render(&events(&igc_file, 0., shape, Some(0.1))), @"near miss  10:00:00-10:00:10  nearest fix 10:00:00 0.698 km  nearest line 10:00:00-10:00:10 0.071 km");
@@ -486,7 +481,7 @@ B1000300000000N00000700EA0050000500
 
 #[test]
 fn a_run_within_the_tolerance_that_reaches_the_zone_is_no_near_miss() {
-    let igc_file = parse(CYLINDER_APPROACH);
+    let igc_file = parse(CYLINDER_APPROACH.as_bytes());
     let events = events(&igc_file, 0., TwoArcZone::cylinder(0.5), Some(0.5));
     assert_snapshot!(render(&events), @"visit      entry 10:00:11.628 (10:00:10-10:00:20)  exit 10:00:18.372 (10:00:10-10:00:20)");
 }
@@ -504,7 +499,7 @@ B1000300002700S00002000WA0050000500
 
 #[test]
 fn a_line_reaches_a_keyhole_only_through_its_sector() {
-    let igc_file = parse(KEYHOLE_PASSES);
+    let igc_file = parse(KEYHOLE_PASSES.as_bytes());
     // The sector points south, away from a task to the north.
     let events = events(&igc_file, 0., TwoArcZone::daec_keyhole(), None);
     assert_snapshot!(render(&events), @"visit      entry 10:00:18.704 (10:00:10-10:00:20)  exit -");
@@ -521,7 +516,7 @@ B1000100000000N00001000EA0050000500
 
 #[test]
 fn a_track_that_starts_and_ends_inside_can_leave_through_a_cutout() {
-    let igc_file = parse(CUTOUT_PASS);
+    let igc_file = parse(CUTOUT_PASS.as_bytes());
     let shape = TwoArcZone {
         r1: 3.,
         a1: 180.,
@@ -545,7 +540,7 @@ B1000100003238S00000000EA0050000500
 
 #[test]
 fn a_zone_whose_r1_equals_r2_has_no_arc_at_r1() {
-    let igc_file = parse(SOUTHWARDS);
+    let igc_file = parse(SOUTHWARDS.as_bytes());
     let shape = TwoArcZone {
         r1: 5.,
         a1: 45.,
@@ -567,7 +562,115 @@ B1000100000000N00000500EA0050000500
 
 #[test]
 fn only_valid_fixes_count() {
-    let igc_file = parse(INVALID_FIX_INSIDE);
+    let igc_file = parse(INVALID_FIX_INSIDE.as_bytes());
     let events = events(&igc_file, 0., TwoArcZone::cylinder(0.5), None);
     assert_snapshot!(render(&events), @"visit      entry 10:00:02.302 (10:00:00-10:00:10)  exit 10:00:07.698 (10:00:00-10:00:10)");
+}
+
+/// The zone visits and near misses of an IGC fixture at a task point.
+fn task_point_events<'a>(
+    igc_file: &'a IgcFile,
+    task: &Task<f64>,
+    point: &TaskPoint<f64>,
+    tolerance: Option<f64>,
+) -> Vec<ZoneEvent<'a>> {
+    let ObservationZone::TwoArc { shape, .. } = point.zone else {
+        panic!("a line has no zone visits");
+    };
+    let (reference_point, bearing) = (point.reference_point, point.direction);
+    let zone = PlacedZone::new(task.earth_model, reference_point, bearing, shape);
+    zone_visits(&igc_file.records, &zone, tolerance)
+}
+
+/// Asserts that an entry rounded up to the second, as SeeYou rounds a
+/// finish, is `expected`.
+fn assert_entered_at(events: &[ZoneEvent], expected: &str) {
+    let expected: Timestamp = expected.parse().unwrap();
+    let rounding = TimestampRound::new()
+        .smallest(Unit::Second)
+        .mode(RoundMode::Ceil);
+    let entries = events.iter().filter_map(|event| match event {
+        ZoneEvent::Visit(ZoneVisit {
+            entry: Some(entry), ..
+        }) => Some(entry.time),
+        _ => None,
+    });
+    let times: Vec<_> = entries.map(|time| time.round(rounding).unwrap()).collect();
+    assert!(times.contains(&expected), "{expected} is none of {times:?}");
+}
+
+/// The task of `junior-world-gliding-championships-2022-tabor-2022/class-standard/2022-07-28`.
+fn tabor_task() -> Task<f64> {
+    let points = [
+        (0.257760986798243, 0.863302970777676, line(7.5)),
+        (0.270142934288308, 0.863477503702875, cylinder(0.5)),
+        (0.240288204768319, 0.865101532571856, cylinder(0.5)),
+        (0.267457163457698, 0.860641343668384, cylinder(0.5)),
+        (0.256611978374014, 0.862090839612166, reducing_cylinder(5.)),
+    ];
+    seeyou_task(TaskKind::Racing, &points, EarthModel::FaiSphere)
+}
+
+/// The task of `wgc2021-club-std-15m-montlucon-gueret-2021/club/2021-08-11`.
+fn montlucon_task() -> Task<f64> {
+    let points = [
+        (0.0402821991360291, 0.808106351406938, line(5.)),
+        (0.0448936499080068, 0.809023231040652, cylinder(0.5)),
+        (0.0434732427850921, 0.815534181815217, cylinder(0.5)),
+        (0.0398612838980898, 0.814041052640136, cylinder(0.5)),
+        (0.0343152093116692, 0.815601958767836, cylinder(0.5)),
+        (0.0412383486779134, 0.806797936244359, reducing_cylinder(5.)),
+    ];
+    seeyou_task(TaskKind::Racing, &points, EarthModel::Wgs84)
+}
+
+/// The track enters the sector of the keyhole about 3.6 km from the
+/// turnpoint, far outside its 500 m cylinder.
+#[test]
+fn keyhole_sector_entry_with_a_2_s_logger() {
+    let igc_file = parse(include_bytes!("fixtures/keyhole.igc"));
+    let task = edpa_task();
+    let events = task_point_events(&igc_file, &task, &task.turnpoints[3], None);
+    assert_snapshot!(render(&events), @"visit      entry 11:27:47.553 (11:27:47-11:27:49)  exit -");
+}
+
+#[test]
+fn finish_cylinder_entry_with_a_2_s_logger() {
+    let igc_file = parse(include_bytes!("fixtures/finish-cylinder-2s-logger.igc"));
+    let task = edpa_task();
+    let events = task_point_events(&igc_file, &task, &task.finish, None);
+    assert_snapshot!(render(&events), @"visit      entry 13:48:27.089 (13:48:26-13:48:28)  exit -");
+    assert_entered_at(&events, "2023-06-04T13:48:28Z");
+}
+
+#[test]
+fn finish_cylinder_entry_with_a_4_s_logger() {
+    let igc_file = parse(include_bytes!("fixtures/finish-cylinder-4s-logger.igc"));
+    let task = tocumwal_task();
+    let events = task_point_events(&igc_file, &task, &task.finish, None);
+    assert_snapshot!(render(&events), @"visit      entry 06:52:04.993 (06:52:03-06:52:07)  exit -");
+    assert_entered_at(&events, "2019-12-16T06:52:05Z");
+}
+
+/// The second visit lies on the line between two fixes outside the
+/// cylinder.
+#[test]
+fn visits_of_a_500_m_cylinder_with_a_1_s_logger() {
+    let igc_file = parse(include_bytes!("fixtures/cylinder-500m.igc"));
+    let task = tabor_task();
+    let events = task_point_events(&igc_file, &task, &task.turnpoints[0], None);
+    assert_snapshot!(render(&events), @"
+    visit      entry 12:14:48.118 (12:14:48-12:14:49)  exit 12:14:49.921 (12:14:49-12:14:50)
+    visit      entry 12:14:50.270 (12:14:50-12:14:51)  exit 12:14:50.658 (12:14:50-12:14:51)
+    visit      entry 12:14:53.453 (12:14:53-12:14:54)  exit 12:15:02.326 (12:15:02-12:15:03)
+    ");
+}
+
+/// The published results penalise this turnpoint as "missed by 27m".
+#[test]
+fn near_miss_of_a_500_m_cylinder() {
+    let igc_file = parse(include_bytes!("fixtures/turnpoint-near-miss.igc"));
+    let task = montlucon_task();
+    let events = task_point_events(&igc_file, &task, &task.turnpoints[3], Some(0.1));
+    assert_snapshot!(render(&events), @"near miss  15:02:49-15:02:58  nearest fix 15:02:54 0.027 km  nearest line 15:02:53-15:02:54 0.027 km");
 }
