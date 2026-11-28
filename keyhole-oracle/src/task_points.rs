@@ -1,6 +1,7 @@
-//! The opt-in full-data check of start and finish line crossings: each row's
-//! published start and finish time against the forward crossing of its
-//! default flight that lies nearest that time.
+//! The opt-in full-data check of how each row's default flight reaches the
+//! task points: its start and finish line crossings and finish cylinder
+//! entries against the published start and finish times, and whether a
+//! finisher visits every turnpoint of a racing task.
 
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
@@ -14,9 +15,11 @@ use flate2::read::GzDecoder;
 use jiff::civil::Date;
 use jiff::tz::TimeZone;
 use jiff::{RoundMode, Timestamp, TimestampRound, Unit};
-use keyhole_engine::flight_analysis::{IgcFile, choose_default_flight, line_crossings};
+use keyhole_engine::flight_analysis::{
+    IgcFile, PlacedZone, Record, ZoneEvent, choose_default_flight, line_crossings, zone_visits,
+};
 use keyhole_engine::geodesy::EarthModel;
-use keyhole_engine::task::{ObservationZone, Task, TaskPoint};
+use keyhole_engine::task::{ObservationZone, Task, TaskKind, TaskPoint};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -37,21 +40,155 @@ pub type TaskPointBaseline = BTreeMap<String, Vec<TaskPointDeviation>>;
 #[serde(deny_unknown_fields)]
 pub struct TaskPointDeviation {
     pub competition_id: String,
-    pub line: Line,
+    pub point: Point,
     /// The published and Keyhole's time, as the report shows them.
     pub explanation: String,
 }
 
-/// A start or finish line.
+/// The task point a row is checked at.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Line {
+#[serde(into = "String", try_from = "String")]
+pub enum Point {
     Start,
+    /// A turnpoint, counted from 1.
+    Turnpoint(usize),
     Finish,
 }
 
-/// How a row's published time compares with its crossing, rounded down at a
-/// start and up at a finish.
+impl fmt::Display for Point {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Start => f.write_str("start"),
+            Self::Turnpoint(number) => write!(f, "turnpoint {number}"),
+            Self::Finish => f.write_str("finish"),
+        }
+    }
+}
+
+impl From<Point> for String {
+    fn from(point: Point) -> Self {
+        point.to_string()
+    }
+}
+
+impl TryFrom<String> for Point {
+    type Error = String;
+
+    fn try_from(name: String) -> Result<Self, String> {
+        let turnpoint = name.strip_prefix("turnpoint ").map(str::parse);
+        match (name.as_str(), turnpoint) {
+            ("start", _) => Ok(Self::Start),
+            ("finish", _) => Ok(Self::Finish),
+            (_, Some(Ok(number))) => Ok(Self::Turnpoint(number)),
+            _ => Err(format!("unknown task point {name:?}")),
+        }
+    }
+}
+
+/// What is checked at a task point, which decides the outcomes a row can
+/// have there and which of them fail.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Check {
+    /// The forward crossing of a start line nearest the published start
+    /// time, rounded down.
+    StartLine,
+    /// A visit to a turnpoint's zone at any time of the flight.
+    Turnpoint,
+    /// The forward crossing of a finish line nearest the published finish
+    /// time, rounded up.
+    FinishLine,
+    /// The entry into a finish cylinder nearest the published finish time,
+    /// rounded up. Unlike at a line, a row 1 s off fails.
+    FinishCylinder,
+}
+
+impl Check {
+    pub const ALL: [Self; 4] = [
+        Self::StartLine,
+        Self::Turnpoint,
+        Self::FinishLine,
+        Self::FinishCylinder,
+    ];
+
+    fn at(point: Point, zone: ObservationZone) -> Self {
+        match (point, zone) {
+            (Point::Start, _) => Self::StartLine,
+            (Point::Turnpoint(_), _) => Self::Turnpoint,
+            (Point::Finish, ObservationZone::Line { .. }) => Self::FinishLine,
+            (Point::Finish, ObservationZone::TwoArc { .. }) => Self::FinishCylinder,
+        }
+    }
+
+    fn outcomes(self) -> &'static [Outcome] {
+        use Outcome::*;
+        match self {
+            Self::StartLine | Self::FinishLine => &[
+                Matching,
+                OneSecondEarly,
+                OneSecondLate,
+                MoreThanOneSecondOff,
+                NoCrossing,
+                NoIgcFile,
+                UnreadableIgcFile,
+            ],
+            Self::FinishCylinder => &[
+                Matching,
+                OneSecondEarly,
+                OneSecondLate,
+                MoreThanOneSecondOff,
+                NoEntry,
+                NoIgcFile,
+                UnreadableIgcFile,
+            ],
+            Self::Turnpoint => &[Visited, NoVisit, NoIgcFile, UnreadableIgcFile],
+        }
+    }
+
+    fn fails(self, outcome: Outcome) -> bool {
+        use Outcome::*;
+        let passes = matches!(outcome, Matching | Visited | NoIgcFile);
+        let line = matches!(self, Self::StartLine | Self::FinishLine);
+        let one_second_off = matches!(outcome, OneSecondEarly | OneSecondLate);
+        !passes && !(line && one_second_off)
+    }
+
+    /// The bearing that a forward crossing of a line with `direction` goes
+    /// along: the start line's own and the reverse of the finish line's.
+    fn crossing_bearing(self, direction: f64) -> f64 {
+        match self {
+            Self::FinishLine => direction + 180.,
+            _ => direction,
+        }
+    }
+
+    /// How SeeYou rounds the time: a start down and a finish up.
+    fn round_mode(self) -> RoundMode {
+        match self {
+            Self::StartLine => RoundMode::Floor,
+            _ => RoundMode::Ceil,
+        }
+    }
+
+    /// The outcome of a row without a crossing or entry.
+    fn missing(self) -> Outcome {
+        match self {
+            Self::FinishCylinder => Outcome::NoEntry,
+            _ => Outcome::NoCrossing,
+        }
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::StartLine => "start line",
+            Self::Turnpoint => "turnpoints",
+            Self::FinishLine => "finish line",
+            Self::FinishCylinder => "finish cylinder",
+        }
+    }
+}
+
+/// How a row's published time compares with its crossing or entry, or
+/// whether it visits a turnpoint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Outcome {
     Matching,
@@ -59,46 +196,31 @@ pub enum Outcome {
     OneSecondLate,
     MoreThanOneSecondOff,
     NoCrossing,
+    NoEntry,
+    Visited,
+    NoVisit,
     NoIgcFile,
     UnreadableIgcFile,
 }
 
-impl Outcome {
-    pub const ALL: [Self; 7] = [
-        Self::Matching,
-        Self::OneSecondEarly,
-        Self::OneSecondLate,
-        Self::MoreThanOneSecondOff,
-        Self::NoCrossing,
-        Self::NoIgcFile,
-        Self::UnreadableIgcFile,
-    ];
-
-    fn fails(self) -> bool {
-        matches!(
-            self,
-            Self::MoreThanOneSecondOff | Self::NoCrossing | Self::UnreadableIgcFile
-        )
-    }
-}
-
-/// A row whose crossing fails its published time.
+/// A row that fails the check at a task point.
 #[derive(Debug)]
 pub struct RowMismatch {
     pub competition_id: String,
-    pub line: Line,
+    pub point: Point,
     pub outcome: Outcome,
+    /// The published start time at the start, otherwise the finish time.
     pub published: Timestamp,
-    /// The rounded crossing nearest the published time, if any.
+    /// The rounded crossing or entry nearest the published time, if any.
     pub keyhole: Option<Timestamp>,
 }
 
-/// The rows of one class day, counted by line and outcome.
+/// The rows of one class day, counted by check and outcome.
 #[derive(Debug)]
 pub struct DayTaskPoints {
     pub earth_model: EarthModel,
     pub time_zone: TimeZone,
-    pub counts: BTreeMap<(Line, Outcome), usize>,
+    pub counts: BTreeMap<(Check, Outcome), usize>,
     pub mismatches: Vec<RowMismatch>,
     /// The class day's rows in the baseline.
     pub baseline: Vec<TaskPointDeviation>,
@@ -113,7 +235,7 @@ impl DayTaskPoints {
         let keyhole = keyhole.map_or(outcome.into(), |time| time.to_string());
         TaskPointDeviation {
             competition_id: mismatch.competition_id.clone(),
-            line: mismatch.line,
+            point: mismatch.point,
             explanation: format!("published {published}, Keyhole {keyhole}"),
         }
     }
@@ -144,7 +266,7 @@ impl DayTaskPoints {
     }
 }
 
-/// The outcome of checking the line crossings of every class day of a
+/// The outcome of checking the task points of every class day of a
 /// dataset.
 #[derive(Debug, Default)]
 pub struct TaskPointReport {
@@ -195,8 +317,8 @@ fn write_baseline_rows<'a>(
         writeln!(f, "{heading} ({}):", rows.len())?;
     }
     for (day, deviation) in rows {
-        let (id, line) = (&deviation.competition_id, line_name(deviation.line));
-        writeln!(f, "  {day} {id} {line}: {}", deviation.explanation)?;
+        let (id, point) = (&deviation.competition_id, deviation.point);
+        writeln!(f, "  {day} {id} {point}: {}", deviation.explanation)?;
     }
     Ok(())
 }
@@ -217,19 +339,20 @@ impl fmt::Display for TaskPointReport {
             };
             let time_zone = day.time_zone.iana_name().unwrap_or_default();
             writeln!(f, "{name} ({earth_model}, {time_zone}):")?;
-            for line in [Line::Start, Line::Finish] {
-                if !day.counts.keys().any(|&(counted, _)| counted == line) {
+            for check in Check::ALL {
+                if !day.counts.keys().any(|&(counted, _)| counted == check) {
                     continue;
                 }
-                let counts = Outcome::ALL.map(|outcome| {
-                    let count = day.counts.get(&(line, outcome)).copied().unwrap_or(0);
+                let counts = check.outcomes().iter().map(|&outcome| {
+                    let count = day.counts.get(&(check, outcome)).copied().unwrap_or(0);
                     format!("{} {count}", outcome_name(outcome))
                 });
-                writeln!(f, "  {}: {}", line_name(line), counts.join(", "))?;
+                let counts: Vec<_> = counts.collect();
+                writeln!(f, "  {}: {}", check.name(), counts.join(", "))?;
             }
             for deviation in day.unexplained() {
-                let (id, line) = (&deviation.competition_id, line_name(deviation.line));
-                writeln!(f, "  {id} {line}: {}", deviation.explanation)?;
+                let (id, point) = (&deviation.competition_id, deviation.point);
+                writeln!(f, "  {id} {point}: {}", deviation.explanation)?;
             }
         }
         let days = self.checked.iter();
@@ -252,13 +375,6 @@ impl fmt::Display for TaskPointReport {
     }
 }
 
-fn line_name(line: Line) -> &'static str {
-    match line {
-        Line::Start => "start",
-        Line::Finish => "finish",
-    }
-}
-
 fn outcome_name(outcome: Outcome) -> &'static str {
     match outcome {
         Outcome::Matching => "matching",
@@ -266,12 +382,15 @@ fn outcome_name(outcome: Outcome) -> &'static str {
         Outcome::OneSecondLate => "1 s late",
         Outcome::MoreThanOneSecondOff => "more than 1 s off",
         Outcome::NoCrossing => "no crossing",
+        Outcome::NoEntry => "no entry",
+        Outcome::Visited => "visited",
+        Outcome::NoVisit => "no visit",
         Outcome::NoIgcFile => "no IGC file",
         Outcome::UnreadableIgcFile => "unreadable IGC file",
     }
 }
 
-/// Checks the line crossings of every class day under
+/// Checks the task points of every class day under
 /// `<competition>/<class>/<date>` in a dataset directory. A class day that
 /// can't be checked fails the report instead of stopping the run.
 pub fn check_task_points(directory: &Path) -> anyhow::Result<TaskPointReport> {
@@ -295,17 +414,17 @@ pub fn check_task_points(directory: &Path) -> anyhow::Result<TaskPointReport> {
     let days: Vec<_> = days.collect::<anyhow::Result<_>>()?;
     let days = days.into_par_iter().map(|(day, name)| {
         let mut left_out = BTreeMap::new();
-        let crossings = check_day(&day, &name, &mut left_out);
-        (name, crossings, left_out)
+        let task_points = check_day(&day, &name, &mut left_out);
+        (name, task_points, left_out)
     });
-    for (name, crossings, left_out) in days.collect::<Vec<_>>() {
+    for (name, task_points, left_out) in days.collect::<Vec<_>>() {
         for (reason, count) in left_out {
             *report.left_out.entry(reason).or_default() += count;
         }
-        match crossings {
-            Ok(Some(mut crossings)) => {
-                crossings.baseline = baseline.remove(&name).unwrap_or_default();
-                report.checked.push((name, Ok(crossings)));
+        match task_points {
+            Ok(Some(mut task_points)) => {
+                task_points.baseline = baseline.remove(&name).unwrap_or_default();
+                report.checked.push((name, Ok(task_points)));
             }
             Ok(None) => {}
             Err(error) => report.checked.push((name, Err(error))),
@@ -377,15 +496,16 @@ fn check_day(
         }
     };
     let task = task.resolve()?;
-    let start = half_width(&task.start).map(|half_width| (Line::Start, half_width));
-    let finish = half_width(&task.finish).map(|half_width| (Line::Finish, half_width));
-    if start.is_none() {
-        leave_out("start cylinder");
+    let mut points = Vec::new();
+    match task.start.zone {
+        ObservationZone::Line { .. } => points.push((Point::Start, &task.start)),
+        ObservationZone::TwoArc { .. } => leave_out("start cylinder"),
     }
-    let lines: Vec<_> = start.into_iter().chain(finish).collect();
-    if lines.is_empty() {
-        return Ok(None);
+    if task.kind == TaskKind::Racing {
+        let turnpoints = task.turnpoints.iter().enumerate();
+        points.extend(turnpoints.map(|(index, point)| (Point::Turnpoint(index + 1), point)));
     }
+    points.push((Point::Finish, &task.finish));
     let igc_files = igc_files(directory)?;
     if igc_files.is_empty() {
         leave_out("no IGC files");
@@ -403,32 +523,33 @@ fn check_day(
     };
     for row in parse_results(&read("results.csv")?).context("parsing results.csv")? {
         let mut parsed = None;
-        for &(line, half_width) in &lines {
-            let time = match line {
-                Line::Start => row.start_time,
-                Line::Finish => row.finish_time,
+        for &(point, task_point) in &points {
+            let check = Check::at(point, task_point.zone);
+            let time = match point {
+                Point::Start => row.start_time,
+                Point::Turnpoint(_) | Point::Finish => row.finish_time,
             };
             let Some(time) = time else { continue };
             let local = file.task_date.to_datetime(time);
             let published = day.time_zone.to_timestamp(local)?;
             let Some(path) = igc_files.get(&row.competition_id) else {
-                *day.counts.entry((line, Outcome::NoIgcFile)).or_default() += 1;
+                *day.counts.entry((check, Outcome::NoIgcFile)).or_default() += 1;
                 continue;
             };
             let igc_file = parsed.get_or_insert_with(|| read_igc_file(path).ok());
             let (outcome, keyhole) = match igc_file {
                 Some(igc_file) => {
-                    let keyhole = crossing_time(igc_file, &task, line, half_width, published)?;
-                    (outcome(keyhole, published), keyhole)
+                    let records = default_flight(igc_file);
+                    check_point(records, &task, check, task_point, published)?
                 }
                 None => (Outcome::UnreadableIgcFile, None),
             };
-            *day.counts.entry((line, outcome)).or_default() += 1;
-            if outcome.fails() {
+            *day.counts.entry((check, outcome)).or_default() += 1;
+            if check.fails(outcome) {
                 let competition_id = row.competition_id.clone();
                 let mismatch = RowMismatch {
                     competition_id,
-                    line,
+                    point,
                     outcome,
                     published,
                     keyhole,
@@ -440,22 +561,72 @@ fn check_day(
     Ok(Some(day))
 }
 
-/// How the rounded crossing nearest a published time compares with it.
-fn outcome(keyhole: Option<Timestamp>, published: Timestamp) -> Outcome {
+/// The records of the default flight, or none without a flight.
+fn default_flight(igc_file: &IgcFile) -> &[Record] {
+    let flights = igc_file.flights();
+    let Some(flight) = choose_default_flight(&flights) else {
+        return &[];
+    };
+    igc_file.records_between(flight.start.time(), flight.end.time())
+}
+
+/// A row's outcome at a task point, with the rounded crossing or entry
+/// nearest the published time.
+fn check_point(
+    records: &[Record],
+    task: &Task<f64>,
+    check: Check,
+    point: &TaskPoint<f64>,
+    published: Timestamp,
+) -> anyhow::Result<(Outcome, Option<Timestamp>)> {
+    let (earth_model, reference_point) = (task.earth_model, point.reference_point);
+    let times: Vec<_> = match point.zone {
+        ObservationZone::Line { length } => {
+            let bearing = check.crossing_bearing(point.direction);
+            let reach = length / 2. + LINE_TOLERANCE;
+            let crossings = line_crossings(records, earth_model, reference_point, bearing);
+            let crossings = crossings
+                .into_iter()
+                .filter(|crossing| crossing.along <= reach);
+            crossings.map(|crossing| crossing.time).collect()
+        }
+        ObservationZone::TwoArc { shape, .. } => {
+            let zone = PlacedZone::new(earth_model, reference_point, point.direction, shape);
+            let events = zone_visits(records, &zone, None);
+            let mut visits = events.into_iter().filter_map(|event| match event {
+                ZoneEvent::Visit(visit) => Some(visit),
+                ZoneEvent::NearMiss(_) => None,
+            });
+            if check == Check::Turnpoint {
+                let outcome = match visits.next() {
+                    Some(_) => Outcome::Visited,
+                    None => Outcome::NoVisit,
+                };
+                return Ok((outcome, None));
+            }
+            let entries = visits.filter_map(|visit| visit.entry);
+            entries.map(|entry| entry.time).collect()
+        }
+    };
+    let offset = |time: &Timestamp| time.duration_since(published).abs();
+    let nearest = times.into_iter().min_by_key(offset);
+    let rounding = TimestampRound::new()
+        .smallest(Unit::Second)
+        .mode(check.round_mode());
+    let keyhole = nearest.map(|time| time.round(rounding)).transpose()?;
+    let missing = check.missing();
+    Ok((outcome(keyhole, published, missing), keyhole))
+}
+
+/// How the rounded crossing or entry nearest a published time compares with
+/// it, or `missing` without one.
+fn outcome(keyhole: Option<Timestamp>, published: Timestamp, missing: Outcome) -> Outcome {
     match keyhole.map(|time| time.duration_since(published).as_secs()) {
-        None => Outcome::NoCrossing,
+        None => missing,
         Some(0) => Outcome::Matching,
         Some(-1) => Outcome::OneSecondEarly,
         Some(1) => Outcome::OneSecondLate,
         Some(_) => Outcome::MoreThanOneSecondOff,
-    }
-}
-
-/// Half the length of a line, or `None` for any other zone.
-fn half_width(point: &TaskPoint<f64>) -> Option<f64> {
-    match point.zone {
-        ObservationZone::Line { length } => Some(length / 2.),
-        ObservationZone::TwoArc { .. } => None,
     }
 }
 
@@ -485,31 +656,4 @@ fn read_igc_file(path: &Path) -> anyhow::Result<IgcFile> {
     let date = igc_file.date;
     let (igc_file, _) = igc_file.resolve_times(date)?;
     Ok(igc_file)
-}
-
-/// The forward crossing of the default flight nearest `published` within half
-/// the line plus the tolerance, rounded down at a start and up at a finish.
-fn crossing_time(
-    igc_file: &IgcFile,
-    task: &Task<f64>,
-    line: Line,
-    half_width: f64,
-    published: Timestamp,
-) -> anyhow::Result<Option<Timestamp>> {
-    let flights = igc_file.flights();
-    let Some(flight) = choose_default_flight(&flights) else {
-        return Ok(None);
-    };
-    let records = igc_file.records_between(flight.start.time(), flight.end.time());
-    let (point, bearing, mode) = match line {
-        Line::Start => (&task.start, task.start.direction, RoundMode::Floor),
-        Line::Finish => (&task.finish, task.finish.direction + 180., RoundMode::Ceil),
-    };
-    let crossings = line_crossings(records, task.earth_model, point.reference_point, bearing);
-    let crossings = crossings.into_iter();
-    let crossings = crossings.filter(|crossing| crossing.along <= half_width + LINE_TOLERANCE);
-    let nearest = crossings.min_by_key(|crossing| crossing.time.duration_since(published).abs());
-    let rounding = TimestampRound::new().smallest(Unit::Second).mode(mode);
-    let time = nearest.map(|crossing| crossing.time.round(rounding));
-    Ok(time.transpose()?)
 }

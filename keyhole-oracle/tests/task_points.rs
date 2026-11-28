@@ -1,4 +1,4 @@
-//! The opt-in full-data check of start and finish line crossings over a local
+//! The opt-in full-data check of how flights reach their task points over a local
 //! soaringspot-downloader output, and its behaviour on small synthetic
 //! datasets.
 
@@ -13,12 +13,12 @@ use insta::assert_snapshot;
 use keyhole_oracle::check_task_points;
 use tempfile::TempDir;
 
-/// Checks the line crossings of every class day of the dataset that
+/// Checks the task points of every class day of the dataset that
 /// `KEYHOLE_ORACLE_DATASET` names and prints the report, and does nothing
 /// without it. With `KEYHOLE_ORACLE_ACCEPT` set, it first writes the current
 /// failing rows as the dataset's baseline.
 #[test]
-fn downloaded_class_days_cross_their_lines_at_the_published_times() {
+fn downloaded_class_days_reach_their_task_points_as_published() {
     let Some(dataset) = env::var_os("KEYHOLE_ORACLE_DATASET") else {
         return;
     };
@@ -121,8 +121,8 @@ fn matching_rows_pass_with_the_earth_model_and_time_zone_of_their_class_day() {
     assert!(report.passes(), "{report}");
     assert_snapshot!(report, @"
     egc2023/club/2026-06-01 (WGS84, Europe/Warsaw):
-      start: matching 1, 1 s early 0, 1 s late 0, more than 1 s off 0, no crossing 0, no IGC file 0, unreadable IGC file 0
-      finish: matching 1, 1 s early 0, 1 s late 0, more than 1 s off 0, no crossing 0, no IGC file 0, unreadable IGC file 0
+      start line: matching 1, 1 s early 0, 1 s late 0, more than 1 s off 0, no crossing 0, no IGC file 0, unreadable IGC file 0
+      finish line: matching 1, 1 s early 0, 1 s late 0, more than 1 s off 0, no crossing 0, no IGC file 0, unreadable IGC file 0
     Checked class days: 1, failing: 0
     ");
 }
@@ -135,8 +135,8 @@ fn rows_1_s_off_are_counted_and_pass() {
     assert!(report.passes(), "{report}");
     assert_snapshot!(report, @"
     egc2023/club/2026-06-01 (WGS84, Europe/Warsaw):
-      start: matching 0, 1 s early 0, 1 s late 1, more than 1 s off 0, no crossing 0, no IGC file 0, unreadable IGC file 0
-      finish: matching 0, 1 s early 1, 1 s late 0, more than 1 s off 0, no crossing 0, no IGC file 0, unreadable IGC file 0
+      start line: matching 0, 1 s early 0, 1 s late 1, more than 1 s off 0, no crossing 0, no IGC file 0, unreadable IGC file 0
+      finish line: matching 0, 1 s early 1, 1 s late 0, more than 1 s off 0, no crossing 0, no IGC file 0, unreadable IGC file 0
     Checked class days: 1, failing: 0
     ");
 }
@@ -149,8 +149,8 @@ fn rows_more_than_1_s_off_fail() {
     assert!(!report.passes());
     assert_snapshot!(report, @"
     egc2023/club/2026-06-01 (WGS84, Europe/Warsaw):
-      start: matching 0, 1 s early 0, 1 s late 0, more than 1 s off 1, no crossing 0, no IGC file 0, unreadable IGC file 0
-      finish: matching 1, 1 s early 0, 1 s late 0, more than 1 s off 0, no crossing 0, no IGC file 0, unreadable IGC file 0
+      start line: matching 0, 1 s early 0, 1 s late 0, more than 1 s off 1, no crossing 0, no IGC file 0, unreadable IGC file 0
+      finish line: matching 1, 1 s early 0, 1 s late 0, more than 1 s off 0, no crossing 0, no IGC file 0, unreadable IGC file 0
       A start: published 14:00:05, Keyhole 14:00:00
     Checked class days: 1, failing: 1
     ");
@@ -165,8 +165,8 @@ fn rows_without_a_crossing_within_half_the_line_plus_500_m_fail() {
     assert!(!report.passes());
     assert_snapshot!(report, @"
     egc2023/club/2026-06-01 (WGS84, Europe/Warsaw):
-      start: matching 0, 1 s early 0, 1 s late 0, more than 1 s off 0, no crossing 1, no IGC file 0, unreadable IGC file 0
-      finish: matching 0, 1 s early 0, 1 s late 0, more than 1 s off 0, no crossing 1, no IGC file 0, unreadable IGC file 0
+      start line: matching 0, 1 s early 0, 1 s late 0, more than 1 s off 0, no crossing 1, no IGC file 0, unreadable IGC file 0
+      finish line: matching 0, 1 s early 0, 1 s late 0, more than 1 s off 0, no crossing 1, no IGC file 0, unreadable IGC file 0
       A start: published 14:00:00, Keyhole no crossing
       A finish: published 14:01:04, Keyhole no crossing
     Checked class days: 1, failing: 1
@@ -181,8 +181,8 @@ fn rows_without_an_igc_file_are_counted_and_pass() {
     assert!(report.passes(), "{report}");
     assert_snapshot!(report, @"
     egc2023/club/2026-06-01 (WGS84, Europe/Warsaw):
-      start: matching 1, 1 s early 0, 1 s late 0, more than 1 s off 0, no crossing 0, no IGC file 1, unreadable IGC file 0
-      finish: matching 1, 1 s early 0, 1 s late 0, more than 1 s off 0, no crossing 0, no IGC file 0, unreadable IGC file 0
+      start line: matching 1, 1 s early 0, 1 s late 0, more than 1 s off 0, no crossing 0, no IGC file 1, unreadable IGC file 0
+      finish line: matching 1, 1 s early 0, 1 s late 0, more than 1 s off 0, no crossing 0, no IGC file 0, unreadable IGC file 0
     Checked class days: 1, failing: 0
     ");
 }
@@ -220,13 +220,15 @@ fn left_out_class_days_are_counted_by_reason() {
     write("02", &task_json("official", &multiple_start), &flights);
     let without_angle12 = TASK_POINTS.replace(r#""oz_angle12": 1.5707963267949, "#, "");
     write("03", &task_json("official", &without_angle12), &flights);
-    let cylinders = TASK_POINTS.replace(r#""oz_line": true"#, r#""oz_line": false"#);
-    write("04", &task_json("official", &cylinders), &flights);
+    let start_cylinder = TASK_POINTS.replacen(r#""oz_line": true"#, r#""oz_line": false"#, 1);
+    write("04", &task_json("official", &start_cylinder), &flights);
     write("05", &task_json("official", TASK_POINTS), &[]);
     let report = check_task_points(dataset.path()).unwrap();
     assert!(report.passes(), "{report}");
     assert_snapshot!(report, @"
-    Checked class days: 0, failing: 0
+    egc2023/club/2026-06-04 (WGS84, Europe/Warsaw):
+      finish line: matching 1, 1 s early 0, 1 s late 0, more than 1 s off 0, no crossing 0, no IGC file 0, unreadable IGC file 0
+    Checked class days: 1, failing: 0
     Left out class days (cancelled): 1
     Left out class days (multiple start points): 1
     Left out class days (no IGC files): 1
@@ -243,10 +245,50 @@ fn rows_with_an_unreadable_igc_file_fail() {
     assert!(!report.passes());
     assert_snapshot!(report, @"
     egc2023/club/2026-06-01 (WGS84, Europe/Warsaw):
-      start: matching 0, 1 s early 0, 1 s late 0, more than 1 s off 0, no crossing 0, no IGC file 0, unreadable IGC file 1
-      finish: matching 0, 1 s early 0, 1 s late 0, more than 1 s off 0, no crossing 0, no IGC file 0, unreadable IGC file 1
+      start line: matching 0, 1 s early 0, 1 s late 0, more than 1 s off 0, no crossing 0, no IGC file 0, unreadable IGC file 1
+      finish line: matching 0, 1 s early 0, 1 s late 0, more than 1 s off 0, no crossing 0, no IGC file 0, unreadable IGC file 1
       A start: published 14:00:00, Keyhole unreadable IGC file
       A finish: published 14:01:04, Keyhole unreadable IGC file
+    Checked class days: 1, failing: 1
+    ");
+}
+
+/// The start line of `TASK_POINTS`, a 500 m turnpoint cylinder 0.0005 rad
+/// east of it on the equator and another 0.001 rad north of that, and a
+/// 500 m finish cylinder where `TASK_POINTS` has its finish line. The flight
+/// along the equator enters the cylinder at about 12:00:58.66.
+const CYLINDER_TASK_POINTS: &str = r#"[
+  {"type": "start", "latitude": 0, "longitude": 0, "oz_type": "next", "oz_radius1": 10000, "oz_radius2": 0, "oz_angle1": 0, "oz_angle2": 0, "oz_angle12": 1.5707963267949, "oz_line": true, "oz_reduce": false},
+  {"type": "point", "latitude": 0, "longitude": 0.0005, "oz_type": "symmetric", "oz_radius1": 500, "oz_radius2": 0, "oz_angle1": 3.14159265358979, "oz_angle2": 0, "oz_angle12": 0, "oz_line": false, "oz_reduce": false},
+  {"type": "point", "latitude": 0.001, "longitude": 0.0005, "oz_type": "symmetric", "oz_radius1": 500, "oz_radius2": 0, "oz_angle1": 3.14159265358979, "oz_angle2": 0, "oz_angle12": 0, "oz_line": false, "oz_reduce": false},
+  {"type": "finish", "latitude": 0, "longitude": 0.001, "oz_type": "previous", "oz_radius1": 500, "oz_radius2": 0, "oz_angle1": 3.14159265358979, "oz_angle2": 0, "oz_angle12": 4.71238898038469, "oz_line": false, "oz_reduce": false}
+]"#;
+
+#[test]
+fn finishers_need_a_visit_to_every_turnpoint_and_the_finish_cylinder_entry_at_the_published_time() {
+    let dataset = TempDir::new().unwrap();
+    let task = task_json("official", CYLINDER_TASK_POINTS);
+    let rows = [
+        row("A", "14:00:00", "14:00:59"),
+        row("B", "14:00:00", "14:01:00"),
+        row("C", "14:00:00", ""),
+    ];
+    let flights = [
+        ("A", equator_flight()),
+        ("B", equator_flight()),
+        ("C", equator_flight()),
+    ];
+    write_day(&dataset, DAY, &task, &rows, &flights);
+    let report = check_task_points(dataset.path()).unwrap();
+    assert!(!report.passes());
+    assert_snapshot!(report, @"
+    egc2023/club/2026-06-01 (WGS84, Europe/Warsaw):
+      start line: matching 3, 1 s early 0, 1 s late 0, more than 1 s off 0, no crossing 0, no IGC file 0, unreadable IGC file 0
+      turnpoints: visited 2, no visit 2, no IGC file 0, unreadable IGC file 0
+      finish cylinder: matching 1, 1 s early 1, 1 s late 0, more than 1 s off 0, no entry 0, no IGC file 0, unreadable IGC file 0
+      A turnpoint 2: published 14:00:59, Keyhole no visit
+      B turnpoint 2: published 14:01:00, Keyhole no visit
+      B finish: published 14:01:00, Keyhole 14:00:59
     Checked class days: 1, failing: 1
     ");
 }
@@ -275,20 +317,20 @@ fn accept_mode_writes_the_failing_rows_as_the_baseline() {
     assert_snapshot!(baseline(&dataset), @r#"
     [["egc2023/club/2026-06-01"]]
     competition_id = "A"
-    line = "start"
+    point = "start"
     explanation = "published 14:00:05, Keyhole 14:00:00"
 
     [["egc2023/club/2026-06-01"]]
     competition_id = "B"
-    line = "start"
+    point = "start"
     explanation = "published 14:00:00, Keyhole no crossing"
     "#);
     let report = check_task_points(dataset.path()).unwrap();
     assert!(report.passes(), "{report}");
     assert_snapshot!(report, @"
     egc2023/club/2026-06-01 (WGS84, Europe/Warsaw):
-      start: matching 0, 1 s early 0, 1 s late 0, more than 1 s off 1, no crossing 1, no IGC file 0, unreadable IGC file 0
-      finish: matching 1, 1 s early 0, 1 s late 0, more than 1 s off 0, no crossing 0, no IGC file 0, unreadable IGC file 0
+      start line: matching 0, 1 s early 0, 1 s late 0, more than 1 s off 1, no crossing 1, no IGC file 0, unreadable IGC file 0
+      finish line: matching 1, 1 s early 0, 1 s late 0, more than 1 s off 0, no crossing 0, no IGC file 0, unreadable IGC file 0
     Checked class days: 1, failing: 0
     ");
 }
@@ -307,8 +349,8 @@ fn new_failing_row_fails_against_the_baseline() {
     assert!(!report.passes());
     assert_snapshot!(report, @"
     egc2023/club/2026-06-01 (WGS84, Europe/Warsaw):
-      start: matching 0, 1 s early 0, 1 s late 0, more than 1 s off 1, no crossing 1, no IGC file 0, unreadable IGC file 0
-      finish: matching 1, 1 s early 0, 1 s late 0, more than 1 s off 0, no crossing 1, no IGC file 0, unreadable IGC file 0
+      start line: matching 0, 1 s early 0, 1 s late 0, more than 1 s off 1, no crossing 1, no IGC file 0, unreadable IGC file 0
+      finish line: matching 1, 1 s early 0, 1 s late 0, more than 1 s off 0, no crossing 1, no IGC file 0, unreadable IGC file 0
       B finish: published 14:01:04, Keyhole no crossing
     Checked class days: 1, failing: 1
     ");
@@ -325,8 +367,8 @@ fn baseline_row_with_changed_values_fails() {
     assert!(!report.passes());
     assert_snapshot!(report, @"
     egc2023/club/2026-06-01 (WGS84, Europe/Warsaw):
-      start: matching 0, 1 s early 0, 1 s late 0, more than 1 s off 1, no crossing 1, no IGC file 0, unreadable IGC file 0
-      finish: matching 1, 1 s early 0, 1 s late 0, more than 1 s off 0, no crossing 0, no IGC file 0, unreadable IGC file 0
+      start line: matching 0, 1 s early 0, 1 s late 0, more than 1 s off 1, no crossing 1, no IGC file 0, unreadable IGC file 0
+      finish line: matching 1, 1 s early 0, 1 s late 0, more than 1 s off 0, no crossing 0, no IGC file 0, unreadable IGC file 0
       A start: published 14:00:06, Keyhole 14:00:00
     Baseline rows that no longer occur (1):
       egc2023/club/2026-06-01 A start: published 14:00:05, Keyhole 14:00:00
@@ -345,8 +387,8 @@ fn baseline_row_that_starts_matching_fails() {
     assert!(!report.passes());
     assert_snapshot!(report, @"
     egc2023/club/2026-06-01 (WGS84, Europe/Warsaw):
-      start: matching 1, 1 s early 0, 1 s late 0, more than 1 s off 0, no crossing 1, no IGC file 0, unreadable IGC file 0
-      finish: matching 1, 1 s early 0, 1 s late 0, more than 1 s off 0, no crossing 0, no IGC file 0, unreadable IGC file 0
+      start line: matching 1, 1 s early 0, 1 s late 0, more than 1 s off 0, no crossing 1, no IGC file 0, unreadable IGC file 0
+      finish line: matching 1, 1 s early 0, 1 s late 0, more than 1 s off 0, no crossing 0, no IGC file 0, unreadable IGC file 0
     Baseline rows that no longer occur (1):
       egc2023/club/2026-06-01 A start: published 14:00:05, Keyhole 14:00:00
     Checked class days: 1, failing: 1

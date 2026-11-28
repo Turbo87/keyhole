@@ -16,6 +16,6 @@ pub use full_data::{Baseline, DatasetReport, check_dataset, time_zone};
 pub use rule_set_family::{Inference, RuleSetFamily, infer_rule_set_family};
 pub use task_info::TaskInfo;
 pub use task_points::{
-    DayTaskPoints, Line, Outcome, RowMismatch, TaskPointBaseline, TaskPointDeviation,
+    Check, DayTaskPoints, Outcome, Point, RowMismatch, TaskPointBaseline, TaskPointDeviation,
     TaskPointReport, check_task_points,
 };
